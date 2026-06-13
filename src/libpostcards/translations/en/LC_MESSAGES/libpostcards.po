@@ -1,0 +1,21 @@
+# English translations for libpostcards.
+# Copyright (C) 2026 bibi21000
+# This file is distributed under the same license as the libpostcards
+# project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: libpostcards 2.0.0\n"
+"Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
+"POT-Creation-Date: 2026-06-13 13:52+0200\n"
+"PO-Revision-Date: 2026-06-12 15:21+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
