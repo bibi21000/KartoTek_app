@@ -96,18 +96,21 @@ def scan():
 
 @scan.command()
 @click.option('--prefix', default='', help=_("Prefix of scanned files"))
+@click.option('--white-threshold', default=240, help=_("white threshold for background transpare"))
 @click.pass_obj
-def prepare(common, prefix):
+def prepare(common, prefix, white_threshold):
     _("""Prepare scanned postcards for import""")
     import re
     from pathlib import Path
     from libpostcards.model import Model
     import cv2
     from ..libs.scan_corrector import ScanCorrector
+    from ..libs.transparency import TiffBackgroundRemover
 
-    def _correct(infile, outfile):
+    def _correct(bgtrans, scanc, infile, outfile):
         img = scanc.load_image(infile)
         img = scanc.process_image(img)
+        img = bgtrans.make_border_white_transparent_cv2(img)
         params: list[int] = []
         if ext in (".jpg", ".jpeg"):
             params = [cv2.IMWRITE_JPEG_QUALITY, 95]
@@ -117,7 +120,8 @@ def prepare(common, prefix):
 
     next_id = Model(common.datadir).next_id()
 
-    scanc = ScanCorrector(verbose=False)
+    scanc = ScanCorrector(white_threshold=white_threshold, verbose=False)
+    bgtrans = TiffBackgroundRemover(white_threshold=white_threshold)
     fl1 = [f for f in os.listdir(common.importdir) if re.match(r'%s.*'%prefix, f)]
     fl2 = []
     for f in fl1:
@@ -140,7 +144,7 @@ def prepare(common, prefix):
         outfile = os.path.join(common.importdir, '%s_R%s'%(next_id, ext))
         if os.path.exists(outfile):
             raise RuntimeError("%s exists" % outfile)
-        _correct(infile, outfile)
+        _correct(bgtrans, scanc, infile, outfile)
 
         infile = os.path.join(common.importdir, fl2[i+1][1])
         ext = Path(infile).suffix.lower()
@@ -148,7 +152,7 @@ def prepare(common, prefix):
         outfile = os.path.join(common.importdir, '%s_V%s'%(next_id, ext))
         if os.path.exists(outfile):
             raise RuntimeError("%s exists" % outfile)
-        _correct(infile, outfile)
+        _correct(bgtrans, scanc, infile, outfile)
 
         next_id += 1
 
@@ -493,6 +497,29 @@ def ocr(common, pcid):
             pbar.update(1)
     pbar.close()
 
+@cli.command()
+@click.argument('pcid', default=None, nargs=-1)
+@click.option('--white-threshold', default=240, help=_("white threshold for background transpare"))
+@click.pass_obj
+def transparency(common, pcid, white_threshold):
+    """Redo transparent on postcards"""
+    from ..libs.transparency import TiffBackgroundRemover
+    bgtrans = TiffBackgroundRemover(white_threshold=white_threshold)
+
+    ids = split_ids(pcid)
+
+    pbar = tqdm(total=len(ids), desc="Postcards")
+    for pci in ids:
+        for tiff_file in [
+            os.path.join(common.datadir, "cards", '%s_R.%s'%(pci, common.file_format)),
+            os.path.join(common.datadir, "cards", '%s_V.%s'%(pci, common.file_format)),
+        ]:
+            bgtrans.make_border_white_transparent(
+                tiff_file,
+                tiff_file
+            )
+        pbar.update(1)
+    pbar.close()
 
 @cli.command()
 @click.pass_obj

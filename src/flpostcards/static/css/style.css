@@ -1,0 +1,824 @@
+:root {
+    --transition-duration: 1.4s;
+    --pip-width: 22vw;
+    --pip-max-width: 280px;
+    --pip-min-width: 120px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #0a0a0a;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: #f5f5f5;
+}
+
+/* -------------------------------------------------------------
+   Diaporama plein écran
+   ------------------------------------------------------------- */
+
+.slideshow {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    cursor: pointer;
+    background: #000;
+}
+
+.slide-layer {
+    position: absolute;
+    inset: 0;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-color: #000;
+    opacity: 0;
+    transform: scale(1.02);
+    transition:
+        opacity var(--transition-duration) ease-in-out,
+        transform var(--transition-duration) ease-in-out;
+    will-change: opacity, transform;
+}
+
+.slide-layer.visible {
+    opacity: 1;
+    transform: scale(1);
+    z-index: 2;
+}
+
+.slide-layer.hidden-layer {
+    opacity: 0;
+    transform: scale(1.04);
+    z-index: 1;
+}
+
+/* -------------------------------------------------------------
+   En-tête : titre + filtre collection
+   ------------------------------------------------------------- */
+
+.page-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    padding-top: 3.5rem;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
+    cursor: default;
+}
+
+.page-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.collection-filter select {
+    background: rgba(0, 0, 0, 0.55);
+    color: #f5f5f5;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.collection-filter select:hover {
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+    .page-header {
+        padding: 0.75rem 1rem;
+        padding-top: 3.25rem;
+        flex-wrap: wrap;
+    }
+
+    .page-title {
+        font-size: 0.95rem;
+    }
+}
+
+/* -------------------------------------------------------------
+   Picture in picture (verso)
+   ------------------------------------------------------------- */
+
+.pip {
+    position: absolute;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    width: var(--pip-width);
+    max-width: var(--pip-max-width);
+    min-width: var(--pip-min-width);
+    aspect-ratio: 3 / 2;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    background: #111;
+    z-index: 5;
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+    transition:
+        opacity var(--transition-duration) ease-in-out,
+        transform var(--transition-duration) ease-in-out;
+}
+
+.pip.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.pip img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: opacity 0.6s ease-in-out;
+}
+
+.pip img.fading {
+    opacity: 0;
+}
+
+.pip-map {
+    width: 100%;
+    height: 100%;
+}
+
+/* Réduit l'encombrement de l'attribution Leaflet dans la petite vignette */
+.pip-map .leaflet-control-attribution {
+    font-size: 0.6rem;
+    padding: 0 4px;
+    line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+    .pip {
+        width: 32vw;
+        bottom: 1rem;
+        right: 1rem;
+    }
+}
+
+/* -------------------------------------------------------------
+   Fiche carte postale
+   ------------------------------------------------------------- */
+
+.card-detail {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+    padding-top: 3.5rem;
+    background: #121212;
+}
+
+.card-detail .back-link {
+    align-self: flex-start;
+    color: #ddd;
+    text-decoration: none;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.card-detail .back-link:hover {
+    opacity: 1;
+}
+
+.card-image-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 720px;
+    aspect-ratio: 3 / 2;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.card-image-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    display: block;
+    position: absolute;
+    inset: 0;
+    opacity: 1;
+    transition: opacity 0.5s ease-in-out;
+}
+
+.card-image-wrapper img.hidden-face {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Vignette de bascule recto/verso */
+.face-toggle {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    width: 90px;
+    height: 60px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    z-index: 5;
+    transition: transform 0.2s ease;
+    background: #000;
+}
+
+.face-toggle:hover {
+    transform: scale(1.05);
+    border-color: #fff;
+}
+
+.face-toggle img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.card-meta {
+    width: 100%;
+    max-width: 720px;
+    margin-top: 1.25rem;
+}
+
+.card-meta h1 {
+    font-size: 1.4rem;
+    margin: 0 0 0.25rem;
+}
+
+.card-meta h2 {
+    font-size: 1rem;
+    font-weight: 400;
+    color: #aaa;
+    margin: 0 0 0.75rem;
+}
+
+.card-meta .collections span {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    margin: 0.15rem 0.25rem 0.15rem 0;
+    font-size: 0.8rem;
+    color: #ddd;
+}
+
+/* -------------------------------------------------------------
+   Galerie
+   ------------------------------------------------------------- */
+
+.gallery-page {
+    min-height: 100vh;
+    background: #121212;
+    padding: 1.5rem;
+    padding-top: 3.5rem;
+}
+
+.gallery-header {
+    max-width: 1400px;
+    margin: 0 auto 1.5rem;
+}
+
+.gallery-header .page-title {
+    position: static;
+    text-shadow: none;
+    margin: 0 0 1rem;
+    font-size: 1.4rem;
+}
+
+.gallery-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+}
+
+.filter-field {
+    display: flex;
+    flex-direction: column;
+}
+
+.gallery-filters input[type="search"],
+.gallery-filters select {
+    background: #1c1c1c;
+    color: #f5f5f5;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.9rem;
+}
+
+.gallery-filters input[type="search"] {
+    min-width: 200px;
+}
+
+.gallery-grid {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+}
+
+.gallery-item {
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #1a1a1a;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gallery-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.gallery-thumb {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    background: #000;
+    overflow: hidden;
+}
+
+.gallery-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Mode recto+verso : verso en PiP dans le coin */
+.gallery-thumb-recto_verso .gallery-img-recto {
+    position: absolute;
+    inset: 0;
+}
+
+.gallery-thumb-recto_verso .gallery-img-verso {
+    position: absolute;
+    width: 38%;
+    height: 38%;
+    bottom: 6px;
+    right: 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.gallery-caption {
+    padding: 0.5rem 0.6rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gallery-pagination {
+    max-width: 1400px;
+    margin: 1.5rem auto 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+}
+
+.gallery-pagination .page-link {
+    color: #f5f5f5;
+    text-decoration: none;
+    padding: 0.4rem 0.9rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    transition: border-color 0.2s ease;
+}
+
+.gallery-pagination .page-link:hover {
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.gallery-pagination .page-link.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+.gallery-pagination .page-status {
+    font-size: 0.9rem;
+    color: #aaa;
+}
+
+.gallery-empty {
+    max-width: 1400px;
+    margin: 2rem auto;
+    text-align: center;
+    color: #aaa;
+}
+
+@media (max-width: 640px) {
+    .gallery-page {
+        padding: 1rem;
+    }
+
+    .gallery-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 0.6rem;
+    }
+}
+
+/* -------------------------------------------------------------
+   Navigation header (page d'accueil)
+   ------------------------------------------------------------- */
+
+.page-nav .nav-link {
+    color: #f5f5f5;
+    text-decoration: none;
+    font-size: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    padding: 0.35rem 0.8rem;
+    transition: border-color 0.2s ease;
+}
+
+.page-nav .nav-link:hover {
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* -------------------------------------------------------------
+   Plein écran (fiche carte)
+   ------------------------------------------------------------- */
+
+.card-image-wrapper {
+    cursor: zoom-in;
+}
+
+.fullscreen-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.92);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease;
+    cursor: zoom-out;
+}
+
+.fullscreen-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.fullscreen-overlay img {
+    max-width: 95vw;
+    max-height: 95vh;
+    object-fit: contain;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.7);
+    border-radius: 4px;
+}
+
+/* -------------------------------------------------------------
+   Navigation globale (toutes les pages)
+   ------------------------------------------------------------- */
+
+.site-nav {
+    position: fixed;
+    top: 0.75rem;
+    left: 1rem;
+    z-index: 50;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.site-nav-link {
+    color: #f5f5f5;
+    text-decoration: none;
+    font-size: 0.85rem;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    backdrop-filter: blur(4px);
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.site-nav-link:hover {
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(0, 0, 0, 0.65);
+}
+
+.site-nav-link.active {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.5);
+    font-weight: 600;
+}
+
+@media (max-width: 640px) {
+    .site-nav {
+        top: 0.5rem;
+        left: 0.5rem;
+    }
+
+    .site-nav-link {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.7rem;
+    }
+}
+
+/* -------------------------------------------------------------
+   Diaporama de parcours (travel)
+   ------------------------------------------------------------- */
+
+.travel-back-link {
+    color: #f5f5f5;
+    text-decoration: none;
+    font-size: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    padding: 0.35rem 0.8rem;
+    transition: border-color 0.2s ease;
+    white-space: nowrap;
+}
+
+.travel-back-link:hover {
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.travel-captions {
+    position: absolute;
+    left: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 5;
+    max-width: 65%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    pointer-events: none;
+}
+
+.travel-caption-current {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+    transition: opacity 0.6s ease-in-out;
+}
+
+.travel-caption-next {
+    font-size: 0.95rem;
+    color: #ccc;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+    opacity: 0;
+    transition: opacity 0.6s ease-in-out;
+}
+
+.travel-caption-next.visible {
+    opacity: 1;
+}
+
+@media (max-width: 640px) {
+    .travel-captions {
+        left: 1rem;
+        bottom: 1rem;
+        max-width: 80%;
+    }
+
+    .travel-caption-current {
+        font-size: 1.05rem;
+    }
+
+    .travel-caption-next {
+        font-size: 0.8rem;
+    }
+}
+
+/* -------------------------------------------------------------
+   Liste des parcours
+   ------------------------------------------------------------- */
+
+.travel-list-page {
+    min-height: 100vh;
+    background: #121212;
+    padding: 1.5rem;
+    padding-top: 3.5rem;
+}
+
+.travel-list-header {
+    max-width: 1000px;
+    margin: 0 auto 1.5rem;
+}
+
+.travel-list-header .page-title {
+    position: static;
+    text-shadow: none;
+    margin: 0;
+    font-size: 1.4rem;
+}
+
+.travel-list {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.travel-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    text-decoration: none;
+    color: #ddd;
+    background: #1a1a1a;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.travel-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.travel-card-thumb {
+    flex-shrink: 0;
+    width: 120px;
+    aspect-ratio: 3 / 2;
+    background: #000;
+}
+
+.travel-card-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.travel-card-info {
+    padding: 0.75rem 1rem 0.75rem 0;
+}
+
+.travel-card-info h2 {
+    margin: 0 0 0.2rem;
+    font-size: 1.05rem;
+    color: #fff;
+}
+
+.travel-card-subtitle {
+    margin: 0 0 0.3rem;
+    font-size: 0.85rem;
+    color: #aaa;
+}
+
+.travel-card-meta {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.travel-empty {
+    max-width: 1000px;
+    margin: 2rem auto;
+    text-align: center;
+    color: #aaa;
+}
+
+@media (max-width: 640px) {
+    .travel-list-page {
+        padding: 1rem;
+        padding-top: 3.25rem;
+    }
+
+    .travel-card-thumb {
+        width: 90px;
+    }
+}
+
+/* -------------------------------------------------------------
+   Page carte (blueprint map)
+   ------------------------------------------------------------- */
+
+.map-page {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.cards-map {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: #1a1a1a;
+}
+
+.map-page-header {
+    position: absolute;
+    z-index: 10;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
+    pointer-events: none;
+}
+
+.map-page-header .page-title,
+.map-page-header .collection-filter {
+    pointer-events: auto;
+}
+
+.map-popup-wrapper .leaflet-popup-content-wrapper {
+    background: #1a1a1a;
+    color: #f5f5f5;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.map-popup-wrapper .leaflet-popup-tip {
+    background: #1a1a1a;
+}
+
+.map-popup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 140px;
+}
+
+.map-popup img {
+    width: 100%;
+    border-radius: 4px;
+    display: block;
+}
+
+.map-popup-title {
+    font-size: 0.8rem;
+    color: #ddd;
+}
+
+/* -------------------------------------------------------------
+   Date d'ajout (page d'accueil)
+   ------------------------------------------------------------- */
+
+.slideshow-meta {
+    position: absolute;
+    left: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.slideshow-cdate {
+    font-size: 0.95rem;
+    color: #ddd;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+    opacity: 0;
+    transition: opacity 0.6s ease-in-out;
+}
+
+.slideshow-cdate.visible {
+    opacity: 1;
+}
+
+@media (max-width: 640px) {
+    .slideshow-meta {
+        left: 1rem;
+        bottom: 1rem;
+    }
+
+    .slideshow-cdate {
+        font-size: 0.8rem;
+    }
+}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="slideshow" id="slideshow">
+
+    <div class="slide-layer" id="layer-a"></div>
+    <div class="slide-layer" id="layer-b"></div>
+
+    <div class="pip" id="pip">
+        <img id="pip-img" alt="{{ _("Verso de la carte") }}" />
+    </div>
+
+    <div class="slideshow-meta">
+        <div class="slideshow-cdate" id="slideshow-cdate"></div>
+    </div>
+
+    <header class="page-header">
+        <h1 class="page-title">{{ page_title }}</h1>
+
+        {% if collections %}
+        <form class="collection-filter" method="get" action="{{ url_for('home.index') }}">
+            <label for="collection-select" class="sr-only">{{ _("Collection") }}</label>
+            <select id="collection-select" name="collection" onchange="this.form.submit()">
+                <option value="" {% if not current_collection %}selected{% endif %}>
+                    {{ _("Toutes les collections") }}
+                </option>
+                {% for c in collections %}
+                <option value="{{ c }}" {% if c == current_collection %}selected{% endif %}>
+                    {{ c }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
+    </header>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    window.SLIDESHOW_CONFIG = {
+        // Délai entre deux cartes (secondes)
+        intervalSeconds: 8,
+        cardsUrl: "{{ url_for('home.api_recent_cards') }}",
+        cardDetailUrlBase: "{{ url_for('home.card_detail', card_id='__ID__') }}",
+        imageBaseUrl: "{{ url_for('home.images', filename='') }}",
+        collection: {{ current_collection | tojson }},
+        addedOnLabel: "{{ _("Ajoutée le") }}"
+    };
+</script>
+<script src="{{ url_for('static', filename='js/slideshow.js') }}"></script>
+{% endblock %}

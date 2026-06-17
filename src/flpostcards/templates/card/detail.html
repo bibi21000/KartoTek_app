@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% set card_title = card.title or (_("Carte #%(id)s", id=card.id)) %}
+
+{% block title %}{{ card_title }} - {{ _("Cartes postales") }}{% endblock %}
+
+{% block content %}
+<div class="card-detail">
+    {% if back_url %}
+    <a class="back-link" href="{{ back_url }}">&larr; {{ back_label or _("Retour") }}</a>
+    {% else %}
+    <a class="back-link" href="{{ url_for('home.index') }}">&larr; {{ _("Retour au diaporama") }}</a>
+    {% endif %}
+
+    <div class="card-image-wrapper" id="image-wrapper" title="{{ _("Cliquer pour agrandir") }}">
+        <img id="img-recto"
+             class="face-image"
+             src="{{ url_for('home.images', filename=images.recto) }}"
+             alt="{{ _("Recto de la carte %(id)s", id=card.id) }}">
+        <img id="img-verso"
+             class="face-image hidden-face"
+             src="{{ url_for('home.images', filename=images.verso) }}"
+             alt="{{ _("Verso de la carte %(id)s", id=card.id) }}">
+
+        <div class="face-toggle" id="face-toggle" title="{{ _("Afficher l'autre face") }}">
+            <img id="toggle-thumb"
+                 src="{{ url_for('home.images', filename=images_small.verso) }}"
+                 alt="{{ _("Aperçu de l'autre face") }}">
+        </div>
+    </div>
+
+    <div class="fullscreen-overlay" id="fullscreen-overlay">
+        <img id="fullscreen-img" alt="">
+    </div>
+
+    <div class="card-meta">
+        <h1>{{ card_title }}</h1>
+        {% if card.title2 %}
+        <h2>{{ card.title2 }}</h2>
+        {% endif %}
+
+        {% if card.description %}
+        <p>{{ card.description }}</p>
+        {% endif %}
+
+        {% if card.collections %}
+        <div class="collections">
+            {% for c in card.collections %}
+            <span>{{ c }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        "use strict";
+
+        var i18n = {
+            rectoPreview: "{{ _("Aperçu du recto") }}",
+            versoPreview: "{{ _("Aperçu du verso") }}"
+        };
+
+        var rectoUrl = "{{ url_for('home.images', filename=images.recto) }}";
+        var versoUrl = "{{ url_for('home.images', filename=images.verso) }}";
+        var rectoThumbUrl = "{{ url_for('home.images', filename=images_small.recto) }}";
+        var versoThumbUrl = "{{ url_for('home.images', filename=images_small.verso) }}";
+
+        var imgRecto = document.getElementById("img-recto");
+        var imgVerso = document.getElementById("img-verso");
+        var toggle = document.getElementById("face-toggle");
+        var thumb = document.getElementById("toggle-thumb");
+        var wrapper = document.getElementById("image-wrapper");
+        var overlay = document.getElementById("fullscreen-overlay");
+        var overlayImg = document.getElementById("fullscreen-img");
+
+        var showingVerso = false;
+
+        toggle.addEventListener("click", function (event) {
+            event.stopPropagation();
+            showingVerso = !showingVerso;
+
+            if (showingVerso) {
+                imgRecto.classList.add("hidden-face");
+                imgVerso.classList.remove("hidden-face");
+                thumb.src = rectoThumbUrl;
+                thumb.alt = i18n.rectoPreview;
+            } else {
+                imgVerso.classList.add("hidden-face");
+                imgRecto.classList.remove("hidden-face");
+                thumb.src = versoThumbUrl;
+                thumb.alt = i18n.versoPreview;
+            }
+        });
+
+        // Plein écran : clic sur l'image principale
+        wrapper.addEventListener("click", function () {
+            var currentUrl = showingVerso ? versoUrl : rectoUrl;
+            var currentAlt = showingVerso ? imgVerso.alt : imgRecto.alt;
+            overlayImg.src = currentUrl;
+            overlayImg.alt = currentAlt;
+            overlay.classList.add("visible");
+        });
+
+        overlay.addEventListener("click", function () {
+            overlay.classList.remove("visible");
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") {
+                overlay.classList.remove("visible");
+            }
+        });
+    })();
+</script>
+{% endblock %}

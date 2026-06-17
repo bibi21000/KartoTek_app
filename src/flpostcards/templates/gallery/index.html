@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="gallery-page">
+
+    <header class="gallery-header">
+        <h1 class="page-title">{{ page_title }}</h1>
+
+        <form class="gallery-filters" method="get" action="{{ url_for('gallery.index') }}" id="gallery-filters-form">
+            <div class="filter-field">
+                <label for="search-input" class="sr-only">{{ _("Recherche") }}</label>
+                <input
+                    type="search"
+                    id="search-input"
+                    name="q"
+                    value="{{ search }}"
+                    placeholder="{{ _("Rechercher...") }}"
+                    autocomplete="off"
+                >
+            </div>
+
+            {% if collections %}
+            <div class="filter-field">
+                <label for="collection-select" class="sr-only">{{ _("Collection") }}</label>
+                <select id="collection-select" name="collection" onchange="this.form.submit()">
+                    <option value="" {% if not current_collection %}selected{% endif %}>
+                        {{ _("Toutes les collections") }}
+                    </option>
+                    {% for c in collections %}
+                    <option value="{{ c }}" {% if c == current_collection %}selected{% endif %}>
+                        {{ c }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="filter-field">
+                <label for="display-select" class="sr-only">{{ _("Affichage") }}</label>
+                <select id="display-select" name="display" onchange="this.form.submit()">
+                    <option value="recto_verso" {% if display == "recto_verso" %}selected{% endif %}>
+                        {{ _("Recto / verso") }}
+                    </option>
+                    <option value="recto" {% if display == "recto" %}selected{% endif %}>
+                        {{ _("Recto") }}
+                    </option>
+                    <option value="verso" {% if display == "verso" %}selected{% endif %}>
+                        {{ _("Verso") }}
+                    </option>
+                </select>
+            </div>
+
+            <div class="filter-field">
+                <label for="doubles-select" class="sr-only">{{ _("Doublons") }}</label>
+                <select id="doubles-select" name="doubles" onchange="this.form.submit()">
+                    <option value="" {% if not show_doubles %}selected{% endif %}>
+                        {{ _("Sans doublons") }}
+                    </option>
+                    <option value="all" {% if show_doubles %}selected{% endif %}>
+                        {{ _("Avec doublons") }}
+                    </option>
+                </select>
+            </div>
+
+            <div class="filter-field">
+                <label for="per-page-select" class="sr-only">{{ _("Cartes par page") }}</label>
+                <select id="per-page-select" name="per_page" onchange="this.form.submit()">
+                    {% for choice in per_page_choices %}
+                    <option value="{{ choice }}" {% if choice == per_page %}selected{% endif %}>
+                        {{ _("%(n)d par page", n=choice) }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </header>
+
+    {% if items %}
+    <div class="gallery-grid" data-display="{{ display }}">
+        {% for item in items %}
+        <a class="gallery-item" href="{{ url_for('home.card_detail', card_id=item.id, back=current_path) }}"
+           title="{{ item.title or _("Carte #%(id)s", id=item.id) }}">
+            <div class="gallery-thumb gallery-thumb-{{ display }}">
+                {% if display in ("recto_verso", "recto") %}
+                <img class="gallery-img gallery-img-recto"
+                     src="{{ url_for('home.images', filename=item.recto) }}"
+                     alt="{{ _("Recto de la carte %(id)s", id=item.id) }}"
+                     loading="lazy">
+                {% endif %}
+                {% if display in ("recto_verso", "verso") %}
+                <img class="gallery-img gallery-img-verso"
+                     src="{{ url_for('home.images', filename=item.verso) }}"
+                     alt="{{ _("Verso de la carte %(id)s", id=item.id) }}"
+                     loading="lazy">
+                {% endif %}
+            </div>
+            {% if item.title %}
+            <span class="gallery-caption">{{ item.title }}</span>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+
+    {% if pages > 1 %}
+    <nav class="gallery-pagination">
+        {% set base_args = {"collection": current_collection, "q": search, "display": display, "doubles": ("all" if show_doubles else ""), "per_page": per_page} %}
+
+        {% if page > 1 %}
+        <a class="page-link" href="{{ url_for('gallery.index', page=page - 1, **base_args) }}">
+            &larr; {{ _("Précédent") }}
+        </a>
+        {% else %}
+        <span class="page-link disabled">&larr; {{ _("Précédent") }}</span>
+        {% endif %}
+
+        <span class="page-status">
+            {{ _("Page %(page)d / %(pages)d", page=page, pages=pages) }}
+        </span>
+
+        {% if page < pages %}
+        <a class="page-link" href="{{ url_for('gallery.index', page=page + 1, **base_args) }}">
+            {{ _("Suivant") }} &rarr;
+        </a>
+        {% else %}
+        <span class="page-link disabled">{{ _("Suivant") }} &rarr;</span>
+        {% endif %}
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <p class="gallery-empty">{{ _("Aucune carte ne correspond à ces critères.") }}</p>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/gallery-filters.js') }}"></script>
+{% endblock %}

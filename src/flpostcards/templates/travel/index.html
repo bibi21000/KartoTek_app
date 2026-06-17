@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="travel-list-page">
+
+    <header class="travel-list-header">
+        <h1 class="page-title">{{ page_title }}</h1>
+    </header>
+
+    {% if travels %}
+    <div class="travel-list">
+        {% for travel in travels %}
+        <a class="travel-card" href="{{ url_for('travel.detail', travel_id=travel.id) }}">
+            {% if travel.cards %}
+            <div class="travel-card-thumb">
+                <img src="{{ url_for('home.images', filename='size_div10/' + (travel.cards[0].id | string) + '_R.png') }}"
+                     alt="{{ travel.title or travel.id }}"
+                     loading="lazy">
+            </div>
+            {% endif %}
+            <div class="travel-card-info">
+                <h2>{{ travel.title or travel.id }}</h2>
+                {% if travel.title2 %}
+                <p class="travel-card-subtitle">{{ travel.title2 }}</p>
+                {% endif %}
+                <p class="travel-card-meta">
+                    {{ _("%(distance)s km", distance=("%.2f" | format(travel.distance_km))) }}
+                    &middot;
+                    {{ _("%(count)d cartes", count=travel.count) }}
+                </p>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="travel-empty">{{ _("Aucun parcours disponible.") }}</p>
+    {% endif %}
+
+</div>
+{% endblock %}

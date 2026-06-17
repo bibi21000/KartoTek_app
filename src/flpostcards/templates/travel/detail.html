@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="slideshow travel-slideshow" id="slideshow">
+
+    <div class="slide-layer" id="layer-a"></div>
+    <div class="slide-layer" id="layer-b"></div>
+
+    <div class="pip" id="pip">
+        <div id="pip-map" class="pip-map"></div>
+    </div>
+
+    <header class="page-header">
+        <h1 class="page-title">{{ page_title }}</h1>
+        <a class="travel-back-link" href="{{ url_for('travel.index') }}">
+            &larr; {{ _("Tous les parcours") }}
+        </a>
+    </header>
+
+    <div class="travel-captions">
+        <div class="travel-caption-current" id="caption-current"></div>
+        <div class="travel-caption-next" id="caption-next"></div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    window.TRAVEL_CONFIG = {
+        // Délai entre deux cartes (secondes)
+        intervalSeconds: 8,
+        cardsUrl: "{{ url_for('travel.cards_json', travel_id=travel.id) }}",
+        cardDetailUrlBase: "{{ url_for('home.card_detail', card_id='__ID__') }}",
+        travelUrl: "{{ url_for('travel.detail', travel_id=travel.id) }}",
+        imageBaseUrl: "{{ url_for('home.images', filename='') }}",
+        nextLabel: "{{ _("Suivant") }}"
+    };
+</script>
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/travel-slideshow.js') }}"></script>
+{% endblock %}

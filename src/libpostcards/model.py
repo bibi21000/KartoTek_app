@@ -3,6 +3,19 @@ libpostcards/model.py - Accès centralisé aux données : JSON, SQLite
 
 Gère les cartes postales (cards) et les trajets (travels).
 Pas de dépendance externe hormis la bibliothèque standard.
+
+Recommandation pour votre script de publication :
+
+bash# Bon : écrire la nouvelle base à côté, puis remplacement atomique
+cp nouvelle_base.sqlite datadir/postcards.sqlite.tmp
+mv datadir/postcards.sqlite.tmp datadir/postcards.sqlite
+
+# À éviter : écraser directement le fichier en place
+cp nouvelle_base.sqlite datadir/postcards.sqlite
+
+mv / os.replace (remplacement atomique du fichier, change l'inode) → fonctionne de manière fiable avec ce mécanisme, même si gunicorn a une connexion active en cours.
+
+cp en place (écrasement du contenu d'un fichier déjà ouvert par une connexion WAL active) → reste risqué indépendamment de mon code, car SQLite en mode WAL associe son fichier -shm à l'état du fichier au moment de l'ouverture ; écraser le contenu en place pendant qu'une connexion le tient ouvert peut produire des lectures incohérentes, peu importe la détection de changement côté applicatif.
 """
 
 from __future__ import annotations
@@ -172,13 +185,58 @@ class Model:
         self.cards_dir = self.datadir / "cards"
         self.db_path = self.datadir / "postcards.sqlite"
         self._conn: sqlite3.Connection | None = None
+        # Signature (mtime, inode) du fichier sqlite au moment de
+        # l'ouverture de la connexion ; permet de détecter un
+        # remplacement du fichier (publication d'une nouvelle base)
+        # et de rouvrir automatiquement la connexion, sans nécessiter
+        # de redémarrer le processus (utile avec gunicorn).
+        self._db_signature: tuple[float, int] | None = None
 
     # ------------------------------------------------------------------
     # Connexion SQLite
     # ------------------------------------------------------------------
 
+    def _current_db_signature(self) -> tuple[float, int] | None:
+        """(mtime, inode) du fichier sqlite sur disque, ou None s'il est absent."""
+        try:
+            stat = self.db_path.stat()
+        except OSError:
+            return None
+        return (stat.st_mtime, stat.st_ino)
+
     def _get_conn(self) -> sqlite3.Connection:
-        """Retourne (et ouvre si nécessaire) la connexion SQLite."""
+        """
+        Retourne (et ouvre si nécessaire) la connexion SQLite.
+
+        Si le fichier sqlite a été remplacé depuis la dernière ouverture
+        (mtime ou inode différent, par exemple après publication d'une
+        nouvelle base de données), la connexion existante est fermée et
+        une nouvelle est ouverte automatiquement.
+        """
+        current_signature = self._current_db_signature()
+
+        if self._conn is not None and current_signature != self._db_signature:
+            logger.info(
+                "Changement détecté sur %s, réouverture de la connexion",
+                self.db_path,
+            )
+            self.close()
+            # En mode WAL, des fichiers -wal/-shm résiduels de l'ancienne
+            # base peuvent subsister si seul le fichier .sqlite principal
+            # a été remplacé (ex: publication via cp/mv). S'ils ne sont
+            # pas supprimés, la nouvelle connexion risque de lire des
+            # pages obsolètes issues de l'ancienne base.
+            for suffix in ("-wal", "-shm"):
+                stale_path = Path(str(self.db_path) + suffix)
+                if stale_path.exists():
+                    try:
+                        stale_path.unlink()
+                    except OSError:
+                        logger.warning(
+                            "Impossible de supprimer le fichier résiduel %s",
+                            stale_path,
+                        )
+
         if self._conn is None:
             self._conn = sqlite3.connect(
                 self.db_path,
@@ -189,6 +247,8 @@ class Model:
             # Performance : WAL mode + foreign keys
             self._conn.execute("PRAGMA journal_mode=WAL;")
             self._conn.execute("PRAGMA foreign_keys=ON;")
+            self._db_signature = self._current_db_signature()
+
         return self._conn
 
     def close(self) -> None:
@@ -196,6 +256,7 @@ class Model:
         if self._conn is not None:
             self._conn.close()
             self._conn = None
+            self._db_signature = None
 
     def __enter__(self) -> "Model":
         return self
@@ -593,6 +654,70 @@ class Model:
         )
         conn = self._get_conn()
         cur = conn.execute(sql, params)
+        return [_row_to_card(r) for r in cur.fetchall()]
+
+    def list_recent_unique_cards(
+        self,
+        days: int,
+        fallback_count: int,
+        collection: str | None = None,
+    ) -> list[dict]:
+        """
+        Liste les cartes uniques (sans doublons) ajoutées dans les
+        ``days`` derniers jours (champ ``cdate``).
+
+        Si aucune carte ne correspond à cette fenêtre, retombe sur les
+        ``fallback_count`` derniers ajouts (toujours sans doublons),
+        quelle que soit leur ancienneté.
+
+        Paramètres
+        ----------
+        days : int
+            Taille de la fenêtre récente, en jours.
+        fallback_count : int
+            Nombre de cartes à retourner si la fenêtre récente est vide.
+        collection : str | None
+            Filtre optionnel sur la collection.
+        """
+        conditions: list[str] = [
+            "NOT EXISTS ("
+            "  SELECT 1 FROM cards AS c2, json_each(c2.doubles)"
+            "  WHERE json_each.value = cards.id"
+            ")"
+        ]
+        params: list[Any] = []
+
+        if collection:
+            conditions.append(
+                "EXISTS ("
+                "  SELECT 1 FROM json_each(cards.collections)"
+                "  WHERE value = ?"
+                ")"
+            )
+            params.append(collection)
+
+        base_where = " AND ".join(conditions)
+        conn = self._get_conn()
+
+        # Tentative 1 : cartes ajoutées dans les `days` derniers jours
+        cutoff = int(time.time()) - days * 86400
+        recent_sql = (
+            f"SELECT * FROM cards WHERE {base_where} AND cdate >= ? "
+            f"ORDER BY cdate DESC"
+        )
+        cur = conn.execute(recent_sql, params + [cutoff])
+        rows = cur.fetchall()
+
+        if rows:
+            return [_row_to_card(r) for r in rows]
+
+        # Repli : les `fallback_count` derniers ajouts, sans contrainte
+        # de date (mais toujours sans doublons / avec le filtre collection)
+        fallback_sql = (
+            f"SELECT * FROM cards WHERE {base_where} "
+            f"ORDER BY cdate DESC LIMIT {int(fallback_count)}"
+        )
+        cur = conn.execute(fallback_sql, params)
         return [_row_to_card(r) for r in cur.fetchall()]
 
     def count_unique_cards(

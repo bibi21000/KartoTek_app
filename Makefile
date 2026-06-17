@@ -18,6 +18,9 @@ venv:
 	./venv/bin/pip install -e .[scan]
 	./venv/bin/pip install -e .[travel]
 
+serve:
+	./venv/bin/python src/run.py
+
 build:
 	rm -rf dist build
 	${MAKE} i18n-compile
@@ -52,3 +55,10 @@ i18n-compile:
 	./venv/bin/python3 scripts/i18n.py compile
 
 i18n: i18n-update i18n-compile
+
+docker:
+	docker build -t flpostcards .
+
+docker-push:
+	docker tag flpostcards localhost:5000/flpostcards
+	docker push localhost:5000/flpostcards

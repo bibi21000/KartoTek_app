@@ -1,15 +1,14 @@
-# French translations for flpostcards.
-# Copyright (C) 2026 bibi21000
-# This file is distributed under the same license as the flpostcards
-# project.
+# French translations for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: flpostcards 2.0.0\n"
-"Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
-"POT-Creation-Date: 2026-06-14 09:35+0200\n"
-"PO-Revision-Date: 2026-06-12 15:19+0200\n"
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-06-17 23:22+0000\n"
+"PO-Revision-Date: 2026-06-14 12:15+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
 "Language-Team: fr <LL@li.org>\n"
@@ -18,4 +17,235 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
+
+#: blueprints/gallery/__init__.py:93
+#, python-format
+msgid "Galerie - %(collection)s"
+msgstr "Galerie - %(collection)s"
+
+#: blueprints/gallery/__init__.py:96 templates/base.html:45
+msgid "Galerie"
+msgstr "Galerie"
+
+#: blueprints/gallery/__init__.py:115
+msgid "Parcourez ma collection de cartes postales anciennes."
+msgstr "Parcourez ma collection de cartes postales anciennes."
+
+#: blueprints/home/__init__.py:57
+#, python-format
+msgid "Ma collection de cartes postales - %(collection)s"
+msgstr "Ma collection de cartes postales - %(collection)s"
+
+#: blueprints/home/__init__.py:61
+msgid "Ma collection de cartes postales"
+msgstr "Ma collection de cartes postales"
+
+#: blueprints/home/__init__.py:91 templates/base.html:12
+msgid "Découvrez ma collection de cartes postales anciennes."
+msgstr "Découvrez ma collection de cartes postales anciennes."
+
+#: blueprints/home/__init__.py:199 templates/card/detail.html:3
+#: templates/gallery/index.html:84
+#, python-format
+msgid "Carte #%(id)s"
+msgstr "Carte #%(id)s"
+
+#: blueprints/home/__init__.py:211
+msgid "Retour à la galerie"
+msgstr "Retour à la galerie"
+
+#: blueprints/home/__init__.py:213
+msgid "Retour au parcours"
+msgstr "Retour au parcours"
+
+#: blueprints/home/__init__.py:215
+msgid "Retour à la carte"
+msgstr "Retour à la carte"
+
+#: blueprints/home/__init__.py:217 templates/card/detail.html:12
+msgid "Retour au diaporama"
+msgstr "Retour au diaporama"
+
+#: blueprints/map/__init__.py:26
+#, python-format
+msgid "Carte - %(collection)s"
+msgstr "Carte - %(collection)s"
+
+#: blueprints/map/__init__.py:28 templates/base.html:53
+msgid "Carte"
+msgstr "Carte"
+
+#: blueprints/map/__init__.py:53
+msgid "Localisez ma collection de cartes postales sur la carte."
+msgstr "Localisez ma collection de cartes postales sur la carte."
+
+#: blueprints/slideshow/__init__.py:43
+#, python-format
+msgid "Diaporama - %(collection)s"
+msgstr "Diaporama - %(collection)s"
+
+#: blueprints/slideshow/__init__.py:46 templates/base.html:57
+msgid "Diaporama"
+msgstr "Diaporama"
+
+#: blueprints/slideshow/__init__.py:55
+msgid "Toutes mes cartes postales en diaporama."
+msgstr "Toutes mes cartes postales en diaporama."
+
+#: blueprints/travel/__init__.py:22 templates/base.html:49
+msgid "Parcours"
+msgstr "Parcours"
+
+#: blueprints/travel/__init__.py:30 blueprints/travel/__init__.py:70
+msgid "Suivez mes parcours à travers ma collection de cartes postales."
+msgstr "Suivez mes parcours à travers ma collection de cartes postales."
+
+#: blueprints/travel/__init__.py:49
+#, python-format
+msgid "Parcours #%(id)s"
+msgstr "Parcours #%(id)s"
+
+#: templates/base.html:6 templates/base.html:11 templates/card/detail.html:5
+msgid "Cartes postales"
+msgstr "Cartes postales"
+
+#: templates/base.html:41
+msgid "Accueil"
+msgstr "Accueil"
+
+#: templates/card/detail.html:10
+msgid "Retour"
+msgstr "Retour"
+
+#: templates/card/detail.html:15
+msgid "Cliquer pour agrandir"
+msgstr "Cliquer pour agrandir"
+
+#: templates/card/detail.html:19 templates/gallery/index.html:89
+#, python-format
+msgid "Recto de la carte %(id)s"
+msgstr "Recto de la carte %(id)s"
+
+#: templates/card/detail.html:23 templates/gallery/index.html:95
+#, python-format
+msgid "Verso de la carte %(id)s"
+msgstr "Verso de la carte %(id)s"
+
+#: templates/card/detail.html:25
+msgid "Afficher l'autre face"
+msgstr "Afficher l'autre face"
+
+#: templates/card/detail.html:28
+msgid "Aperçu de l'autre face"
+msgstr "Aperçu de l'autre face"
+
+#: templates/card/detail.html:63
+msgid "Aperçu du recto"
+msgstr "Aperçu du recto"
+
+#: templates/card/detail.html:64
+msgid "Aperçu du verso"
+msgstr "Aperçu du verso"
+
+#: templates/gallery/index.html:13
+msgid "Recherche"
+msgstr "Recherche"
+
+#: templates/gallery/index.html:19
+msgid "Rechercher..."
+msgstr "Rechercher..."
+
+#: templates/gallery/index.html:26 templates/home/index.html:24
+#: templates/map/index.html:19 templates/slideshow/index.html:24
+msgid "Collection"
+msgstr "Collection"
+
+#: templates/gallery/index.html:29 templates/home/index.html:27
+#: templates/map/index.html:22 templates/slideshow/index.html:27
+msgid "Toutes les collections"
+msgstr "Toutes les collections"
+
+#: templates/gallery/index.html:41
+msgid "Affichage"
+msgstr "Affichage"
+
+#: templates/gallery/index.html:44
+msgid "Recto / verso"
+msgstr "Recto / verso"
+
+#: templates/gallery/index.html:47
+msgid "Recto"
+msgstr "Recto"
+
+#: templates/gallery/index.html:50
+msgid "Verso"
+msgstr "Verso"
+
+#: templates/gallery/index.html:56
+msgid "Doublons"
+msgstr "Doublons"
+
+#: templates/gallery/index.html:59
+msgid "Sans doublons"
+msgstr "Sans doublons"
+
+#: templates/gallery/index.html:62
+msgid "Avec doublons"
+msgstr "Avec doublons"
+
+#: templates/gallery/index.html:68
+msgid "Cartes par page"
+msgstr "Cartes par page"
+
+#: templates/gallery/index.html:72
+#, python-format
+msgid "%(n)d par page"
+msgstr "%(n)d par page"
+
+#: templates/gallery/index.html:112 templates/gallery/index.html:115
+msgid "Précédent"
+msgstr "Précédent"
+
+#: templates/gallery/index.html:119
+#, python-format
+msgid "Page %(page)d / %(pages)d"
+msgstr "Page %(page)d / %(pages)d"
+
+#: templates/gallery/index.html:124 templates/gallery/index.html:127
+#: templates/travel/detail.html:43
+msgid "Suivant"
+msgstr "Suivant"
+
+#: templates/gallery/index.html:133
+msgid "Aucune carte ne correspond à ces critères."
+msgstr "Aucune carte ne correspond à ces critères."
+
+#: templates/home/index.html:12 templates/slideshow/index.html:12
+msgid "Verso de la carte"
+msgstr "Verso de la carte"
+
+#: templates/home/index.html:51 templates/slideshow/index.html:51
+msgid "Ajoutée le"
+msgstr "Ajoutée le"
+
+#: templates/travel/detail.html:22
+msgid "Tous les parcours"
+msgstr "Tous les parcours"
+
+#: templates/travel/index.html:29
+#, python-format
+msgid "%(distance)s km"
+msgstr "%(distance)s km"
+
+#: templates/travel/index.html:31
+#, python-format
+msgid "%(count)d cartes"
+msgstr "%(count)d cartes"
+
+#: templates/travel/index.html:38
+msgid "Aucun parcours disponible."
+msgstr "Aucun parcours disponible."
+
+#~ msgid "Filtrer"
+#~ msgstr "Filtrer"
 
