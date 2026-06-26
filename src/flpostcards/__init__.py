@@ -116,4 +116,7 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
     from flpostcards.blueprints.slideshow import bp as slideshow_bp
     app.register_blueprint(slideshow_bp)
 
+    from flpostcards.blueprints.api import bp as api_bp
+    app.register_blueprint(api_bp)
+
     return app

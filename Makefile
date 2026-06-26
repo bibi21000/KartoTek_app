@@ -23,6 +23,7 @@ serve:
 
 build:
 	rm -rf dist build
+	${MAKE} i18n-extract
 	${MAKE} i18n-update
 	${MAKE} i18n-compile
 	./venv/bin/python3 -m build

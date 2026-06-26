@@ -17,9 +17,12 @@ source change.
 from __future__ import annotations
 
 import hashlib
+import logging
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+logger = logging.getLogger(__name__)
 
 ICON_FILENAMES = ("icon.png", "icon.jpg", "icon.jpeg")
 
@@ -145,7 +148,19 @@ def render_text_icon(text: str, size: int = ICON_SIZE) -> Image.Image:
     try:
         font = ImageFont.truetype(str(font_path), font_size)
     except Exception:
-        font = ImageFont.load_default()
+        logger.warning(
+            "Police %s introuvable ou illisible, repli sur une police par "
+            "défaut redimensionnée (le rendu sera moins soigné). "
+            "Vérifiez que assets/fonts/ a bien été déployé.",
+            font_path,
+        )
+        try:
+            # Pillow >= 10.1 : load_default accepte un paramètre de taille,
+            # contrairement aux versions plus anciennes qui retournent
+            # toujours une police bitmap minuscule à taille fixe.
+            font = ImageFont.load_default(size=font_size)
+        except TypeError:
+            font = ImageFont.load_default()
 
     # Calque texte (avec marge pour permettre la rotation sans rognage)
     margin = size // 2
@@ -216,6 +231,13 @@ def render_text_icon(text: str, size: int = ICON_SIZE) -> Image.Image:
     return rounded
 
 
+# Incrémenté à chaque changement du rendu de render_text_icon, pour que
+# le cache sur disque (datadir/cache/icon-<hash>.png) soit invalidé
+# automatiquement après une mise à jour du code, même si le texte de
+# configuration ou le fichier uploadé n'a pas changé.
+_GENERATOR_VERSION = 2
+
+
 def _source_signature(static_dir: Path, icon_config: str | None) -> str:
     """
     Construit une signature identifiant la source courante de l'icône
@@ -224,9 +246,9 @@ def _source_signature(static_dir: Path, icon_config: str | None) -> str:
     """
     uploaded = find_uploaded_icon(static_dir)
     if uploaded is not None:
-        return f"file:{uploaded.name}:{uploaded.stat().st_mtime_ns}"
+        return f"file:{uploaded.name}:{uploaded.stat().st_mtime_ns}:v{_GENERATOR_VERSION}"
     if icon_config:
-        return f"text:{icon_config}"
+        return f"text:{icon_config}:v{_GENERATOR_VERSION}"
     return ""
 
 

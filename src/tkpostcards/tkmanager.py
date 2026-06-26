@@ -1471,8 +1471,8 @@ class App(tk.Tk):
         self.collections: list[str] = self._load_collections()
         self.title(_("app_title"))
         self.configure(bg=BG_MAIN)
-        self.geometry("1200x860")
-        self.minsize(980, 700)
+        self.geometry("1380x860")
+        self.minsize(1200, 700)
 
         self._ids: list[int] = []
         self._current_idx = 0
@@ -1487,7 +1487,14 @@ class App(tk.Tk):
         self._text_search_win: "TextSearchView | None" = None
         self._doubles_win: "DoublesSearchView | None" = None
         self._poi_win: "PoiManagerView | None" = None
+        # Shared PostcardSearcher instance — loaded once, reused by all
+        # sub-windows (SearchView, DoublesSearchView) to avoid loading
+        # the CLIP model multiple times and saturating GPU memory.
+        self.searcher: "PostcardSearcher | None" = None
+        self._searcher_loading: bool = False
         self._nav_collection: str | None = self._load_last_filter()
+        self._nav_no_gps: bool = False
+        self._nav_no_poi: bool = False
 
         self._scan_ids()
 
@@ -1498,6 +1505,7 @@ class App(tk.Tk):
 
         self._build_ui()
         self._nav_filter_var.set(self._nav_collection if self._nav_collection else _("tsearch_all"))
+        self._nav_missing_var.set(_("tsearch_all"))
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         if self._ids:
@@ -1570,6 +1578,12 @@ class App(tk.Tk):
         collection = self._nav_collection if getattr(self, "_nav_collection", None) else None
         try:
             cards = self.model.list_cards(collection=collection)
+
+            if getattr(self, "_nav_no_gps", False):
+                cards = [c for c in cards if not c.get("coord")]
+            if getattr(self, "_nav_no_poi", False):
+                cards = [c for c in cards if not c.get("poi")]
+
             ids = []
             for data in cards:
                 try:
@@ -1617,29 +1631,24 @@ class App(tk.Tk):
         nav = tk.Frame(self, bg=BG_CARD, pady=6)
         nav.pack(fill=tk.X)
 
-        self._btn_prev = tk.Button(nav, text=_("nav_prev"), command=self._go_prev,
-                                   bg=BG_FIELD, fg=FG_TEXT, font=FONT_NAV,
-                                   relief=tk.FLAT, padx=14, pady=4, cursor="hand2")
-        self._btn_prev.pack(side=tk.LEFT, padx=12)
+        # ── ⇤ Premier ─────────────────────────────────────────────────────────
+        self._btn_first = tk.Button(nav, text="\u23ee", command=self._go_first,
+                                    bg=BG_FIELD, fg=FG_TEXT, font=FONT_NAV,
+                                    relief=tk.FLAT, padx=10, pady=4, cursor="hand2")
+        self._btn_first.pack(side=tk.LEFT, padx=(12, 2))
 
+        # ── ← Précédent ───────────────────────────────────────────────────────
+        self._btn_prev = tk.Button(nav, text="\u25c0", command=self._go_prev,
+                                   bg=BG_FIELD, fg=FG_TEXT, font=FONT_NAV,
+                                   relief=tk.FLAT, padx=10, pady=4, cursor="hand2")
+        self._btn_prev.pack(side=tk.LEFT, padx=(2, 4))
+
+        # ── Id / compteur ─────────────────────────────────────────────────────
         self._lbl_counter = tk.Label(nav, text="", bg=BG_CARD,
                                      fg=FG_ACCENT2, font=FONT_TITLE)
         self._lbl_counter.pack(side=tk.LEFT, padx=8)
 
-        # Collection filter for navigation
-        filt_frm = tk.Frame(nav, bg=BG_CARD)
-        filt_frm.pack(side=tk.LEFT, padx=8)
-        tk.Label(filt_frm, text=_("nav_filter_label"), bg=BG_CARD, fg=FG_LABEL,
-                 font=FONT_LABEL).pack(side=tk.LEFT, padx=(0, 4))
-        self._nav_filter_var = tk.StringVar(value=_("tsearch_all"))
-        choices = [_("tsearch_all")] + self.collections
-        self._nav_filter_menu = ttk.Combobox(filt_frm, textvariable=self._nav_filter_var,
-                                             values=choices, width=14,
-                                             font=FONT_INPUT, state="readonly")
-        self._nav_filter_menu.pack(side=tk.LEFT)
-        self._nav_filter_menu.bind("<<ComboboxSelected>>", self._on_nav_filter_changed)
-
-        # Free id entry
+        # ── Aller à ──────────────────────────────────────────────────────────
         goto_frm = tk.Frame(nav, bg=BG_CARD)
         goto_frm.pack(side=tk.LEFT, padx=8)
         tk.Label(goto_frm, text=_("goto_label"), bg=BG_CARD, fg=FG_LABEL,
@@ -1655,21 +1664,61 @@ class App(tk.Tk):
                   bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
                   relief=tk.FLAT, padx=6).pack(side=tk.LEFT)
 
+        # ── Enregistrer ───────────────────────────────────────────────────────
+        self._btn_save = tk.Button(nav, text=_("nav_save"), command=self._save_json,
+                                   bg=BTN_CLEAN, fg="#fff", font=FONT_NAV,
+                                   relief=tk.FLAT, padx=14, pady=4, cursor="hand2")
+        self._btn_save.pack(side=tk.LEFT, padx=8)
+
+        # ── → Suivant ─────────────────────────────────────────────────────────
+        self._btn_next = tk.Button(nav, text="\u25b6", command=self._go_next,
+                                   bg=BG_FIELD, fg=FG_TEXT, font=FONT_NAV,
+                                   relief=tk.FLAT, padx=10, pady=4, cursor="hand2")
+        self._btn_next.pack(side=tk.LEFT, padx=(4, 2))
+
+        # ── ⇥ Dernier ─────────────────────────────────────────────────────────
+        self._btn_last = tk.Button(nav, text="\u23ed", command=self._go_last,
+                                   bg=BG_FIELD, fg=FG_TEXT, font=FONT_NAV,
+                                   relief=tk.FLAT, padx=10, pady=4, cursor="hand2")
+        self._btn_last.pack(side=tk.LEFT, padx=(2, 12))
+
+        # ── Séparateur visuel ─────────────────────────────────────────────────
+        tk.Frame(nav, bg=FG_ACCENT, width=1).pack(side=tk.LEFT, fill=tk.Y,
+                                                   padx=4, pady=4)
+
+        # ── Filtre collection ─────────────────────────────────────────────────
+        filt_frm = tk.Frame(nav, bg=BG_CARD)
+        filt_frm.pack(side=tk.LEFT, padx=8)
+        tk.Label(filt_frm, text=_("nav_filter_label"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL).pack(side=tk.LEFT, padx=(0, 4))
+        self._nav_filter_var = tk.StringVar(value=_("tsearch_all"))
+        choices = [_("tsearch_all")] + self.collections
+        self._nav_filter_menu = ttk.Combobox(filt_frm, textvariable=self._nav_filter_var,
+                                             values=choices, width=14,
+                                             font=FONT_INPUT, state="readonly")
+        self._nav_filter_menu.pack(side=tk.LEFT)
+        self._nav_filter_menu.bind("<<ComboboxSelected>>", self._on_nav_filter_changed)
+
+        # ── Filtre données manquantes (GPS / POI) ─────────────────────────────
+        missing_filt_frm = tk.Frame(nav, bg=BG_CARD)
+        missing_filt_frm.pack(side=tk.LEFT, padx=8)
+        tk.Label(missing_filt_frm, text=_("nav_missing_filter_label"), bg=BG_CARD,
+                 fg=FG_LABEL, font=FONT_LABEL).pack(side=tk.LEFT, padx=(0, 4))
+        self._nav_missing_var = tk.StringVar(value=_("tsearch_all"))
+        missing_choices = [_("tsearch_all"), _("nav_no_gps"), _("nav_no_poi")]
+        self._nav_missing_menu = ttk.Combobox(missing_filt_frm,
+                                              textvariable=self._nav_missing_var,
+                                              values=missing_choices, width=14,
+                                              font=FONT_INPUT, state="readonly")
+        self._nav_missing_menu.pack(side=tk.LEFT)
+        self._nav_missing_menu.bind("<<ComboboxSelected>>", self._on_nav_filter_changed)
+
+        # ── Plus ▾ ────────────────────────────────────────────────────────────
         self._btn_more = tk.Button(nav, text=_("nav_more"),
                                    command=self._open_more_menu,
                                    bg=BG_FIELD, fg=FG_TEXT, font=FONT_NAV,
                                    relief=tk.FLAT, padx=14, pady=4, cursor="hand2")
-        self._btn_more.pack(side=tk.RIGHT, padx=6)
-
-        self._btn_next = tk.Button(nav, text=_("nav_next"), command=self._go_next,
-                                   bg=BG_FIELD, fg=FG_TEXT, font=FONT_NAV,
-                                   relief=tk.FLAT, padx=14, pady=4, cursor="hand2")
-        self._btn_next.pack(side=tk.RIGHT, padx=12)
-
-        self._btn_save = tk.Button(nav, text=_("nav_save"), command=self._save_json,
-                                   bg=BTN_CLEAN, fg="#fff", font=FONT_NAV,
-                                   relief=tk.FLAT, padx=14, pady=4, cursor="hand2")
-        self._btn_save.pack(side=tk.RIGHT, padx=6)
+        self._btn_more.pack(side=tk.LEFT, padx=8)
 
         # Body
         body = tk.Frame(self, bg=BG_MAIN)
@@ -1828,8 +1877,10 @@ class App(tk.Tk):
 
         self._lbl_counter.config(
             text=f"#{cid}  ({idx + 1}/{len(self._ids)})")
+        self._btn_first.config(state=tk.NORMAL if idx > 0 else tk.DISABLED)
         self._btn_prev.config(state=tk.NORMAL if idx > 0 else tk.DISABLED)
         self._btn_next.config(state=tk.NORMAL if idx < len(self._ids) - 1 else tk.DISABLED)
+        self._btn_last.config(state=tk.NORMAL if idx < len(self._ids) - 1 else tk.DISABLED)
 
         for key, _lk, single, _h in self.TEXT_FIELDS:
             val = str(self._data.get(key) or "")
@@ -1924,29 +1975,45 @@ class App(tk.Tk):
     # ── Navigation ────────────────────────────────────────────────────────────
     # ── Collection filter for navigation ─────────────────────────────────────
     def _on_nav_filter_changed(self, _event=None):
+        all_label = _("tsearch_all")
         if not self._ask_save_if_dirty():
-            # Revert the combobox to the previous value
+            # Revert all combobox values to the previous state
             self._nav_filter_var.set(
-                self._nav_collection if self._nav_collection else _("tsearch_all"))
+                self._nav_collection if self._nav_collection else all_label)
+            if self._nav_no_gps:
+                self._nav_missing_var.set(_("nav_no_gps"))
+            elif self._nav_no_poi:
+                self._nav_missing_var.set(_("nav_no_poi"))
+            else:
+                self._nav_missing_var.set(all_label)
             return
         choice = self._nav_filter_var.get()
-        all_label = _("tsearch_all")
+        missing_choice = self._nav_missing_var.get()
         current_cid = self._ids[self._current_idx] if self._ids else None
 
         self._nav_collection = None if (not choice or choice == all_label) else choice
+        self._nav_no_gps = (missing_choice == _("nav_no_gps"))
+        self._nav_no_poi = (missing_choice == _("nav_no_poi"))
         self._scan_ids()
 
         if not self._ids:
             messagebox.showinfo(_("info_title"),
                                 _("nav_filter_empty"))
             self._nav_collection = None
+            self._nav_no_gps = False
+            self._nav_no_poi = False
             self._nav_filter_var.set(all_label)
+            self._nav_missing_var.set(all_label)
             self._scan_ids()
 
         # Try to keep the same card visible if it's still in the filtered list
         if current_cid is not None and current_cid in self._ids:
             self._load_card(self._ids.index(current_cid))
         else:
+            self._load_card(0)
+
+    def _go_first(self):
+        if self._ids and self._ask_save_if_dirty():
             self._load_card(0)
 
     def _go_prev(self):
@@ -1956,6 +2023,10 @@ class App(tk.Tk):
     def _go_next(self):
         if self._current_idx < len(self._ids) - 1 and self._ask_save_if_dirty():
             self._load_card(self._current_idx + 1)
+
+    def _go_last(self):
+        if self._ids and self._ask_save_if_dirty():
+            self._load_card(len(self._ids) - 1)
 
     def _goto(self):
         raw = self._goto_var.get().strip()
@@ -2003,6 +2074,62 @@ class App(tk.Tk):
             # the grab here immediately would prevent outside clicks from
             # dismissing it properly.
             pass
+
+    # ── Shared PostcardSearcher ───────────────────────────────────────────────
+    def load_searcher_async(self, on_ready=None, on_error=None):
+        """Load the shared PostcardSearcher once.
+
+        If already loaded, calls ``on_ready(self.searcher)`` immediately.
+        If currently loading, the callbacks are queued and called when done.
+        Otherwise starts a background thread.
+        """
+        if self.searcher is not None:
+            if on_ready:
+                on_ready(self.searcher)
+            return
+
+        # Queue callbacks to fire when loading completes
+        if not hasattr(self, "_searcher_callbacks"):
+            self._searcher_callbacks: list = []
+        if on_ready or on_error:
+            self._searcher_callbacks.append((on_ready, on_error))
+
+        if self._searcher_loading:
+            return  # thread already running — callback will fire when done
+
+        self._searcher_loading = True
+        index_path = self.datadir / "postcards.pkl"
+
+        def worker():
+            try:
+                s = PostcardSearcher()
+                s.load_index(str(index_path))
+                self.after(0, lambda: self._on_searcher_loaded(s))
+            except Exception as e:
+                self.after(0, lambda err=e: self._on_searcher_error(err))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_searcher_loaded(self, searcher: "PostcardSearcher"):
+        self.searcher = searcher
+        self._searcher_loading = False
+        for on_ready, _on_error in getattr(self, "_searcher_callbacks", []):
+            try:
+                if on_ready:
+                    on_ready(searcher)
+            except Exception:
+                pass
+        self._searcher_callbacks = []
+
+    def _on_searcher_error(self, err: Exception):
+        self._searcher_loading = False
+        for _on_ready, on_error in getattr(self, "_searcher_callbacks", []):
+            try:
+                if on_error:
+                    on_error(err)
+            except Exception:
+                pass
+        self._searcher_callbacks = []
 
     # ── Gallery ───────────────────────────────────────────────────────────────
     def _open_gallery(self):
@@ -2188,27 +2315,21 @@ class SearchView(tk.Toplevel):
         self._build_statusbar()
         self._cv.bind("<Configure>", self._on_cv_configure)
 
-        # Load the index in the background to avoid blocking the UI
+        # Use the shared PostcardSearcher from App (loaded once, no GPU reload)
         self._load_index_async()
 
     # ── Index loading ─────────────────────────────────────────────────────────
     def _load_index_async(self):
-        """Load postcards.pkl in a thread to avoid blocking the UI."""
         if not SEARCHER_AVAILABLE:
+            self._status.set(_("search_unavailable"))
+            self._btn_search.config(state=tk.DISABLED)
             return
-        index_path = self._app.datadir / "postcards.pkl"
         self._status.set(_("search_index_loading"))
         self._btn_search.config(state=tk.DISABLED)
-
-        def worker():
-            try:
-                searcher = PostcardSearcher()
-                searcher.load_index(str(index_path))
-                self.after(0, lambda s=searcher: self._on_index_loaded(s))
-            except Exception as e:
-                self.after(0, lambda err=e: self._on_index_error(err))
-
-        threading.Thread(target=worker, daemon=True).start()
+        self._app.load_searcher_async(
+            on_ready=self._on_index_loaded,
+            on_error=self._on_index_error,
+        )
 
     def _on_index_loaded(self, searcher: "PostcardSearcher"):
         if not self.winfo_exists():
@@ -2221,7 +2342,6 @@ class SearchView(tk.Toplevel):
         if not self.winfo_exists():
             return
         self._status.set(_("search_index_error").format(err=err))
-        # Button stays disabled if the index could not be loaded
 
     # ── Form ──────────────────────────────────────────────────────────────────
     def _build_form(self):
@@ -2583,29 +2703,21 @@ class DoublesSearchView(tk.Toplevel):
         self._build_statusbar()
         self._cv.bind("<Configure>", self._on_cv_configure)
 
-        # Load the index in the background to avoid blocking the UI
+        # Use the shared PostcardSearcher from App (loaded once, no GPU reload)
         self._load_index_async()
 
     # ── Index loading ─────────────────────────────────────────────────────────
     def _load_index_async(self):
-        """Load postcards.pkl in a thread to avoid blocking the UI."""
         if not SEARCHER_AVAILABLE:
             self._status.set(_("search_unavailable"))
             self._btn_run.config(state=tk.DISABLED)
             return
-        index_path = self._app.datadir / "postcards.pkl"
         self._status.set(_("search_index_loading"))
         self._btn_run.config(state=tk.DISABLED)
-
-        def worker():
-            try:
-                searcher = PostcardSearcher()
-                searcher.load_index(str(index_path))
-                self.after(0, lambda s=searcher: self._on_index_loaded(s))
-            except Exception as e:
-                self.after(0, lambda err=e: self._on_index_error(err))
-
-        threading.Thread(target=worker, daemon=True).start()
+        self._app.load_searcher_async(
+            on_ready=self._on_index_loaded,
+            on_error=self._on_index_error,
+        )
 
     def _on_index_loaded(self, searcher: "PostcardSearcher"):
         if not self.winfo_exists():
@@ -3337,3 +3449,4 @@ def run():
     """Standalone entry point (tkmanager script): runs `cli main`."""
     sys.argv.insert(1, "main")
     cli()
+

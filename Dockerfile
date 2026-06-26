@@ -3,6 +3,8 @@
 # base python image for custom image
 FROM python:3.12-alpine
 
+ENV PIP_NO_CACHE_DIR=false
+
 # create working directory and install pip dependencies
 RUN mkdir -p /data
 COPY pyproject.toml /app/

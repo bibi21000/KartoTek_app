@@ -13,6 +13,32 @@ from tqdm import tqdm
 from .. import cli
 from . import split_ids
 
+def _travels(common):
+
+    from pathlib import Path
+    import json
+    from libpostcards.model import Model
+    from ..libs.travel import (
+        ParcoursCartes
+    )
+    datadir = Path(common.datadir)
+    model = Model(common.datadir)
+    data = model.list_cards()
+    with open(datadir / "travels.json", "r", encoding="utf-8") as f:
+        travels = json.load(f)
+
+    travel = ParcoursCartes(data)
+    travel_data = {}
+    for tt in travels:
+        travel_data = travel.calculer(
+            *travels[tt]['start'],
+            collection=travels[tt]['collection'],
+            )
+        travel_data['id'] = travels[tt]['id']
+        travel_data['title'] = travels[tt]['title']
+        travel_data['title2'] = travels[tt]['title2']
+        model.write_travel(travel_data)
+
 
 @cli.command()
 @click.pass_obj
@@ -525,34 +551,13 @@ def transparency(common, pcid, white_threshold):
 @click.pass_obj
 def travels(common):
     """Calculate travels and add thm to database"""
-    from pathlib import Path
-    import json
-    from libpostcards.model import Model
-    from ..libs.travel import (
-        ParcoursCartes
-    )
-    datadir = Path(common.datadir)
-    model = Model(common.datadir)
-    data = model.list_cards()
-    with open(datadir / "travels.json", "r", encoding="utf-8") as f:
-        travels = json.load(f)
-
-    travel = ParcoursCartes(data)
-    travel_data = {}
-    for tt in travels:
-        travel_data = travel.calculer(
-            *travels[tt]['start'],
-            collection=travels[tt]['collection'],
-            )
-        travel_data['id'] = travels[tt]['id']
-        travel_data['title'] = travels[tt]['title']
-        travel_data['title2'] = travels[tt]['title2']
-        model.write_travel(travel_data)
+    _travels(common)
 
 @cli.command()
-@click.argument('config', default=None)
+@click.argument('config', default='sync_default')
+@click.option('--full', is_flag=True, help=_("Update all data (travel, ...) before publihing"))
 @click.pass_obj
-def publish(common, config):
+def publish(common, config, full):
     """Publish data to a remote web server"""
     import logging
     from pathlib import Path
@@ -560,6 +565,9 @@ def publish(common, config):
     from ..libs.remotesync import (
         RemoteSync
     )
+
+    if full is True:
+        _travels(common)
 
     if config is None:
         raise RuntimeError("Give me a config")

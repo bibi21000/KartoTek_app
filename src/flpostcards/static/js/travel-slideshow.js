@@ -117,6 +117,24 @@
         } else {
             map.setView([0, 0], 2);
         }
+
+        // Clic sur la mini-carte → ouvre OpenStreetMap à la position
+        // de la carte courante dans un nouvel onglet
+        pipMapEl.style.cursor = "pointer";
+        pipMapEl.addEventListener("click", function (event) {
+            event.stopPropagation(); // ne pas déclencher la navigation vers la fiche carte
+            if (currentIndex < 0 || !cards.length) {
+                return;
+            }
+            var card = cards[currentIndex];
+            if (!card || !card.coord || card.coord[0] == null || card.coord[1] == null) {
+                return;
+            }
+            var url = "https://www.openstreetmap.org/?mlat=" + card.coord[0]
+                + "&mlon=" + card.coord[1]
+                + "&zoom=" + MAP_DISPLAY_ZOOM;
+            window.open(url, "_blank", "noopener,noreferrer");
+        });
     }
 
     function updateMap(index) {

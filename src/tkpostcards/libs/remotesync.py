@@ -12,8 +12,11 @@ import hashlib
 import logging
 import os
 import stat
+import threading
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -46,6 +49,8 @@ class SyncConfig:
     timeout: int = 30
     delete_orphans: bool = False   # supprimer les fichiers distants absents en local
     dry_run: bool = False          # simuler sans transférer
+    logdir: str = ""               # répertoire de stockage des logs de session
+    max_workers: int = 5           # transferts simultanés lors de sync_directory
 
     @classmethod
     def from_ini(cls, path: str | Path, section: str = "remotesync") -> "SyncConfig":
@@ -76,12 +81,39 @@ class SyncConfig:
             timeout=int(s.get("timeout", 30)),
             delete_orphans=s.getboolean("delete_orphans", False),
             dry_run=s.getboolean("dry_run", False),
+            # logdir est dans [DEFAULT] (hérité par toutes les sections)
+            logdir=s.get("logdir", ""),
+            max_workers=int(s.get("max_workers", 5)),
         )
 
 
+# ---------------------------------------------------------------------------
+# Entrée de log d'une opération au sein d'une session
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _SyncEntry:
+    """Une opération (fichier ou répertoire) effectuée pendant la session."""
+    label: str          # chemin local ou libellé fourni par l'appelant
+    remote: str         # cible distante
+    kind: str           # "file" | "directory"
+    started_at: datetime
+    ended_at: datetime
+    result: "SyncResult"
+
+
+# ---------------------------------------------------------------------------
+# SyncResult
+# ---------------------------------------------------------------------------
+
 @dataclass
 class SyncResult:
-    """Résultat d'une opération de synchronisation."""
+    """
+    Résultat d'une opération de synchronisation (fichier ou répertoire).
+
+    Peut être agrégé dans une :class:`SyncSession` pour suivre plusieurs
+    opérations au sein d'une même session de travail.
+    """
     uploaded: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     deleted: list[str] = field(default_factory=list)
@@ -96,6 +128,195 @@ class SyncResult:
             f"SyncResult(uploaded={len(self.uploaded)}, skipped={len(self.skipped)}, "
             f"deleted={len(self.deleted)}, errors={len(self.errors)})"
         )
+
+
+# ---------------------------------------------------------------------------
+# SyncSession — agrégation de plusieurs SyncResult
+# ---------------------------------------------------------------------------
+
+class SyncSession:
+    """
+    Regroupe plusieurs opérations de synchronisation effectuées lors d'une
+    même session de travail et permet de sauvegarder un rapport lisible.
+
+    Exemple d'utilisation ::
+
+        session = SyncSession(config)
+
+        r1 = sync.sync_file("dist/app.js", "/public_html/app.js")
+        session.add(r1, local="dist/app.js", remote="/public_html/app.js", kind="file")
+
+        r2 = sync.sync_directory("dist/", "/public_html")
+        session.add(r2, local="dist/", remote="/public_html", kind="directory")
+
+        session.save()          # écrit le rapport dans logdir
+        print(session.summary())
+    """
+
+    def __init__(self, config: "SyncConfig", label: str = ""):
+        self.config = config
+        self.label = label or "session"
+        self.started_at: datetime = datetime.now(tz=timezone.utc)
+        self._entries: list[_SyncEntry] = []
+
+    # ------------------------------------------------------------------
+    # API publique
+    # ------------------------------------------------------------------
+
+    def add(
+        self,
+        result: SyncResult,
+        *,
+        local: str,
+        remote: str,
+        kind: str = "file",
+    ) -> None:
+        """
+        Enregistre le résultat d'une opération dans la session.
+
+        :param result: :class:`SyncResult` retourné par ``sync_file`` ou
+                       ``sync_directory``.
+        :param local:  Chemin local utilisé (pour le rapport).
+        :param remote: Chemin distant cible (pour le rapport).
+        :param kind:   ``"file"`` ou ``"directory"``.
+        """
+        now = datetime.now(tz=timezone.utc)
+        # started_at estimé : heure courante moins durée implicite (inconnue) —
+        # on conserve l'heure d'ajout comme timestamp de fin.
+        entry = _SyncEntry(
+            label=local,
+            remote=remote,
+            kind=kind,
+            started_at=now,
+            ended_at=now,
+            result=result,
+        )
+        self._entries.append(entry)
+
+    @property
+    def total_uploaded(self) -> int:
+        return sum(len(e.result.uploaded) for e in self._entries)
+
+    @property
+    def total_skipped(self) -> int:
+        return sum(len(e.result.skipped) for e in self._entries)
+
+    @property
+    def total_deleted(self) -> int:
+        return sum(len(e.result.deleted) for e in self._entries)
+
+    @property
+    def total_errors(self) -> int:
+        return sum(len(e.result.errors) for e in self._entries)
+
+    @property
+    def success(self) -> bool:
+        return self.total_errors == 0
+
+    def summary(self) -> str:
+        """Retourne un résumé compact sur une ligne."""
+        status = "OK" if self.success else "ERREURS"
+        return (
+            f"[{status}] Session «{self.label}» — "
+            f"{len(self._entries)} opération(s) : "
+            f"↑{self.total_uploaded} uploadé(s), "
+            f"↷{self.total_skipped} ignoré(s), "
+            f"✗{self.total_deleted} supprimé(s), "
+            f"⚠{self.total_errors} erreur(s)"
+        )
+
+    def save(self, logdir: Optional[str] = None) -> Path:
+        """
+        Écrit le rapport de session dans un fichier texte lisible.
+
+        Le nom du fichier est ``<label>_<YYYYMMDD_HHMMSS>.log``.
+
+        :param logdir: Répertoire de destination. Si omis, utilise
+                       ``config.logdir``. Si les deux sont vides, écrit dans
+                       le répertoire courant.
+        :returns: Chemin du fichier créé.
+        :raises OSError: Si le répertoire ne peut pas être créé ou le fichier
+                         ne peut pas être écrit.
+        """
+        dest_dir = Path(logdir or self.config.logdir or ".")
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        ts = self.started_at.strftime("%Y%m%d_%H%M%S")
+        safe_label = "".join(c if c.isalnum() or c in "-_" else "_" for c in self.label)
+        filename = f"{safe_label}_{ts}.log"
+        log_path = dest_dir / filename
+
+        log_path.write_text(self._render_report(), encoding="utf-8")
+        logger.info("Rapport de session écrit dans %s", log_path)
+        return log_path
+
+    # ------------------------------------------------------------------
+    # Rendu interne
+    # ------------------------------------------------------------------
+
+    def _render_report(self) -> str:
+        now = datetime.now(tz=timezone.utc)
+        lines: list[str] = []
+
+        def sep(char: str = "─", width: int = 72) -> str:
+            return char * width
+
+        lines += [
+            sep("═"),
+            f"  RAPPORT DE SYNCHRONISATION — {self.label.upper()}",
+            sep("═"),
+            f"  Début de session : {self.started_at.strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"  Fin de session   : {now.strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"  Serveur          : {self.config.host}:{self.config.port}"
+            f"  [{self.config.protocol.value.upper()}]",
+            f"  Répertoire base  : {self.config.remote_base_dir}",
+            f"  Mode simulation  : {'OUI' if self.config.dry_run else 'NON'}",
+            sep(),
+            f"  RÉSUMÉ : {len(self._entries)} opération(s) | "
+            f"↑{self.total_uploaded} uploadé(s) | "
+            f"↷{self.total_skipped} ignoré(s) | "
+            f"✗{self.total_deleted} supprimé(s) | "
+            f"⚠{self.total_errors} erreur(s)",
+            sep("═"),
+            "",
+        ]
+
+        for i, entry in enumerate(self._entries, 1):
+            r = entry.result
+            status = "✔ OK" if r.success else "✘ ERREUR(S)"
+            kind_label = "Fichier" if entry.kind == "file" else "Répertoire"
+            lines += [
+                f"  [{i}/{len(self._entries)}] {kind_label} — {status}",
+                f"  Local  : {entry.label}",
+                f"  Distant: {entry.remote}",
+                sep("·"),
+            ]
+
+            if r.uploaded:
+                lines.append(f"  Uploadé(s) [{len(r.uploaded)}] :")
+                lines += [f"    + {f}" for f in r.uploaded]
+
+            if r.skipped:
+                lines.append(f"  Ignoré(s)  [{len(r.skipped)}] (déjà à jour) :")
+                lines += [f"    = {f}" for f in r.skipped]
+
+            if r.deleted:
+                lines.append(f"  Supprimé(s)[{len(r.deleted)}] :")
+                lines += [f"    - {f}" for f in r.deleted]
+
+            if r.errors:
+                lines.append(f"  Erreur(s)  [{len(r.errors)}] :")
+                lines += [f"    ! {e}" for e in r.errors]
+
+            lines.append("")
+
+        lines += [
+            sep("═"),
+            f"  Statut final : {'SUCCÈS' if self.success else 'ÉCHEC (voir erreurs ci-dessus)'}",
+            sep("═"),
+        ]
+
+        return "\n".join(lines) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +347,11 @@ class _BaseBackend(ABC):
     @abstractmethod
     def list_remote(self, remote_dir: str) -> list[str]:
         """Liste récursive des fichiers sous remote_dir (chemins relatifs à remote_dir)."""
+        ...
+
+    @abstractmethod
+    def download_file(self, remote_path: str, local_path: Path) -> None:
+        """Télécharge un fichier distant vers local_path."""
         ...
 
     @abstractmethod
@@ -190,7 +416,6 @@ class _FTPBackend(_BaseBackend):
             resp = self._ftp.sendcmd(f"MDTM {remote_path}")
             # Format : "213 YYYYMMDDHHMMSS"
             ts_str = resp[4:].strip()
-            from datetime import datetime, timezone
             dt = datetime.strptime(ts_str, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
             return dt.timestamp()
         except Exception:
@@ -227,6 +452,11 @@ class _FTPBackend(_BaseBackend):
             except ftplib.error_perm:
                 result.append(item)
         return result
+
+    def download_file(self, remote_path: str, local_path: Path) -> None:
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(local_path, "wb") as fh:
+            self._ftp.retrbinary(f"RETR {remote_path}", fh.write)
 
     def delete_remote(self, remote_path: str) -> None:
         self._ftp.delete(remote_path)
@@ -315,6 +545,10 @@ class _SFTPBackend(_BaseBackend):
                 result.append(full)
         return result
 
+    def download_file(self, remote_path: str, local_path: Path) -> None:
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        self._sftp.get(remote_path, str(local_path))
+
     def delete_remote(self, remote_path: str) -> None:
         self._sftp.remove(remote_path)
 
@@ -337,7 +571,6 @@ class RemoteSync:
 
     def __init__(self, config_path: str | Path, section: str = "remotesync"):
         self.config = SyncConfig.from_ini(config_path, section)
-        self._backend: _BaseBackend = self._build_backend()
 
     # ------------------------------------------------------------------
     # API publique
@@ -370,8 +603,8 @@ class RemoteSync:
             remote_path = self._resolve_remote(remote_path)
 
         try:
-            with self._backend:
-                self._sync_single(local, remote_path, result)
+            with self._build_backend() as backend:
+                self._sync_single(backend, local, remote_path, result)
         except Exception as exc:
             logger.exception("Erreur de connexion")
             result.errors.append(str(exc))
@@ -381,19 +614,27 @@ class RemoteSync:
         self,
         local_dir: str | Path,
         remote_dir: Optional[str] = None,
+        max_workers: Optional[int] = None,
     ) -> SyncResult:
         """
-        Synchronise récursivement un répertoire local vers le serveur distant.
+        Synchronise récursivement un répertoire local vers le serveur distant
+        en utilisant des transferts simultanés.
 
-        :param local_dir:  Répertoire local source.
-        :param remote_dir: Répertoire distant cible.
-                           - Si omis : ``remote_base_dir``
-                           - Si relatif (ne commence pas par «/») :
-                             ``remote_base_dir/<remote_dir>``
-                           - Si absolu : utilisé tel quel.
+        Chaque worker maintient sa propre connexion au serveur pour garantir
+        la thread-safety (les connexions FTP/SFTP ne sont pas partagées).
+
+        :param local_dir:   Répertoire local source.
+        :param remote_dir:  Répertoire distant cible.
+                            - Si omis : ``remote_base_dir``
+                            - Si relatif : ``remote_base_dir/<remote_dir>``
+                            - Si absolu : utilisé tel quel.
+        :param max_workers: Nombre de connexions/transferts simultanés.
+                            Priorité : argument > ``config.max_workers`` (défaut 5).
         """
         result = SyncResult()
+        lock = threading.Lock()
         local = Path(local_dir)
+
         if not local.is_dir():
             result.errors.append(f"Répertoire local introuvable : {local}")
             return result
@@ -403,34 +644,217 @@ class RemoteSync:
         else:
             remote_dir = self._resolve_remote(remote_dir)
 
+        workers = max_workers if max_workers is not None else self.config.max_workers
+        workers = max(1, workers)
+
+        # ── 1. Inventaire local ───────────────────────────────────────────────
+        local_files = {
+            f.relative_to(local).as_posix()
+            for f in local.rglob("*")
+            if f.is_file()
+        }
+
+        # ── 2. Pré-création des répertoires distants (sérialisée) ─────────────
+        # On crée l'arborescence avant le lancement des workers pour éviter
+        # les conditions de course sur makedirs entre threads.
+        remote_dirs_needed = {
+            remote_dir.rstrip("/") + "/" + os.path.dirname(rel)
+            for rel in local_files
+        }
         try:
-            with self._backend:
-                local_files = {
-                    f.relative_to(local).as_posix()
-                    for f in local.rglob("*")
-                    if f.is_file()
-                }
+            with self._build_backend() as probe:
+                for d in sorted(remote_dirs_needed):
+                    d = d.rstrip("/")
+                    if d:
+                        probe.makedirs(d)
 
-                # Upload / skip
-                for rel in sorted(local_files):
-                    local_file = local / rel
+                # Récupérer aussi la liste des fichiers distants (pour orphelins)
+                remote_files_list: list[str] = (
+                    probe.list_remote(remote_dir)
+                    if self.config.delete_orphans else []
+                )
+        except Exception as exc:
+            logger.exception("Erreur lors de la préparation des répertoires distants")
+            result.errors.append(f"Préparation distante : {exc}")
+            return result
+
+        # ── 3. Transferts parallèles — connexion persistante par worker ──────────
+        #
+        # ARCHITECTURE CORRIGÉE :
+        # Avant : _worker(fichier) → 1 connexion SSH par fichier  ← bug (avalanche)
+        # Après : _worker(lot)    → 1 connexion SSH pour N fichiers du lot
+        #
+        # On distribue les fichiers en lots équilibrés (round-robin), puis chaque
+        # worker ouvre UNE connexion pour traiter tous les fichiers de son lot.
+
+        sorted_files = sorted(local_files)
+        # Découpage en lots : chaque worker reçoit un sous-ensemble de fichiers
+        # distribué de façon interleaved pour équilibrer la charge (pas de split
+        # en tranches consécutives qui favoriserait les gros répertoires uniques).
+        batches: list[list[str]] = [[] for _ in range(workers)]
+        for i, rel in enumerate(sorted_files):
+            batches[i % workers].append(rel)
+
+        def _worker_batch(batch: list[str]) -> None:
+            """
+            Traite un lot de fichiers sur UNE connexion persistante.
+            Ouvre la connexion une seule fois, itère sur les fichiers, ferme.
+            """
+            if not batch:
+                return
+            try:
+                with self._build_backend() as backend:
+                    for rel in batch:
+                        local_file = local / rel
+                        remote_file = remote_dir.rstrip("/") + "/" + rel
+                        try:
+                            remote_mtime = backend.remote_mtime(remote_file)
+                            local_mtime = local_file.stat().st_mtime
+
+                            if remote_mtime is not None and local_mtime <= remote_mtime:
+                                with lock:
+                                    result.skipped.append(remote_file)
+                                logger.debug("[SKIP]   %s (déjà à jour)", remote_file)
+                                continue
+
+                            action = "[DRY-RUN]" if self.config.dry_run else "[UPLOAD]"
+                            logger.info("%s %s → %s", action, local_file, remote_file)
+
+                            if not self.config.dry_run:
+                                backend.upload_file(local_file, remote_file)
+
+                            with lock:
+                                result.uploaded.append(remote_file)
+
+                        except Exception as exc:
+                            msg = f"{remote_file}: {exc}"
+                            logger.error("[ERROR]  %s", msg)
+                            with lock:
+                                result.errors.append(msg)
+
+            except Exception as exc:
+                # Erreur de connexion : tous les fichiers du lot échouent
+                for rel in batch:
                     remote_file = remote_dir.rstrip("/") + "/" + rel
-                    self._sync_single(local_file, remote_file, result)
+                    msg = f"{remote_file}: erreur de connexion : {exc}"
+                    logger.error("[ERROR]  %s", msg)
+                    with lock:
+                        result.errors.append(msg)
 
-                # Suppression des orphelins distants
-                if self.config.delete_orphans:
-                    remote_files = self._backend.list_remote(remote_dir)
-                    for rf in remote_files:
+        try:
+            # On ne soumet que les lots non vides (si workers > nb fichiers)
+            non_empty_batches = [b for b in batches if b]
+            with ThreadPoolExecutor(max_workers=len(non_empty_batches) or 1) as pool:
+                futures = {pool.submit(_worker_batch, batch): batch
+                           for batch in non_empty_batches}
+                for future in as_completed(futures):
+                    exc = future.exception()
+                    if exc:
+                        batch = futures[future]
+                        msg = f"Lot [{batch[0]}…]: erreur inattendue : {exc}"
+                        logger.error("[ERROR]  %s", msg)
+                        with lock:
+                            result.errors.append(msg)
+        except Exception as exc:
+            logger.exception("Erreur du pool de threads")
+            result.errors.append(str(exc))
+            return result
+
+        # ── 4. Suppression des orphelins distants (sérialisée) ────────────────
+        if self.config.delete_orphans and remote_files_list:
+            try:
+                with self._build_backend() as backend:
+                    for rf in remote_files_list:
                         rel = rf[len(remote_dir):].lstrip("/")
                         if rel not in local_files:
                             if not self.config.dry_run:
-                                self._backend.delete_remote(rf)
-                            result.deleted.append(rf)
+                                backend.delete_remote(rf)
+                            with lock:
+                                result.deleted.append(rf)
                             logger.info("[DELETED] %s", rf)
+            except Exception as exc:
+                logger.exception("Erreur lors de la suppression des orphelins")
+                result.errors.append(f"Suppression orphelins : {exc}")
+
+        logger.info(
+            "sync_directory terminé — workers=%d | ↑%d uploadé(s) | ↷%d ignoré(s) | "
+            "✗%d supprimé(s) | ⚠%d erreur(s)",
+            workers,
+            len(result.uploaded), len(result.skipped),
+            len(result.deleted), len(result.errors),
+        )
+        return result
+
+    def fetch_file(
+        self,
+        remote_path: str,
+        local_path: Optional[str | Path] = None,
+        overwrite: bool = True,
+    ) -> SyncResult:
+        """
+        Télécharge un fichier depuis le serveur distant vers le système local.
+
+        :param remote_path: Chemin du fichier sur le serveur.
+                            - Si relatif : ``remote_base_dir/<remote_path>``
+                            - Si absolu  : utilisé tel quel.
+        :param local_path:  Destination locale.
+                            - Si omis : le fichier est déposé dans le répertoire
+                              courant avec le même nom que le fichier distant.
+                            - Si un répertoire : le fichier y est déposé avec
+                              son nom d'origine.
+                            - Si un chemin de fichier : utilisé tel quel.
+        :param overwrite:   Si ``False`` et que le fichier local existe déjà et
+                            est plus récent que le fichier distant, le téléchar-
+                            gement est ignoré (comportement miroir de sync_file).
+                            Par défaut ``True`` (téléchargement systématique).
+        :returns: :class:`SyncResult` —
+                  ``uploaded`` contient le chemin local du fichier téléchargé,
+                  ``skipped`` contient le chemin local si ignoré.
+        """
+        result = SyncResult()
+        remote_path = self._resolve_remote(remote_path)
+        remote_name = remote_path.rstrip("/").split("/")[-1]
+
+        # Résolution de la destination locale
+        if local_path is None:
+            dest = Path.cwd() / remote_name
+        else:
+            dest = Path(local_path)
+            if dest.is_dir():
+                dest = dest / remote_name
+
+        try:
+            with self._build_backend() as backend:
+                # Vérification overwrite / mtime
+                if not overwrite and dest.exists():
+                    remote_mtime = backend.remote_mtime(remote_path)
+                    local_mtime = dest.stat().st_mtime
+                    if remote_mtime is None or local_mtime >= remote_mtime:
+                        result.skipped.append(str(dest))
+                        logger.debug(
+                            "[SKIP] %s (local déjà à jour)", dest
+                        )
+                        return result
+
+                if self.config.dry_run:
+                    logger.info("[DRY-RUN] %s ← %s", dest, remote_path)
+                    result.uploaded.append(str(dest))
+                    return result
+
+                logger.info("[DOWNLOAD] %s ← %s", dest, remote_path)
+                backend.download_file(remote_path, dest)
+                result.uploaded.append(str(dest))
 
         except Exception as exc:
-            logger.exception("Erreur de connexion")
-            result.errors.append(str(exc))
+            msg = f"{remote_path} → {dest} : {exc}"
+            result.errors.append(msg)
+            logger.error("[ERROR] %s", msg)
+            # Nettoyer un fichier partiellement téléchargé
+            if dest.exists() and dest.stat().st_size == 0:
+                try:
+                    dest.unlink()
+                except OSError:
+                    pass
 
         return result
 
@@ -449,17 +873,35 @@ class RemoteSync:
         return self.config.remote_base_dir.rstrip("/") + "/" + remote
 
     def _build_backend(self) -> _BaseBackend:
+        """Instancie un nouveau backend (nouvelle connexion) à chaque appel."""
         if self.config.protocol == Protocol.SFTP:
             return _SFTPBackend(self.config)
         return _FTPBackend(self.config)
 
-    def _sync_single(self, local: Path, remote: str, result: SyncResult) -> None:
-        """Décide d'uploader ou de sauter un fichier, met à jour result."""
-        remote_mtime = self._backend.remote_mtime(remote)
+    def _sync_single(
+        self,
+        backend: _BaseBackend,
+        local: Path,
+        remote: str,
+        result: SyncResult,
+        lock: Optional[threading.Lock] = None,
+    ) -> None:
+        """Décide d'uploader ou de sauter un fichier, met à jour result.
+
+        Peut être appelé depuis un thread (passer lock) ou en mode séquentiel.
+        """
+        def _append(lst: list, value: str) -> None:
+            if lock:
+                with lock:
+                    lst.append(value)
+            else:
+                lst.append(value)
+
+        remote_mtime = backend.remote_mtime(remote)
         local_mtime = local.stat().st_mtime
 
         if remote_mtime is not None and local_mtime <= remote_mtime:
-            result.skipped.append(remote)
+            _append(result.skipped, remote)
             logger.debug("[SKIP]   %s (distant plus récent ou identique)", remote)
             return
 
@@ -468,11 +910,11 @@ class RemoteSync:
 
         if not self.config.dry_run:
             try:
-                self._backend.upload_file(local, remote)
-                result.uploaded.append(remote)
+                backend.upload_file(local, remote)
+                _append(result.uploaded, remote)
             except Exception as exc:
                 msg = f"{remote}: {exc}"
-                result.errors.append(msg)
+                _append(result.errors, msg)
                 logger.error("[ERROR]  %s", msg)
         else:
-            result.uploaded.append(remote)
+            _append(result.uploaded, remote)

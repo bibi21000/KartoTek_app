@@ -20,9 +20,10 @@ cp en place (écrasement du contenu d'un fichier déjà ouvert par une connexion
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
-import os
+import secrets
 import sqlite3
 import time
 import unicodedata
@@ -30,6 +31,51 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Auth hashing (PBKDF2-HMAC-SHA256)
+# ---------------------------------------------------------------------------
+# Stored format: "pbkdf2$<iterations>$<hex-salt>$<hex-digest>"
+# An empty password always fails verification.
+
+_HASH_ALGO       = "sha256"
+_HASH_ITERATIONS = 260_000   # OWASP 2023 recommendation for PBKDF2-SHA256
+_SALT_BYTES      = 32
+
+
+def _hash_password(password: str) -> str:
+    """Return a salted PBKDF2 hash of *password* suitable for storage."""
+    salt   = secrets.token_bytes(_SALT_BYTES)
+    digest = hashlib.pbkdf2_hmac(
+        _HASH_ALGO, password.encode("utf-8"), salt, _HASH_ITERATIONS
+    )
+    return f"pbkdf2${_HASH_ITERATIONS}${salt.hex()}${digest.hex()}"
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    """Return True if *password* matches the stored PBKDF2 hash.
+
+    Returns False immediately if *password* is empty, if *stored* is
+    None/empty, or if the format is unrecognised.
+    """
+    if not password or not stored:
+        return False
+    try:
+        scheme, iterations_s, salt_hex, digest_hex = stored.split("$", 3)
+    except ValueError:
+        return False
+    if scheme != "pbkdf2":
+        return False
+    try:
+        iterations = int(iterations_s)
+        salt       = bytes.fromhex(salt_hex)
+        expected   = bytes.fromhex(digest_hex)
+    except (ValueError, AttributeError):
+        return False
+    candidate = hashlib.pbkdf2_hmac(
+        _HASH_ALGO, password.encode("utf-8"), salt, iterations
+    )
+    return secrets.compare_digest(candidate, expected)
 
 def _strip_accents(value: str | None) -> str | None:
     """Remove diacritics (accents) from a string and lowercase it.
@@ -95,6 +141,13 @@ CREATE TABLE IF NOT EXISTS pois (
     description TEXT,
     coord_lat   REAL,
     coord_lon   REAL
+);
+"""
+
+_DDL_AUTHS = """
+CREATE TABLE IF NOT EXISTS auths (
+    email   TEXT PRIMARY KEY,
+    auth    TEXT
 );
 """
 
@@ -229,6 +282,7 @@ class Model:
         self.datadir = Path(datadir)
         self.cards_dir = self.datadir / "cards"
         self.db_path = self.datadir / "postcards.sqlite"
+        self.pois_json = self.datadir / "pois.json"
         self._conn: sqlite3.Connection | None = None
         # Signature (mtime, inode) du fichier sqlite au moment de
         # l'ouverture de la connexion ; permet de détecter un
@@ -523,9 +577,13 @@ class Model:
         self.datadir.mkdir(parents=True, exist_ok=True)
 
         conn = self._get_conn()
-        conn.executescript(_DDL_CARDS + _DDL_TRAVELS + _DDL_POIS + _DDL_INDEXES)
+        conn.executescript(_DDL_CARDS + _DDL_TRAVELS + _DDL_POIS + _DDL_AUTHS + _DDL_INDEXES)
         conn.commit()
         logger.info("Base créée : %s", self.db_path)
+
+        # Import POIs from pois.json first (before cards, so _ensure_poi
+        # can skip ids that are already fully described in pois.json)
+        self.sync_pois()
 
         if not self.cards_dir.exists():
             logger.warning("cards_dir introuvable : %s", self.cards_dir)
@@ -914,11 +972,30 @@ class Model:
 
         self._upsert_card(other)
 
+    def _read_pois_json(self) -> dict:
+        """Read pois.json and return the dict {poi_id: {...}}.
+
+        Returns an empty dict if the file is absent or unreadable.
+        """
+        try:
+            with self.pois_json.open(encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                return data
+        except (OSError, json.JSONDecodeError):
+            pass
+        return {}
+
+    def _write_pois_json(self, pois: dict) -> None:
+        """Atomically write {poi_id: {...}} to pois.json."""
+        self.datadir.mkdir(parents=True, exist_ok=True)
+        tmp = self.pois_json.with_suffix(".json.tmp")
+        with tmp.open("w", encoding="utf-8") as fh:
+            json.dump(pois, fh, ensure_ascii=False, indent=2, sort_keys=True)
+        tmp.replace(self.pois_json)
+
     def _ensure_poi(self, poi_id: str) -> None:
-        """
-        Crée une entrée squelette dans la table ``pois`` si ``poi_id``
-        n'y existe pas encore. N'écrase jamais un POI déjà renseigné.
-        """
+        """Create a skeleton POI entry if it doesn't exist yet."""
         conn = self._get_conn()
         cur = conn.execute("SELECT 1 FROM pois WHERE id = ?", (poi_id,))
         if cur.fetchone() is not None:
@@ -931,20 +1008,23 @@ class Model:
     # ------------------------------------------------------------------
 
     def get_poi(self, poi_id: str) -> dict | None:
-        """Retourne un POI depuis la base SQLite, ou None si absent."""
+        """Return a POI from SQLite, or None if absent."""
         conn = self._get_conn()
         cur = conn.execute("SELECT * FROM pois WHERE id = ?", (poi_id,))
         row = cur.fetchone()
         return _row_to_poi(row) if row else None
 
     def list_pois(self) -> list[dict]:
-        """Retourne la liste de tous les POIs."""
+        """Return the list of all POIs (from SQLite)."""
         conn = self._get_conn()
         cur = conn.execute("SELECT * FROM pois ORDER BY id")
         return [_row_to_poi(r) for r in cur.fetchall()]
 
     def write_poi(self, poi: dict) -> None:
-        """Écrit (INSERT OR REPLACE) un POI dans la base SQLite."""
+        """Write (INSERT OR REPLACE) a POI in SQLite and in pois.json.
+
+        The JSON file is updated atomically after the SQLite write.
+        """
         row = _poi_to_row(poi)
         cols = ", ".join(row.keys())
         placeholders = ", ".join(f":{k}" for k in row)
@@ -953,12 +1033,113 @@ class Model:
         conn.execute(sql, row)
         conn.commit()
 
+        # Update pois.json
+        pois = self._read_pois_json()
+        pois[str(poi["id"])] = _row_to_poi(conn.execute(
+            "SELECT * FROM pois WHERE id = ?", (str(poi["id"]),)
+        ).fetchone())
+        self._write_pois_json(pois)
+
     def delete_poi(self, poi_id: str) -> bool:
-        """Supprime un POI de la base. Retourne True s'il existait."""
+        """Delete a POI from SQLite and from pois.json.
+
+        Returns True if the POI existed.
+        """
         conn = self._get_conn()
         cur = conn.execute("SELECT 1 FROM pois WHERE id = ?", (poi_id,))
         existed = cur.fetchone() is not None
         conn.execute("DELETE FROM pois WHERE id = ?", (poi_id,))
         conn.commit()
+
+        # Update pois.json
+        pois = self._read_pois_json()
+        if poi_id in pois:
+            del pois[poi_id]
+            self._write_pois_json(pois)
+
         return existed
 
+    def sync_pois(self) -> int:
+        """Synchronise pois.json → SQLite.
+
+        Inserts or updates every POI present in pois.json whose entry in
+        SQLite is absent or older (based on presence, not mdate — POIs
+        have no mdate). Returns the number of POIs written.
+        """
+        pois = self._read_pois_json()
+        if not pois:
+            return 0
+        conn = self._get_conn()
+        count = 0
+        for poi_id, poi_data in pois.items():
+            poi_data["id"] = poi_id
+            row = _poi_to_row(poi_data)
+            cols = ", ".join(row.keys())
+            placeholders = ", ".join(f":{k}" for k in row)
+            conn.execute(
+                f"INSERT OR REPLACE INTO pois ({cols}) VALUES ({placeholders})",
+                row,
+            )
+            count += 1
+        conn.commit()
+        logger.info("sync_pois : %d POI(s) synchronisé(s)", count)
+        return count
+
+    # ------------------------------------------------------------------
+    # Auths
+    # ------------------------------------------------------------------
+
+    def get_auth(self, email: str) -> dict | None:
+        """Return an auth entry from SQLite, or None if absent.
+
+        The ``auth`` field contains the PBKDF2 hash, not the original
+        password. Use :meth:`check_auth` to verify a plain-text password.
+        """
+        conn = self._get_conn()
+        cur = conn.execute("SELECT * FROM auths WHERE email = ?", (email,))
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+    def list_auths(self) -> list[dict]:
+        """Return all auth entries (email only — hash not exposed)."""
+        conn = self._get_conn()
+        cur = conn.execute("SELECT email FROM auths ORDER BY email")
+        return [{"email": row["email"]} for row in cur.fetchall()]
+
+    def write_auth(self, email: str, password: str) -> None:
+        """Hash *password* with PBKDF2 and store it for *email*.
+
+        Raises :class:`ValueError` if *password* is empty.
+        """
+        if not password:
+            raise ValueError("Password must not be empty")
+        hashed = _hash_password(password)
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT OR REPLACE INTO auths (email, auth) VALUES (?, ?)",
+            (email, hashed),
+        )
+        conn.commit()
+        logger.info("write_auth : entrée mise à jour pour %s", email)
+
+    def check_auth(self, email: str, password: str) -> bool:
+        """Return True if *password* matches the stored hash for *email*.
+
+        Always returns False if *password* is empty, if *email* does not
+        exist, or if the stored value cannot be parsed as a PBKDF2 hash.
+        """
+        if not password:
+            return False
+        entry = self.get_auth(email)
+        if entry is None:
+            return False
+        return _verify_password(password, entry.get("auth") or "")
+
+    def delete_auth(self, email: str) -> bool:
+        """Delete an auth entry. Returns True if it existed."""
+        conn = self._get_conn()
+        cur = conn.execute("SELECT 1 FROM auths WHERE email = ?", (email,))
+        existed = cur.fetchone() is not None
+        conn.execute("DELETE FROM auths WHERE email = ?", (email,))
+        conn.commit()
+        return existed
