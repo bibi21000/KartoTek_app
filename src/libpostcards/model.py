@@ -282,8 +282,9 @@ class Model:
         self.datadir = Path(datadir)
         self.cards_dir = self.datadir / "cards"
         self.db_path = self.datadir / "postcards.sqlite"
-        self.pois_json    = self.datadir / "pois.json"
-        self.updates_json = self.datadir / "updates.json"
+        self.pois_json     = self.datadir / "pois.json"
+        self.updates_json  = self.datadir / "updates.json"
+        self.travels_json  = self.datadir / "travels.json"
         self._conn: sqlite3.Connection | None = None
         # Signature (mtime, inode) du fichier sqlite au moment de
         # l'ouverture de la connexion ; permet de détecter un
