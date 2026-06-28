@@ -1488,6 +1488,7 @@ class App(tk.Tk):
         self._doubles_win: "DoublesSearchView | None" = None
         self._poi_win: "PoiManagerView | None" = None
         self._auth_win: "AuthManagerView | None" = None
+        self._travel_win: "TravelManagerView | None" = None
         # Shared PostcardSearcher instance — loaded once, reused by all
         # sub-windows (SearchView, DoublesSearchView) to avoid loading
         # the CLIP model multiple times and saturating GPU memory.
@@ -1497,7 +1498,6 @@ class App(tk.Tk):
         self._nav_no_gps: bool = False
         self._nav_no_poi: bool = False
         self._nav_with_updates: bool = False
-        self._nav_with_doubles: bool = False   # ← add this line
 
         self._scan_ids()
 
@@ -1587,9 +1587,12 @@ class App(tk.Tk):
             if getattr(self, "_nav_no_poi", False):
                 cards = [c for c in cards if not c.get("poi")]
             if getattr(self, "_nav_with_updates", False):
+                update_ids = {
+                    str(e.get("card_id"))
+                    for e in self.model.read_updates()
+                    if e.get("card_id")
+                }
                 cards = [c for c in cards if str(c.get("id")) in update_ids]
-            if getattr(self, "_nav_with_doubles", False):   # ← add these 2 lines
-                cards = [c for c in cards if c.get("doubles")]
 
             ids = []
             for data in cards:
@@ -1712,7 +1715,7 @@ class App(tk.Tk):
         tk.Label(missing_filt_frm, text=_("nav_missing_filter_label"), bg=BG_CARD,
                  fg=FG_LABEL, font=FONT_LABEL).pack(side=tk.LEFT, padx=(0, 4))
         self._nav_missing_var = tk.StringVar(value=_("tsearch_all"))
-        missing_choices = [_("tsearch_all"), _("nav_no_gps"), _("nav_no_poi"), _("nav_with_updates"), _("nav_with_doubles")]
+        missing_choices = [_("tsearch_all"), _("nav_no_gps"), _("nav_no_poi"), _("nav_with_updates")]
         self._nav_missing_menu = ttk.Combobox(missing_filt_frm,
                                               textvariable=self._nav_missing_var,
                                               values=missing_choices, width=14,
@@ -2094,8 +2097,6 @@ class App(tk.Tk):
                 self._nav_missing_var.set(_("nav_no_poi"))
             elif self._nav_with_updates:
                 self._nav_missing_var.set(_("nav_with_updates"))
-            elif self._nav_with_doubles:                                    # ← add
-                self._nav_missing_var.set(_("nav_with_doubles"))            # ← add
             else:
                 self._nav_missing_var.set(all_label)
             return
@@ -2107,7 +2108,6 @@ class App(tk.Tk):
         self._nav_no_gps = (missing_choice == _("nav_no_gps"))
         self._nav_no_poi = (missing_choice == _("nav_no_poi"))
         self._nav_with_updates = (missing_choice == _("nav_with_updates"))
-        self._nav_with_doubles = (missing_choice == _("nav_with_doubles"))  # ← add
         self._scan_ids()
 
         if not self._ids:
@@ -2117,7 +2117,6 @@ class App(tk.Tk):
             self._nav_no_gps = False
             self._nav_no_poi = False
             self._nav_with_updates = False
-            self._nav_with_doubles = False   # ← add
             self._nav_filter_var.set(all_label)
             self._nav_missing_var.set(all_label)
             self._scan_ids()
@@ -2176,6 +2175,7 @@ class App(tk.Tk):
         m.add_command(label=_("nav_doubles"), command=self._open_doubles_search)
         m.add_command(label=_("nav_pois"), command=self._open_poi_manager)
         m.add_command(label=_("nav_auths"), command=self._open_auth_manager)
+        m.add_command(label=_("nav_travels"), command=self._open_travel_manager)
         m.add_command(label=_("nav_gallery"), command=self._open_gallery)
 
         # Close the menu as soon as it loses focus (click outside,
@@ -2295,6 +2295,14 @@ class App(tk.Tk):
             self._auth_win.focus_force()
             return
         self._auth_win = AuthManagerView(self, self._t)
+
+    # ── Travel manager ────────────────────────────────────────────────────────
+    def _open_travel_manager(self):
+        if self._travel_win and self._travel_win.winfo_exists():
+            self._travel_win.lift()
+            self._travel_win.focus_force()
+            return
+        self._travel_win = TravelManagerView(self, self._t)
 
     # ── Viewer ────────────────────────────────────────────────────────────────
     def _open_viewer(self, side: str):
@@ -3388,6 +3396,266 @@ class PoiManagerView(tk.Toplevel):
                 self._lb.see(i)
                 return
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Travel model manager (travels.json only)
+# ─────────────────────────────────────────────────────────────────────────────
+class TravelManagerView(tk.Toplevel):
+    """Manage travel model definitions stored in travels.json.
+
+    Each travel has: id, title, title2 (optional), collection (optional),
+    start GPS coordinates (optional). The JSON is the source of truth;
+    a separate script generates the SQLite data from it.
+    """
+
+    def __init__(self, parent: "App", t):
+        super().__init__(parent)
+        self._app = parent
+        self._t   = t
+        self.title(_("travel_title"))
+        self.configure(bg=BG_MAIN)
+        self.resizable(True, True)
+
+        self._travels: dict = {}        # {id: {...}}
+        self._selected: str | None = None
+        self._start_coord: list = []
+        self._is_new = False
+
+        self._build_ui()
+        self._reload()
+        self.geometry("820x540")
+        self.minsize(700, 420)
+
+    # ── Construction ─────────────────────────────────────────────────────────
+    def _build_ui(self):
+        body = tk.Frame(self, bg=BG_MAIN)
+        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Left: list
+        left = tk.Frame(body, bg=BG_CARD)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
+
+        tk.Label(left, text=_("travel_list_label"), bg=BG_CARD, fg=FG_ACCENT,
+                 font=FONT_TITLE).pack(anchor=tk.W, padx=8, pady=(8, 4))
+
+        lb_frm = tk.Frame(left, bg=BG_CARD)
+        lb_frm.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
+        vsb = ttk.Scrollbar(lb_frm, orient=tk.VERTICAL)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self._lb = tk.Listbox(lb_frm, bg=BG_INPUT, fg=FG_TEXT,
+                              selectbackground=FG_ACCENT, font=FONT_INPUT,
+                              relief=tk.FLAT, activestyle="none",
+                              yscrollcommand=vsb.set)
+        self._lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        vsb.config(command=self._lb.yview)
+        self._lb.bind("<<ListboxSelect>>", self._on_select)
+
+        tk.Button(left, text=_("travel_new"), command=self._new,
+                  bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=8, cursor="hand2").pack(
+            fill=tk.X, padx=8, pady=(0, 8))
+
+        # Right: detail form
+        right = tk.Frame(body, bg=BG_CARD, width=360)
+        right.pack(side=tk.LEFT, fill=tk.Y)
+        right.pack_propagate(False)
+
+        tk.Label(right, text=_("travel_detail_label"), bg=BG_CARD, fg=FG_ACCENT,
+                 font=FONT_TITLE).pack(anchor=tk.W, padx=10, pady=(10, 6))
+
+        pad = dict(padx=10, pady=4)
+
+        def row(label_key: str, widget_factory):
+            frm = tk.Frame(right, bg=BG_CARD)
+            frm.pack(fill=tk.X, **pad)
+            tk.Label(frm, text=_(label_key), bg=BG_CARD, fg=FG_LABEL,
+                     font=FONT_LABEL, width=10, anchor=tk.W).pack(side=tk.LEFT)
+            w = widget_factory(frm)
+            w.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            return w
+
+        # Id
+        idf = tk.Frame(right, bg=BG_CARD)
+        idf.pack(fill=tk.X, **pad)
+        tk.Label(idf, text=_("travel_id"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, width=10, anchor=tk.W).pack(side=tk.LEFT)
+        self._id_var = tk.StringVar()
+        self._id_entry = tk.Entry(idf, textvariable=self._id_var,
+                                  bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                                  font=FONT_INPUT, relief=tk.FLAT)
+        self._id_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        context_menu(self._id_entry)
+
+        # Title
+        self._title_var = tk.StringVar()
+        self._title_entry = row("travel_title_field",
+                                lambda p: tk.Entry(p, textvariable=self._title_var,
+                                                   bg=BG_INPUT, fg=FG_TEXT,
+                                                   insertbackground=FG_TEXT,
+                                                   font=FONT_INPUT, relief=tk.FLAT))
+        context_menu(self._title_entry)
+
+        # Title2
+        self._title2_var = tk.StringVar()
+        self._title2_entry = row("travel_title2_field",
+                                 lambda p: tk.Entry(p, textvariable=self._title2_var,
+                                                    bg=BG_INPUT, fg=FG_TEXT,
+                                                    insertbackground=FG_TEXT,
+                                                    font=FONT_INPUT, relief=tk.FLAT))
+        context_menu(self._title2_entry)
+
+        # Collection (combobox from config)
+        cf = tk.Frame(right, bg=BG_CARD)
+        cf.pack(fill=tk.X, **pad)
+        tk.Label(cf, text=_("travel_collection"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, width=10, anchor=tk.W).pack(side=tk.LEFT)
+        self._coll_var = tk.StringVar()
+        self._coll_combo = ttk.Combobox(cf, textvariable=self._coll_var,
+                                        values=[""] + self._app.collections,
+                                        font=FONT_INPUT, state="normal")
+        self._coll_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Start GPS
+        gf = tk.Frame(right, bg=BG_CARD)
+        gf.pack(fill=tk.X, **pad)
+        tk.Label(gf, text=_("travel_start"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, width=10, anchor=tk.W).pack(side=tk.LEFT)
+        self._start_lbl = tk.Label(gf, text="", bg=BG_INPUT, fg=FG_TEXT,
+                                   font=FONT_INPUT, anchor=tk.W, relief=tk.FLAT, padx=6)
+        self._start_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(gf, text=_("btn_edit"), command=self._edit_start,
+                  bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=8, cursor="hand2").pack(side=tk.RIGHT, padx=(4, 0))
+
+        # Actions
+        actions = tk.Frame(right, bg=BG_CARD)
+        actions.pack(fill=tk.X, padx=10, pady=10, side=tk.BOTTOM)
+        tk.Button(actions, text=_("btn_save_close"), command=self._save,
+                  bg=FG_ACCENT, fg="#fff", font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10, cursor="hand2").pack(side=tk.LEFT, padx=(0, 6))
+        tk.Button(actions, text=_("travel_delete"), command=self._delete,
+                  bg="#5a1a1a", fg=FG_TEXT, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10, cursor="hand2").pack(side=tk.LEFT)
+
+        self._status = tk.StringVar(value="")
+        tk.Label(self, textvariable=self._status, bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_SMALL, anchor=tk.W, padx=8).pack(fill=tk.X)
+
+    # ── Data ──────────────────────────────────────────────────────────────────
+    def _reload(self):
+        try:
+            self._travels = self._app.model.read_travels_json()
+        except Exception as e:
+            self._status.set(str(e))
+            self._travels = {}
+
+        self._lb.delete(0, tk.END)
+        for tid, t in sorted(self._travels.items()):
+            label = tid if not t.get("title") else f"{tid}  —  {t['title'][:40]}"
+            self._lb.insert(tk.END, label)
+
+        self._status.set(_("travel_count").format(n=len(self._travels)))
+
+    def _on_select(self, _event=None):
+        sel = self._lb.curselection()
+        if not sel:
+            return
+        tid = sorted(self._travels.keys())[sel[0]]
+        self._load_travel(tid)
+
+    def _load_travel(self, travel_id: str):
+        self._is_new = False
+        self._selected = travel_id
+        t = self._travels[travel_id]
+        self._id_var.set(t.get("id", travel_id))
+        self._id_entry.config(state=tk.DISABLED)
+        self._title_var.set(t.get("title") or "")
+        self._title2_var.set(t.get("title2") or "")
+        self._coll_var.set(t.get("collection") or "")
+        start = t.get("start") or []
+        self._start_coord = list(start) if len(start) >= 2 else []
+        self._refresh_start()
+
+    def _new(self):
+        self._is_new = True
+        self._selected = None
+        self._lb.selection_clear(0, tk.END)
+        self._id_var.set("")
+        self._id_entry.config(state=tk.NORMAL)
+        self._title_var.set("")
+        self._title2_var.set("")
+        self._coll_var.set("")
+        self._start_coord = []
+        self._refresh_start()
+        self._id_entry.focus_set()
+        self._status.set("")
+
+    def _refresh_start(self):
+        if len(self._start_coord) >= 2:
+            self._start_lbl.config(
+                text=f"lat {self._start_coord[0]:.6f}  /  lon {self._start_coord[1]:.6f}")
+        else:
+            self._start_lbl.config(text="")
+
+    def _edit_start(self):
+        def on_save(c):
+            self._start_coord = c
+            self._refresh_start()
+        CoordDialog(self, list(self._start_coord), on_save, self._t)
+
+    # ── Save / Delete ─────────────────────────────────────────────────────────
+    def _save(self):
+        travel_id = self._id_var.get().strip()
+        if not travel_id:
+            messagebox.showwarning(_("info_title"), _("travel_id_required"), parent=self)
+            return
+
+        start = self._start_coord if len(self._start_coord) >= 2 else None
+
+        entry = {
+            "id":         travel_id,
+            "title":      self._title_var.get().strip() or None,
+            "title2":     self._title2_var.get().strip() or None,
+            "collection": self._coll_var.get().strip() or None,
+            "start":      start,
+        }
+
+        try:
+            self._app.model.write_travel_json(entry)
+        except Exception as e:
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            return
+
+        self._is_new = False
+        self._selected = travel_id
+        self._id_entry.config(state=tk.DISABLED)
+        self._reload()
+        self._select_in_list(travel_id)
+        self._status.set(_("travel_saved").format(id=travel_id))
+
+    def _delete(self):
+        if not self._selected:
+            return
+        if not messagebox.askyesno(_("info_title"),
+                                   _("travel_delete_confirm").format(id=self._selected),
+                                   parent=self):
+            return
+        try:
+            self._app.model.delete_travel_json(self._selected)
+        except Exception as e:
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            return
+        self._new()
+        self._reload()
+
+    def _select_in_list(self, travel_id: str):
+        keys = sorted(self._travels.keys())
+        if travel_id in keys:
+            i = keys.index(travel_id)
+            self._lb.selection_clear(0, tk.END)
+            self._lb.selection_set(i)
+            self._lb.see(i)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

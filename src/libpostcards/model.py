@@ -1290,3 +1290,83 @@ class Model:
             logger.info("delete_update : %d entrée(s) supprimée(s) pour carte %s / %s",
                         removed, cid, email)
         return bool(removed)
+
+
+    # ------------------------------------------------------------------
+    # Travel models (travels.json only — no SQLite)
+    # ------------------------------------------------------------------
+    # travels.json format:
+    # {
+    #   "seille": {
+    #     "id": "seille",
+    #     "title": "La Seille de sa source à la Saône",
+    #     "title2": null,
+    #     "start": [46.697018, 5.657401],
+    #     "collection": "Seille"
+    #   },
+    #   ...
+    # }
+
+    def read_travels_json(self) -> dict:
+        """Read travels.json and return {travel_id: {...}}.
+
+        Accepts both the dict format ``{id: {...}}`` and the legacy list
+        format ``[{...}, ...]`` (converting it automatically).
+        Returns an empty dict if the file is absent or unreadable.
+        """
+        if not self.travels_json.exists():
+            return {}
+        with self.travels_json.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, list):
+            # Convert list → dict, using the "id" field as key
+            result = {}
+            for entry in data:
+                if isinstance(entry, dict) and entry.get("id"):
+                    result[str(entry["id"])] = entry
+            return result
+        return {}
+
+    def _write_travels_json(self, travels: dict) -> None:
+        """Atomically write {travel_id: {...}} to travels.json."""
+        self.datadir.mkdir(parents=True, exist_ok=True)
+        tmp = self.travels_json.with_suffix(".json.tmp")
+        with tmp.open("w", encoding="utf-8") as fh:
+            json.dump(travels, fh, ensure_ascii=False, indent=2, sort_keys=True)
+        tmp.replace(self.travels_json)
+
+    def write_travel_json(self, travel: dict) -> None:
+        """Insert or replace a travel model entry in travels.json.
+
+        The ``id`` field is required. All other fields are optional.
+        """
+        travel_id = str(travel.get("id", "")).strip()
+        if not travel_id:
+            raise ValueError("Travel id must not be empty")
+        travels = self.read_travels_json()
+        entry = dict(travel)
+        entry["id"] = travel_id
+        travels[travel_id] = entry
+        self._write_travels_json(travels)
+        logger.info("write_travel_json : trajet %s enregistré", travel_id)
+
+    def delete_travel_json(self, travel_id: str) -> bool:
+        """Remove a travel model entry from travels.json.
+
+        Returns True if it existed.
+        """
+        travels = self.read_travels_json()
+        if travel_id not in travels:
+            return False
+        del travels[travel_id]
+        if travels:
+            self._write_travels_json(travels)
+        else:
+            try:
+                self.travels_json.unlink()
+            except OSError:
+                pass
+        logger.info("delete_travel_json : trajet %s supprimé", travel_id)
+        return True
