@@ -56,7 +56,23 @@
            href="{{ url_for('map.index') }}">
             {{ _("Carte") }}
         </a>
+        {% if request.endpoint == 'home.index' and config.SMTP_HOST and config.CONTACT_EMAIL %}
+        <a class="site-nav-link" href="{{ url_for('contact.index') }}">
+            {{ _("Contact") }}
+        </a>
+        {% endif %}
     </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-messages">
+        {% for category, message in messages %}
+        <div class="flash-message flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
     {% block content %}{% endblock %}
     {% block scripts %}{% endblock %}
 </body>

@@ -416,18 +416,22 @@ html, body {
     max-width: 1400px;
     margin: 1.5rem auto 0;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: 1.5rem;
+    gap: 0.4rem;
 }
 
 .gallery-pagination .page-link {
     color: #f5f5f5;
     text-decoration: none;
-    padding: 0.4rem 0.9rem;
+    padding: 0.4rem 0.75rem;
     border-radius: 6px;
     border: 1px solid rgba(255, 255, 255, 0.25);
     transition: border-color 0.2s ease;
+    font-size: 0.9rem;
+    min-width: 2.2rem;
+    text-align: center;
 }
 
 .gallery-pagination .page-link:hover {
@@ -439,9 +443,20 @@ html, body {
     pointer-events: none;
 }
 
-.gallery-pagination .page-status {
-    font-size: 0.9rem;
-    color: #aaa;
+.gallery-pagination .page-current {
+    background: #2a6df4;
+    border-color: #2a6df4;
+    color: #fff;
+    font-weight: 600;
+    pointer-events: none;
+}
+
+.gallery-pagination .page-ellipsis {
+    border: none;
+    color: #888;
+    pointer-events: none;
+    padding: 0.4rem 0.25rem;
+    min-width: auto;
 }
 
 .gallery-empty {
@@ -972,5 +987,217 @@ html, body {
         font-size: 0.9rem;
         top: 0.5rem;
         right: 0.5rem;
+    }
+}
+
+/* -------------------------------------------------------------
+   Messages flash
+   ------------------------------------------------------------- */
+
+.flash-messages {
+    max-width: 600px;
+    margin: 1rem auto 0;
+    padding: 0 1.5rem;
+}
+
+.flash-message {
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.flash-success {
+    background: rgba(46, 204, 113, 0.15);
+    border: 1px solid rgba(46, 204, 113, 0.4);
+    color: #2ecc71;
+}
+
+/* -------------------------------------------------------------
+   Page contact
+   ------------------------------------------------------------- */
+
+.contact-page {
+    min-height: 100vh; /* repli */
+    min-height: 100dvh;
+    background: #121212;
+    padding: 1.5rem;
+    padding-top: 5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.contact-header {
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 1.5rem;
+}
+
+.contact-header .page-title {
+    position: static;
+    text-shadow: none;
+    margin: 0;
+    font-size: 1.4rem;
+    color: #f5f5f5;
+}
+
+.contact-form {
+    width: 100%;
+    max-width: 600px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.form-field label {
+    font-size: 0.85rem;
+    color: #aaa;
+}
+
+.form-field input,
+.form-field textarea {
+    background: #1a1a1a;
+    color: #f5f5f5;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.95rem;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.form-field input:focus,
+.form-field textarea:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.form-error {
+    color: #e63946;
+    font-size: 0.8rem;
+    margin: 0;
+}
+
+.form-error-global {
+    background: rgba(230, 57, 70, 0.12);
+    border: 1px solid rgba(230, 57, 70, 0.4);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+}
+
+/* Honeypot : masqué visuellement mais toujours présent dans le DOM
+   et accessible aux bots qui ne respectent pas le CSS */
+.form-honeypot {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+.contact-submit {
+    align-self: flex-start;
+    background: #2a6df4;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.6rem 1.5rem;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.contact-submit:hover {
+    background: #1f56c4;
+}
+
+@media (max-width: 640px) {
+    .contact-page {
+        padding-top: 4.5rem;
+    }
+}
+
+/* -------------------------------------------------------------
+   Bouton Contact page d'accueil
+   ------------------------------------------------------------- */
+
+.home-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.home-contact-link {
+    color: #f5f5f5;
+    text-decoration: none;
+    font-size: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    padding: 0.35rem 0.8rem;
+    transition: border-color 0.2s ease;
+    white-space: nowrap;
+}
+
+.home-contact-link:hover {
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* -------------------------------------------------------------
+   Flèches de navigation (desktop) et zone de swipe (mobile)
+   ------------------------------------------------------------- */
+
+.slide-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 8;
+    width: 3rem;
+    height: 5rem;
+    border: none;
+    background: rgba(0, 0, 0, 0.25);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 2.2rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease;
+    pointer-events: auto;
+}
+
+.slide-nav-prev {
+    left: 0;
+    border-radius: 0 4px 4px 0;
+}
+
+.slide-nav-next {
+    right: 0;
+    border-radius: 4px 0 0 4px;
+}
+
+/* Affichage au survol du diaporama */
+.slideshow:hover .slide-nav-btn {
+    opacity: 1;
+}
+
+.slide-nav-btn:hover {
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+}
+
+/* Masqué sur mobile (le swipe prend le relais) */
+@media (max-width: 640px) {
+    .slide-nav-btn {
+        display: none;
     }
 }

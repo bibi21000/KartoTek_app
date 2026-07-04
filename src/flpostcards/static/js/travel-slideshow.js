@@ -236,6 +236,14 @@
         showCard(nextIndex);
     }
 
+    function prevSlide() {
+        if (!cards.length) {
+            return;
+        }
+        var prevIndex = (currentIndex - 1 + cards.length) % cards.length;
+        showCard(prevIndex);
+    }
+
     function startLoop() {
         if (timer) {
             clearInterval(timer);
@@ -288,6 +296,9 @@
         if (event.target.closest(".page-header")) {
             return;
         }
+        if (event.target.closest(".slide-nav-btn")) {
+            return;
+        }
         if (currentIndex < 0 || !cards.length) {
             return;
         }
@@ -304,12 +315,18 @@
             return;
         }
         var startIndex = getStartIndex(cards.length);
-        // showCard avance currentIndex avant le premier affichage
         currentIndex = startIndex - 1;
         if (currentIndex < 0) {
             currentIndex = cards.length - 1;
         }
         nextSlide();
         startLoop();
+
+        if (typeof NavControls !== "undefined") {
+            NavControls.init(slideshow, {
+                onPrev: function () { prevSlide(); startLoop(); },
+                onNext: function () { nextSlide(); startLoop(); }
+            });
+        }
     });
 })();

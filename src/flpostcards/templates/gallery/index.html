@@ -113,23 +113,37 @@
         {% set base_args = {"collection": current_collection, "q": search, "display": display, "doubles": ("all" if show_doubles else ""), "per_page": per_page} %}
 
         {% if page > 1 %}
+        <a class="page-link" href="{{ url_for('gallery.index', page=1, **base_args) }}" title="{{ _("Première page") }}">
+            &laquo;
+        </a>
         <a class="page-link" href="{{ url_for('gallery.index', page=page - 1, **base_args) }}">
-            &larr; {{ _("Précédent") }}
+            &larr;
         </a>
         {% else %}
-        <span class="page-link disabled">&larr; {{ _("Précédent") }}</span>
+        <span class="page-link disabled">&laquo;</span>
+        <span class="page-link disabled">&larr;</span>
         {% endif %}
 
-        <span class="page-status">
-            {{ _("Page %(page)d / %(pages)d", page=page, pages=pages) }}
-        </span>
+        {% for p in page_range %}
+            {% if p is none %}
+            <span class="page-link page-ellipsis">&hellip;</span>
+            {% elif p == page %}
+            <span class="page-link page-current">{{ p }}</span>
+            {% else %}
+            <a class="page-link" href="{{ url_for('gallery.index', page=p, **base_args) }}">{{ p }}</a>
+            {% endif %}
+        {% endfor %}
 
         {% if page < pages %}
         <a class="page-link" href="{{ url_for('gallery.index', page=page + 1, **base_args) }}">
-            {{ _("Suivant") }} &rarr;
+            &rarr;
+        </a>
+        <a class="page-link" href="{{ url_for('gallery.index', page=pages, **base_args) }}" title="{{ _("Dernière page") }}">
+            &raquo;
         </a>
         {% else %}
-        <span class="page-link disabled">{{ _("Suivant") }} &rarr;</span>
+        <span class="page-link disabled">&rarr;</span>
+        <span class="page-link disabled">&raquo;</span>
         {% endif %}
     </nav>
     {% endif %}

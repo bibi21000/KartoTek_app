@@ -44,6 +44,27 @@ LOCALE_DIR = Path(__file__).parent / "translations"
 _ = gettext.gettext
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  Progressive iteration helper for PostcardSearcher
+# ─────────────────────────────────────────────────────────────────────────────
+class _ProgressIter:
+    """Wraps an iterable, calling ``on_progress(done, total)`` at each step.
+
+    Passed as the ``tqdm`` parameter to PostcardSearcher so that the inner
+    loops report their progress without modifying similar.py.
+    """
+
+    def __init__(self, on_progress):
+        self._on_progress = on_progress
+
+    def __call__(self, iterable):
+        items = list(iterable)
+        total = len(items)
+        for i, item in enumerate(items):
+            yield item
+            self._on_progress(i + 1, total)
+
+
 def setup_i18n():
     """Set up gettext translations using the system locale."""
     global _
@@ -964,6 +985,7 @@ class GalleryView(tk.Toplevel):
 
     def _poll_queue(self):
         import queue as qm
+        needs_draw = False
         try:
             while True:
                 item = self._queue.get_nowait()
@@ -971,14 +993,17 @@ class GalleryView(tk.Toplevel):
                     self._loading = False
                     self._status.set(
                         _("gallery_ready").format(total=len(self._app._ids)))
-                    self._schedule_draw()
+                    needs_draw = True
                 else:
                     cid, side, img, done, total = item
                     self._pil[(cid, side)] = img
                     self._status.set(
                         _("gallery_loading").format(done=done, total=total))
+                    needs_draw = True
         except qm.Empty:
             pass
+        if needs_draw:
+            self._schedule_draw()
         if self.winfo_exists():
             self.after(30, self._poll_queue)
 
@@ -1474,6 +1499,16 @@ class App(tk.Tk):
         self.geometry("1380x860")
         self.minsize(1200, 700)
 
+        # Application icon
+        _icon_path = Path(__file__).parent / "images" / "ktmanager_256.png"
+        if PIL_AVAILABLE and _icon_path.exists():
+            try:
+                _icon_img = ImageTk.PhotoImage(Image.open(_icon_path))
+                self.wm_iconphoto(True, _icon_img)
+                self._icon_ref = _icon_img  # keep a reference to prevent GC
+            except Exception:
+                pass
+
         self._ids: list[int] = []
         self._current_idx = 0
         self._data: dict = {}
@@ -1571,6 +1606,25 @@ class App(tk.Tk):
                 self.config_parser.add_section("tkmanager")
             self.config_parser.set("tkmanager", "last_id", str(cid))
             self.config_parser.set("tkmanager", "last_filter", self._nav_collection or "")
+            with open(self.conf_file, "w", encoding="utf-8") as f:
+                self.config_parser.write(f)
+        except Exception as e:
+            print(f"[postcards.conf] Update error: {e}")
+
+    def get_search_conf(self, section: str, key: str, fallback: str) -> str:
+        """Read a value from postcards.conf search sections."""
+        try:
+            return self.config_parser.get(section, key, fallback=fallback)
+        except Exception:
+            return fallback
+
+    def save_search_conf(self, section: str, **kwargs) -> None:
+        """Persist search parameters to postcards.conf."""
+        try:
+            if not self.config_parser.has_section(section):
+                self.config_parser.add_section(section)
+            for key, value in kwargs.items():
+                self.config_parser.set(section, key, str(value))
             with open(self.conf_file, "w", encoding="utf-8") as f:
                 self.config_parser.write(f)
         except Exception as e:
@@ -2438,6 +2492,10 @@ class SearchView(tk.Toplevel):
         self._last_cv_w = 0
         self._pending_draw: str | None = None
 
+        # Load saved parameters
+        self._def_threshold   = self._app.get_search_conf("tkmanager", "search_threshold", "70")
+        self._def_max_results = self._app.get_search_conf("tkmanager", "search_max_results", "20")
+
         self.title(_("search_title"))
         self.configure(bg=BG_MAIN)
         self.geometry("1100x750")
@@ -2500,7 +2558,7 @@ class SearchView(tk.Toplevel):
 
         tk.Label(row2, text=_("search_threshold_label"), bg=BG_CARD, fg=FG_LABEL,
                  font=FONT_LABEL, anchor=tk.W).pack(side=tk.LEFT)
-        self._thr_var = tk.StringVar(value="0.7")
+        self._thr_var = tk.StringVar(value=self._def_threshold)
         thr_entry = tk.Entry(row2, textvariable=self._thr_var, width=6,
                              bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
                              font=FONT_INPUT, relief=tk.FLAT)
@@ -2509,7 +2567,7 @@ class SearchView(tk.Toplevel):
 
         tk.Label(row2, text=_("search_maxresults_label"), bg=BG_CARD, fg=FG_LABEL,
                  font=FONT_LABEL, anchor=tk.W).pack(side=tk.LEFT)
-        self._max_var = tk.StringVar(value="20")
+        self._max_var = tk.StringVar(value=self._def_max_results)
         max_entry = tk.Entry(row2, textvariable=self._max_var, width=6,
                              bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
                              font=FONT_INPUT, relief=tk.FLAT)
@@ -2560,12 +2618,20 @@ class SearchView(tk.Toplevel):
             return
 
         try:
-            threshold   = float(self._thr_var.get())
-            max_results = int(self._max_var.get())
+            threshold_pct = float(self._thr_var.get())
+            max_results   = int(self._max_var.get())
+            if not (0 <= threshold_pct <= 100):
+                raise ValueError
+            threshold = threshold_pct / 100.0
         except ValueError:
             messagebox.showerror(_("error_title"),
                                  _("search_param_error"), parent=self)
             return
+
+        # Persist parameters
+        self._app.save_search_conf("tkmanager",
+                                   search_threshold=int(threshold_pct),
+                                   search_max_results=max_results)
 
         if not SEARCHER_AVAILABLE or self._searcher is None:
             messagebox.showerror(_("error_title"),
@@ -2578,7 +2644,14 @@ class SearchView(tk.Toplevel):
         self._results = []
         self._draw()
 
+        def on_progress(done: int, total: int):
+            if self.winfo_exists():
+                self.after(0, lambda d=done, t=total: self._status.set(
+                    _("search_running_progress").format(done=d, total=t)))
+
         def worker():
+            original_tqdm = self._searcher.tqdm
+            self._searcher.tqdm = _ProgressIter(on_progress)
             try:
                 results = self._searcher.search_url(
                     image_url=url,
@@ -2590,6 +2663,8 @@ class SearchView(tk.Toplevel):
                 if self.winfo_exists():
                     self.after(0, lambda err=e: messagebox.showerror(
                         _("error_title"), str(err), parent=self))
+            finally:
+                self._searcher.tqdm = original_tqdm
             if self.winfo_exists():
                 self.after(0, lambda r=results: self._on_results(r))
 
@@ -2812,7 +2887,8 @@ class DoublesSearchView(tk.Toplevel):
     RES_PAD = 8
     HDR_H   = 18
     BADGE_H = 20
-    EDIT_H  = 22
+    CID_H   = 18   # height of the card-id label above the edit button
+    EDIT_H  = 22   # height of the edit button
 
     def __init__(self, parent: "App", t):
         super().__init__(parent)
@@ -2825,6 +2901,9 @@ class DoublesSearchView(tk.Toplevel):
         self._searcher: "PostcardSearcher | None" = None
         self._last_cv_w = 0
         self._pending_draw: str | None = None
+
+        # Load saved parameters
+        self._def_threshold = self._app.get_search_conf("tkmanager", "doubles_threshold", "90")
 
         self.title(_("doubles_title"))
         self.configure(bg=BG_MAIN)
@@ -2875,7 +2954,7 @@ class DoublesSearchView(tk.Toplevel):
 
         tk.Label(row, text=_("doubles_threshold_label"), bg=BG_CARD, fg=FG_LABEL,
                  font=FONT_LABEL, anchor=tk.W).pack(side=tk.LEFT)
-        self._thr_var = tk.StringVar(value="90")
+        self._thr_var = tk.StringVar(value=self._def_threshold)
         thr_entry = tk.Entry(row, textvariable=self._thr_var, width=6,
                              bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
                              font=FONT_INPUT, relief=tk.FLAT)
@@ -2926,6 +3005,9 @@ class DoublesSearchView(tk.Toplevel):
                                  _("search_param_error"), parent=self)
             return
 
+        # Persist parameters
+        self._app.save_search_conf("tkmanager", doubles_threshold=threshold)
+
         if not SEARCHER_AVAILABLE or self._searcher is None:
             messagebox.showerror(_("error_title"),
                                  _("search_unavailable") if not SEARCHER_AVAILABLE
@@ -2937,7 +3019,14 @@ class DoublesSearchView(tk.Toplevel):
         self._results = []
         self._draw()
 
+        def on_progress(done: int, total: int):
+            if self.winfo_exists():
+                self.after(0, lambda d=done, t=total: self._status.set(
+                    _("search_running_progress").format(done=d, total=t)))
+
         def worker():
+            original_tqdm = self._searcher.tqdm
+            self._searcher.tqdm = _ProgressIter(on_progress)
             try:
                 results = self._searcher.find_missing_doubles(
                     self._app.model, threshold=threshold)
@@ -2946,6 +3035,8 @@ class DoublesSearchView(tk.Toplevel):
                 if self.winfo_exists():
                     self.after(0, lambda err=e: messagebox.showerror(
                         _("error_title"), str(err), parent=self))
+            finally:
+                self._searcher.tqdm = original_tqdm
             if self.winfo_exists():
                 self.after(0, lambda r=results: self._on_results(r))
 
@@ -3010,7 +3101,7 @@ class DoublesSearchView(tk.Toplevel):
         tile_w  = (cv_w - M * (cols + 1)) // cols
         half    = (tile_w - 2 * M - 2) // 2
         img_h   = int(half * self.RES_H / self.RES_W)
-        tile_h  = self.HDR_H + self.BADGE_H + img_h + self.EDIT_H + 2 * M
+        tile_h  = self.BADGE_H + img_h + self.CID_H + self.EDIT_H + 2 * M
 
         for pos, item in enumerate(self._results):
             pct   = float(item.get("score", 0))
@@ -3029,16 +3120,8 @@ class DoublesSearchView(tk.Toplevel):
             self._cv.create_rectangle(x0, y0, x1, y1,
                                       fill=BG_CARD, outline=border, width=2)
 
-            # Header
-            self._cv.create_rectangle(x0, y0, x1, y0 + self.HDR_H,
-                                      fill=BG_FIELD, outline="")
-            hdr = _("doubles_pair").format(id1=id1, id2=id2)
-            self._cv.create_text(x0 + 5, y0 + self.HDR_H // 2,
-                                 text=hdr, anchor=tk.W,
-                                 fill=FG_ACCENT2, font=("Courier", 8, "bold"))
-
             # Score badge
-            by0 = y0 + self.HDR_H
+            by0 = y0
             by1 = by0 + self.BADGE_H
             self._cv.create_rectangle(x0, by0, x1, by1,
                                       fill=self._pct_bg(pct), outline="")
@@ -3059,9 +3142,22 @@ class DoublesSearchView(tk.Toplevel):
             self._hits.append((lx0, iy0, lx0 + half, iy1, id1, file1))
             self._hits.append((rx0, iy0, x1 - M, iy1, id2, file2))
 
-            # "Edit" buttons below each thumbnail, opening the postcard
-            # in the main window
-            ey0 = iy1 + 2
+            # Card id label (large) above each edit button
+            cy0 = iy1 + 2
+            cy1 = cy0 + self.CID_H
+            self._cv.create_rectangle(lx0, cy0, lx0 + half, cy1,
+                                      fill=BG_CARD, outline="")
+            self._cv.create_text((lx0 + lx0 + half) // 2, (cy0 + cy1) // 2,
+                                 text=f"#{id1}" if id1 else "?",
+                                 fill=FG_ACCENT2, font=("Courier", 11, "bold"))
+            self._cv.create_rectangle(rx0, cy0, x1 - M, cy1,
+                                      fill=BG_CARD, outline="")
+            self._cv.create_text((rx0 + x1 - M) // 2, (cy0 + cy1) // 2,
+                                 text=f"#{id2}" if id2 else "?",
+                                 fill=FG_ACCENT2, font=("Courier", 11, "bold"))
+
+            # "Edit" buttons below each id label
+            ey0 = cy1 + 2
             ey1 = ey0 + self.EDIT_H - 4
             self._draw_edit_button(lx0, ey0, lx0 + half, ey1, id1)
             self._draw_edit_button(rx0, ey0, x1 - M, ey1, id2)
@@ -3547,8 +3643,10 @@ class TravelManagerView(tk.Toplevel):
         try:
             self._travels = self._app.model.read_travels_json()
         except Exception as e:
-            self._status.set(str(e))
             self._travels = {}
+            self._status.set(f"{_('error_title')} : {e}")
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            return
 
         self._lb.delete(0, tk.END)
         for tid, t in sorted(self._travels.items()):
@@ -3943,6 +4041,16 @@ class TextSearchView(tk.Toplevel):
         self._coll_menu.pack(side=tk.LEFT, padx=(0, 6))
         self._coll_menu.bind("<<ComboboxSelected>>", lambda _: self._run_search())
 
+        # Include doubles checkbox
+        self._with_doubles_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(row, text=_("tsearch_with_doubles"),
+                       variable=self._with_doubles_var,
+                       command=self._run_search,
+                       bg=BG_CARD, fg=FG_TEXT, selectcolor=BG_FIELD,
+                       activebackground=BG_CARD, activeforeground=FG_ACCENT2,
+                       font=FONT_LABEL, relief=tk.FLAT, cursor="hand2"
+                       ).pack(side=tk.LEFT, padx=(8, 0))
+
         # Clear button
         tk.Button(row, text=_("search_clear"), command=self._clear,
                   bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
@@ -3997,18 +4105,42 @@ class TextSearchView(tk.Toplevel):
         self._results = []
         self._lb.delete(0, tk.END)
 
+        seen: set[int] = set()
+
         for data in cards:
             try:
                 cid = int(data.get("id"))
             except (TypeError, ValueError):
                 continue
-            self._results.append(cid)
-            title = data.get("title") or data.get("title2") or ""
-            colls = ", ".join(data.get("collections") or [])
-            label = f"#{cid:>5}  {title[:40]}"
-            if colls:
-                label += f"  [{colls}]"
-            self._lb.insert(tk.END, label)
+
+            entries = [(cid, data)]
+
+            # If "include doubles" is checked, add linked doubles too
+            if self._with_doubles_var.get():
+                for did_raw in (data.get("doubles") or []):
+                    try:
+                        did = int(did_raw)
+                    except (TypeError, ValueError):
+                        continue
+                    if did not in seen:
+                        ddata = self._app.model.get_card(did)
+                        if ddata:
+                            entries.append((did, ddata))
+
+            for entry_cid, entry_data in entries:
+                if entry_cid in seen:
+                    continue
+                seen.add(entry_cid)
+                self._results.append(entry_cid)
+                title = entry_data.get("title") or entry_data.get("title2") or ""
+                colls = ", ".join(entry_data.get("collections") or [])
+                doubles = entry_data.get("doubles") or []
+                label = f"#{entry_cid:>5}  {title[:35]}"
+                if colls:
+                    label += f"  [{colls}]"
+                if doubles and entry_cid != cid:
+                    label += f"  ↔#{cid}"
+                self._lb.insert(tk.END, label)
 
         n = len(self._results)
         self._status.set(_("tsearch_results").format(n=n))

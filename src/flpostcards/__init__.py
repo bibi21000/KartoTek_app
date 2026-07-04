@@ -23,7 +23,7 @@ def select_locale() -> str:
 
 def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     """Charge postcards.conf (section DEFAULT + section [flask])."""
-    parser = configparser.ConfigParser()
+    parser = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
     parser.read(config_path)
 
     datadir = parser.get("DEFAULT", "datadir", fallback="datadir")
@@ -78,11 +78,14 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["RECENT_FALLBACK_COUNT"] = parser.getint(
                     "flask", "recent_fallback_count"
                 )
+            elif key == "smtp_port":
+                app.config["SMTP_PORT"] = parser.getint("flask", "smtp_port")
             else:
                 app.config[key.upper()] = value
 
     app.config.setdefault("RECENT_DAYS", 30)
     app.config.setdefault("RECENT_FALLBACK_COUNT", 20)
+    app.config.setdefault("SMTP_PORT", 587)
 
 
 def create_app(config_path: str | Path = "postcards.conf") -> Flask:
@@ -129,5 +132,8 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
 
     from flpostcards.blueprints.api import bp as api_bp
     app.register_blueprint(api_bp)
+
+    from flpostcards.blueprints.contact import bp as contact_bp
+    app.register_blueprint(contact_bp)
 
     return app

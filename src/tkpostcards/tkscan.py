@@ -471,6 +471,16 @@ class PostcardScannerApp(tk.Tk):
         self.resizable(True, True)
         self.minsize(560, 480)
 
+        # Application icon
+        _icon_path = APP_DIR / "images" / "ktscan_256.png"
+        if _icon_path.exists():
+            try:
+                _icon = ImageTk.PhotoImage(Image.open(_icon_path))
+                self.iconphoto(True, _icon)
+                self._icon = _icon  # keep a reference
+            except Exception as exc:
+                logging.warning("Could not load icon: %s", exc)
+
         # State
         self._scan_index = self._next_index()
         self._batch_running = False

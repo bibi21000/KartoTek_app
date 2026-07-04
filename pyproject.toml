@@ -20,7 +20,7 @@ maintainers = [
   {name = "bibi21000", email = "bibi21000@gmail.com"}
 ]
 description = "Scan, manage and publish your postcards collection"
-version = "2.5.18"
+version = "2.6.9"
 requires-python = ">=3.9"
 dependencies = [
     "pillow",
@@ -88,16 +88,18 @@ dev = [
     "ruff",
     "Babel",
 ]
+appimage = [
+    "python-appimage",
+]
 
 [project.urls]
 HomePage = "https://github.com/bibi21000/pypostcards"
 Issues = "https://github.com/bibi21000/pypostcards/issues"
 
 [project.scripts]
-tktools = "tkpostcards.scripts.tktools:cli"
-tkmanager = "tkpostcards.tkmanager:run"
-tkscan = "tkpostcards.tkscan:run"
-flpostcards = "flpostcards.run:main"
+kttools = "tkpostcards.scripts.tktools:cli"
+ktmanager = "tkpostcards.tkmanager:run"
+ktscan = "tkpostcards.tkscan:run"
 
 [tool.black]
 line-length = 88
@@ -120,6 +122,7 @@ mapping_file = "babel.cfg"
 tkpostcards = [
     "translations/**/*.po",
     "translations/**/*.mo",
+    "images/*.png",
 ]
 flpostcards = [
     "translations/**/*.po",

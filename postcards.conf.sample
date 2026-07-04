@@ -18,6 +18,21 @@ lock_poll_interval = 2.0
 lock_timeout = 60.0
 
 [tkmanager]
+# Collections
+collections=Louhans,Seille,Autres
+# Subdirectory (under datadir) containing full-resolution PNGs
+images_dir=size_div1
+# Subdirectory (under datadir) containing gallery thumbnail PNGs
+gallery_images_dir=size_div3
+# Last edited card id (saved automatically)
+last_id=
+# Last used collection filter for navigation (saved automatically)
+last_filter=
+# Similarity search parameters (saved automatically)
+search_threshold=0.7
+search_max_results=20
+# Duplicate detection threshold (saved automatically)
+doubles_threshold=90
 
 [tkscan]
 # SANE device string of the default scanner (empty = simulate scan)

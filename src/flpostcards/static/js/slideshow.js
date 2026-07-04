@@ -36,6 +36,9 @@
     var allCards = [];
     // Index courant pour le mode séquentiel (config.shuffle === false).
     var seqIndex = 0;
+    // Historique des cartes affichées (pour le bouton "précédente")
+    var history = [];
+    var historyIndex = -1;
 
     function imageUrl(relativePath) {
         return config.imageBaseUrl + relativePath;
@@ -130,7 +133,6 @@
 
             nextLayer.style.backgroundImage = "url('" + rectoUrl + "')";
 
-            // Force le navigateur à appliquer le style avant de déclencher la transition
             requestAnimationFrame(function () {
                 nextLayer.classList.add("visible");
                 nextLayer.classList.remove("hidden-layer");
@@ -172,7 +174,26 @@
         if (!card) {
             return;
         }
+        // Tronque l'historique si on était revenu en arrière
+        if (historyIndex < history.length - 1) {
+            history = history.slice(0, historyIndex + 1);
+        }
+        history.push(card);
+        historyIndex = history.length - 1;
         showCard(card);
+    }
+
+    function prevSlide() {
+        if (historyIndex <= 0) {
+            return; // pas d'historique à reculer
+        }
+        historyIndex--;
+        showCard(history[historyIndex]);
+    }
+
+    // Repart du début du timer (utilisé après navigation manuelle)
+    function resetLoop() {
+        startLoop();
     }
 
     function startLoop() {
@@ -184,6 +205,9 @@
 
     slideshow.addEventListener("click", function (event) {
         if (event.target.closest(".page-header")) {
+            return;
+        }
+        if (event.target.closest(".slide-nav-btn")) {
             return;
         }
         if (!currentCard) {
@@ -201,6 +225,13 @@
             }
             nextSlide();
             startLoop();
+
+            if (typeof NavControls !== "undefined") {
+                NavControls.init(slideshow, {
+                    onPrev: function () { prevSlide(); resetLoop(); },
+                    onNext: function () { nextSlide(); resetLoop(); }
+                });
+            }
         })
         .catch(function () {
             // Pas de carte disponible : rien à afficher pour le moment

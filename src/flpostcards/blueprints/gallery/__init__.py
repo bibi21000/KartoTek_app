@@ -88,6 +88,22 @@ def index():
             }
         )
 
+    # Calcul des numéros de pages à afficher dans la pagination :
+    # toujours page 1, les 5 pages autour de la page courante, et la
+    # dernière page. Les « trous » sont représentés par None (ellipse).
+    WINDOW = 2  # pages de chaque côté de la page courante
+    shown: set[int] = {1, pages}
+    for p in range(max(1, page - WINDOW), min(pages, page + WINDOW) + 1):
+        shown.add(p)
+    sorted_pages = sorted(shown)
+    page_range: list[int | None] = []
+    prev: int | None = None
+    for p in sorted_pages:
+        if prev is not None and p - prev > 1:
+            page_range.append(None)  # ellipse
+        page_range.append(p)
+        prev = p
+
     if collection:
         page_title = gettext(
             "Galerie - %(collection)s", collection=collection
@@ -109,6 +125,7 @@ def index():
         per_page_choices=PER_PAGE_CHOICES,
         page=page,
         pages=pages,
+        page_range=page_range,
         total=total,
         og_title=page_title,
         og_description=gettext(

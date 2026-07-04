@@ -567,11 +567,11 @@ def publish(common, config, full):
         RemoteSync
     )
 
-    if full is True:
-        _travels(common)
-
     if config is None:
         raise RuntimeError("Give me a config")
+
+    if full is True:
+        _travels(common)
 
     logging.basicConfig(
         level=logging.INFO,

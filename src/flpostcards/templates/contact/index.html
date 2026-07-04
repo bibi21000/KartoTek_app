@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="contact-page">
+    <header class="contact-header">
+        <h1 class="page-title">{{ page_title }}</h1>
+    </header>
+
+    <form class="contact-form" method="post" novalidate>
+        {% if errors._global %}
+        <p class="form-error form-error-global">{{ errors._global }}</p>
+        {% endif %}
+
+        <div class="form-field">
+            <label for="name">{{ _("Nom") }}</label>
+            <input type="text" id="name" name="name" value="{{ values.name }}" required maxlength="100">
+            {% if errors.name %}<p class="form-error">{{ errors.name }}</p>{% endif %}
+        </div>
+
+        <div class="form-field">
+            <label for="email">{{ _("Email") }}</label>
+            <input type="email" id="email" name="email" value="{{ values.email }}" required maxlength="200">
+            {% if errors.email %}<p class="form-error">{{ errors.email }}</p>{% endif %}
+        </div>
+
+        <div class="form-field">
+            <label for="subject">{{ _("Sujet") }}</label>
+            <input type="text" id="subject" name="subject" value="{{ values.subject }}" maxlength="200">
+        </div>
+
+        <div class="form-field">
+            <label for="message">{{ _("Message") }}</label>
+            <textarea id="message" name="message" rows="8" required maxlength="5000">{{ values.message }}</textarea>
+            {% if errors.message %}<p class="form-error">{{ errors.message }}</p>{% endif %}
+        </div>
+
+        <!-- Honeypot anti-spam : champ masqué par CSS, ignoré par les
+             utilisateurs humains mais souvent rempli par les bots -->
+        <div class="form-field form-honeypot" aria-hidden="true">
+            <label for="website">{{ _("Site web") }}</label>
+            <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
+        <button type="submit" class="contact-submit">{{ _("Envoyer") }}</button>
+    </form>
+</div>
+{% endblock %}
