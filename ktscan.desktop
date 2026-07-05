@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=KartoTek Scanner
+Comment=Scan and manage your postcard collection
+Comment[fr]=Numériser votre collection de cartes postales
+Exec=/path/to/venv/bin/ktscan
+Icon=/path/to/src/tkpostcards/images/ktscan_256.png
+Terminal=false
+Categories=Graphics;Scanning;
+StartupWMClass=tkscan
+StartupNotify=true

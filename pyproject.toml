@@ -20,7 +20,7 @@ maintainers = [
   {name = "bibi21000", email = "bibi21000@gmail.com"}
 ]
 description = "Scan, manage and publish your postcards collection"
-version = "2.6.9"
+version = "2.7.4"
 requires-python = ">=3.9"
 dependencies = [
     "pillow",
@@ -31,6 +31,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 [project.optional-dependencies]
@@ -51,7 +53,8 @@ tkinter = [
     "click",
     "numpy",
     "tqdm",
-    "zstandard",
+    #"zstandard",
+    "pyzstd",
     "paramiko",
 ]
 ocr = [

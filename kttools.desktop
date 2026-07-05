@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=KartoTek Tools
+Comment=Tools for adding postcards in collection and publish them
+Comment[fr]=Outils pour ajouter les cartes postales à votre collection et les publier
+Exec=/path/to/venv/bin/kttools
+Icon=/path/to/src/tkpostcards/images/kttools_256.png
+Terminal=true
+Categories=Graphics;
+StartupWMClass=tktools
+StartupNotify=true

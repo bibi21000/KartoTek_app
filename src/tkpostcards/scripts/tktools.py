@@ -263,24 +263,24 @@ def backup():
 @click.pass_obj
 def create(common, level, archive):
     _("""Backup cards directory""")
+    from tqdm import tqdm
     from ..libs.backup import (
         PostcardBackup
     )
 
-    if archive is None:
-        import datetime
-        archive = "archive_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + '.tar.zst'
-
-    PostcardBackup.create_backup(common.datadir,
-        archive,
-        compression_level=level)
+    with tqdm(unit='B', unit_scale=True, desc='Sauvegarde') as pbar:
+        PostcardBackup.create_backup(common.datadir,
+            archive,
+            compression_level=level,
+            progress=pbar)
 
 @backup.command()
-@click.option('--dest', default=15, help="Destination dir")
+@click.option('--dest', default=None, help="Destination dir")
 @click.option('--archive', help="Name of archive to create (backup_(date).tar.zst if None)")
 @click.pass_obj
 def extract(common, dest, archive):
     _("""Extract cards in directory""")
+    from tqdm import tqdm
     from ..libs.backup import (
         PostcardBackup
     )
@@ -288,7 +288,8 @@ def extract(common, dest, archive):
     if dest is None:
         raise RuntimeError("Need a dest directory")
 
-    PostcardBackup.extract_backup(archive, dest)
+    with tqdm(unit='B', unit_scale=True, desc='Restauration') as pbar:
+        PostcardBackup.extract_backup(archive, dest, progress=pbar)
 
 
 @cli.group()
@@ -585,6 +586,8 @@ def publish(common, config, full):
     result = sync.sync_directory(datadir / 'size_div10', 'size_div10')
     print(result)
     result = sync.sync_directory(datadir / 'size_div20', 'size_div20')
+    print(result)
+    result = sync.sync_directory(datadir / 'verification', 'verification')
     print(result)
     result = sync.sync_file(datadir / 'postcards.sqlite')
     print(result)

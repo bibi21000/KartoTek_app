@@ -57,7 +57,7 @@
             {{ _("Carte") }}
         </a>
         {% if request.endpoint == 'home.index' and config.SMTP_HOST and config.CONTACT_EMAIL %}
-        <a class="site-nav-link" href="{{ url_for('contact.index') }}">
+        <a class="site-nav-link site-nav-link--right" href="{{ url_for('contact.index') }}">
             {{ _("Contact") }}
         </a>
         {% endif %}

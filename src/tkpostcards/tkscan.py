@@ -471,7 +471,16 @@ class PostcardScannerApp(tk.Tk):
         self.resizable(True, True)
         self.minsize(560, 480)
 
-        # Application icon
+        # WM_CLASS required by GNOME/Ubuntu to match the .desktop file
+        # and display the correct icon in the taskbar / dock.
+        self.tk.call("wm", "iconname", ".", "tkscan")
+        try:
+            # Sets both instance name and class name
+            self.tk.call("tk", "appname", "tkscan")
+        except Exception:
+            pass
+
+        # Application icon (window decoration + Alt-Tab)
         _icon_path = APP_DIR / "images" / "ktscan_256.png"
         if _icon_path.exists():
             try:

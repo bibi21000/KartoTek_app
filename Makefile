@@ -6,17 +6,22 @@ PYTHON:=python3
 endif
 VERSION := $(shell grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
 
-.PHONY: venv build tests i18n-extract i18n-init i18n-update i18n-compile i18n docker
+.PHONY: venv venv-min venv-dev build tests i18n-extract i18n-init i18n-update i18n-compile i18n docker
 
-venv:
+
+venv-min:
 	${PYTHON} -m venv venv
 	./venv/bin/pip install -e .
-	./venv/bin/pip install -e .[dev]
 	./venv/bin/pip install -e .[tkinter]
-	./venv/bin/pip install -e .[flask]
-	./venv/bin/pip install -e .[similar]
 	./venv/bin/pip install -e .[scan]
+
+venv: venv-min
+	./venv/bin/pip install -e .[similar]
 	./venv/bin/pip install -e .[travel]
+
+venv-dev: venv
+	./venv/bin/pip install -e .[dev]
+	./venv/bin/pip install -e .[flask]
 
 serve:
 	./venv/bin/python src/run.py

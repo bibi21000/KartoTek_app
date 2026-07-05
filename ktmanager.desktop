@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=KartoTek Manager
+Comment=Manage your postcard collection
+Comment[fr]=Gérer votre collection de cartes postales
+# Adjust Exec path to your virtualenv / install location:
+Exec=/path/to/venv/bin/ktmanager
+Icon=/path/to/src/tkpostcards/images/ktmanager_256.png
+Terminal=false
+Categories=Graphics;Education;
+StartupWMClass=tkmanager
+StartupNotify=true

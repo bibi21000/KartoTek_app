@@ -1500,14 +1500,26 @@ class App(tk.Tk):
         self.minsize(1200, 700)
 
         # Application icon
+        # wm_class must match the .desktop file's StartupWMClass for GNOME
+        # to associate the taskbar icon with the application.
+        try:
+            self.wm_attributes("-class", "tkmanager")
+        except Exception:
+            pass
+
         _icon_path = Path(__file__).parent / "images" / "ktmanager_256.png"
         if PIL_AVAILABLE and _icon_path.exists():
             try:
                 _icon_img = ImageTk.PhotoImage(Image.open(_icon_path))
-                self.wm_iconphoto(True, _icon_img)
-                self._icon_ref = _icon_img  # keep a reference to prevent GC
+                self._icon_ref = _icon_img  # prevent GC
+                # Set icon on the Tk root directly via tk.call for better
+                # compatibility with GNOME/Wayland on Ubuntu 24.04
+                self.tk.call("wm", "iconphoto", self._w, "-default", _icon_img)
             except Exception:
-                pass
+                try:
+                    self.wm_iconphoto(True, _icon_img)
+                except Exception:
+                    pass
 
         self._ids: list[int] = []
         self._current_idx = 0

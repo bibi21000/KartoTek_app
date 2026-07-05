@@ -196,6 +196,35 @@ def robots():
     return Response("\n".join(lines), mimetype="text/plain")
 
 
+@bp.route("/<string:filename>")
+def verification_file(filename: str):
+    """
+    Sert les fichiers de vérification de propriété de site déposés dans
+    datadir/verification/ (Google Search Console, Bing, Yandex, etc.).
+
+    Seuls les fichiers .html et .txt sont autorisés, et uniquement depuis
+    ce répertoire dédié — aucun autre fichier du serveur n'est exposé.
+
+    Usage : déposer le fichier fourni par le moteur de recherche dans
+    datadir/verification/ puis accéder à /<nom-du-fichier>.
+    """
+    from flask import send_from_directory
+
+    if not filename.endswith((".html", ".txt")):
+        abort(404)
+
+    verification_dir = Path(current_app.config["DATADIR"]) / "verification"
+    if not verification_dir.exists():
+        abort(404)
+
+    file_path = verification_dir / filename
+    if not file_path.exists():
+        abort(404)
+
+    mimetype = "text/html" if filename.endswith(".html") else "text/plain"
+    return send_from_directory(verification_dir, filename, mimetype=mimetype)
+
+
 @bp.route("/sitemap.xml")
 def sitemap():
     """

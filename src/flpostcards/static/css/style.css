@@ -538,6 +538,7 @@ html, body {
     position: fixed;
     top: 0.75rem;
     left: 1rem;
+    right: 1rem;
     z-index: 50;
     display: flex;
     gap: 0.5rem;
@@ -564,6 +565,10 @@ html, body {
     background: rgba(255, 255, 255, 0.18);
     border-color: rgba(255, 255, 255, 0.5);
     font-weight: 600;
+}
+
+.site-nav-link--right {
+    margin-left: auto;
 }
 
 @media (max-width: 640px) {
