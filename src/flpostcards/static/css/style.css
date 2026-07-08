@@ -1206,3 +1206,18 @@ html, body {
         display: none;
     }
 }
+
+.contact-footer {
+    margin-top: 2rem;
+    font-size: 0.78rem;
+    color: #666;
+}
+
+.contact-footer a {
+    color: #888;
+    text-decoration: none;
+}
+
+.contact-footer a:hover {
+    color: #aaa;
+}

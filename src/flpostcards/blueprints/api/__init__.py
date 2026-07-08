@@ -3,10 +3,12 @@ Blueprint API v1 : endpoints JSON pour une application mobile de
 localisation de cartes postales.
 
 Routes :
-  GET  /api/v1/bounds          → zone GPS couverte par les cartes (rectangle)
-  GET  /api/v1/nearby          → cartes dans un rayon autour d'une position
-  GET  /api/v1/next-update     → délai recommandé avant le prochain poll
-  POST /api/v1/update          → enregistre un repérage de carte sur le terrain
+  GET  /api/v1/dbid          → hash du fichier postcards.sqlite (détection de changement)
+  GET  /api/v1/gps           → coordonnées GPS paginées (sans doublons)
+  GET  /api/v1/bounds        → zone GPS couverte par les cartes (rectangle)
+  GET  /api/v1/nearby        → cartes dans un rayon autour d'une position
+  GET  /api/v1/next-update   → délai recommandé avant le prochain poll
+  POST /api/v1/update        → enregistre un repérage de carte sur le terrain
 
 Authentification (endpoint POST) :
   Utilise la table ``auths`` de la base SQLite via ``model.check_auth()``.
@@ -16,6 +18,7 @@ Authentification (endpoint POST) :
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import time
@@ -64,6 +67,131 @@ def _cards_with_coord(model) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@bp.route("/api/v1/dbid")
+def dbid():
+    """
+    Retourne un hash SHA1 (12 premiers caractères) du fichier
+    postcards.sqlite (et de son fichier WAL s'il existe), permettant à
+    un client de détecter si la base a changé depuis son dernier appel
+    (nouvelles cartes, coordonnées GPS mises à jour, etc.) sans
+    télécharger ni interroger la base entière.
+
+    Le fichier -wal est inclus dans le hash car SQLite en mode WAL
+    n'écrit pas immédiatement dans le fichier principal.
+
+    Réponse JSON : { "hash": "abc123def456", "mtime": 1234567890 }
+    """
+    db_path = Path(current_app.config["DATADIR"]) / "postcards.sqlite"
+    if not db_path.exists():
+        return jsonify({"error": "database not found"}), 404
+
+    h = hashlib.sha1()
+    candidates = [db_path, Path(str(db_path) + "-wal")]
+    latest_mtime = 0
+
+    for path in candidates:
+        if not path.exists():
+            continue
+        stat = path.stat()
+        latest_mtime = max(latest_mtime, int(stat.st_mtime))
+        with path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
+
+    return jsonify({"hash": h.hexdigest()[:12], "mtime": latest_mtime})
+
+
+@bp.route("/api/v1/gps")
+def gps():
+    """
+    Liste paginée des coordonnées GPS des cartes uniques (sans doublons)
+    ayant une position renseignée, triées par id numérique croissant.
+
+    Paramètres de requête (optionnels) :
+      start  : index de départ dans la liste complète (défaut 0)
+      offset : nombre de résultats à retourner (défaut 500, max 2000)
+
+    Réponse JSON :
+      {
+        "count": 42,          -- nombre de résultats dans cette page
+        "total": 150,         -- nombre total de cartes GPS sans doublons
+        "cards": [
+          { "id": "1", "lat": 46.749, "lon": 5.620 },
+          ...
+        ]
+      }
+
+    Utilisation typique : appeler successivement avec start=0, puis
+    start+=offset jusqu'à ce que count < offset (fin de liste).
+    """
+    try:
+        start = max(int(request.args.get("start", 0)), 0)
+        limit = min(int(request.args.get("offset", 500)), 2000)
+    except ValueError:
+        return jsonify({"error": "start et offset doivent être des entiers"}), 400
+
+    model = current_app.model
+
+    # Requête directe : cartes uniques avec coord, paginées par offset SQL.
+    # On filtre coord_lat IS NOT NULL au niveau SQL pour n'obtenir et
+    # paginer que les cartes réellement géolocalisées, sans avoir à
+    # surcharger list_unique_cards puis filtrer côté Python.
+    unique_cond = (
+        "("
+        "  (cards.coord_lat IS NOT NULL"
+        "   AND NOT EXISTS ("
+        "     SELECT 1 FROM cards AS cg"
+        "     WHERE cg.coord_lat IS NOT NULL"
+        "       AND CAST(cg.id AS INTEGER) < CAST(cards.id AS INTEGER)"
+        "       AND ("
+        "         EXISTS (SELECT 1 FROM json_each(cards.doubles)"
+        "                 WHERE CAST(json_each.value AS TEXT) = cg.id)"
+        "         OR EXISTS (SELECT 1 FROM json_each(cg.doubles)"
+        "                    WHERE CAST(json_each.value AS TEXT) = cards.id)"
+        "       )"
+        "   ))"
+        "  OR"
+        "  (cards.coord_lat IS NULL"
+        "   AND NOT EXISTS ("
+        "     SELECT 1 FROM cards AS cg"
+        "     WHERE cg.coord_lat IS NOT NULL"
+        "       AND ("
+        "         EXISTS (SELECT 1 FROM json_each(cards.doubles)"
+        "                 WHERE CAST(json_each.value AS TEXT) = cg.id)"
+        "         OR EXISTS (SELECT 1 FROM json_each(cg.doubles)"
+        "                    WHERE CAST(json_each.value AS TEXT) = cards.id)"
+        "       )"
+        "   )"
+        "   AND NOT EXISTS ("
+        "     SELECT 1 FROM cards AS c2, json_each(c2.doubles)"
+        "     WHERE CAST(json_each.value AS TEXT) = cards.id"
+        "   ))"
+        ")"
+    )
+    conn = model._get_conn()
+
+    sql_data = (
+        f"SELECT id, coord_lat, coord_lon FROM cards "
+        f"WHERE {unique_cond} AND coord_lat IS NOT NULL AND coord_lon IS NOT NULL "
+        f"ORDER BY CAST(id AS INTEGER) "
+        f"LIMIT ? OFFSET ?"
+    )
+    sql_count = (
+        f"SELECT COUNT(*) FROM cards "
+        f"WHERE {unique_cond} AND coord_lat IS NOT NULL AND coord_lon IS NOT NULL"
+    )
+
+    rows = conn.execute(sql_data, (limit, start)).fetchall()
+    total = conn.execute(sql_count).fetchone()[0]
+
+    cards = [
+        {"id": row["id"], "lat": row["coord_lat"], "lon": row["coord_lon"]}
+        for row in rows
+    ]
+
+    return jsonify({"count": len(cards), "total": total, "cards": cards})
+
 
 @bp.route("/api/v1/bounds")
 def bounds():

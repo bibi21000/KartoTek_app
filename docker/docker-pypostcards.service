@@ -13,7 +13,7 @@ Type=simple
 EnvironmentFile=/etc/postcards/systemd.conf
 
 # Pull the image first if PULL is true/True/1
-ExecStartPre=/bin/bash -c 'if [[ "${PULL,,}" == "true" || "${PULL}" == "1" ]]; then /usr/bin/docker pull ${IMAGE}; fi'
+ExecStartPre=/bin/bash -c '[ "$PULL" = "true" ] || [ "$PULL" = "1" ] && exec /usr/bin/docker pull "$IMAGE"'
 
 # Start the container in the foreground (no -d flag)
 ExecStart=/usr/bin/docker run \
