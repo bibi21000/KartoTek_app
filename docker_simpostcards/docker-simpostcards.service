@@ -1,0 +1,39 @@
+[Unit]
+Description=Similar Postcards Docker Container
+# Only start after Docker is ready
+After=docker.service
+Requires=docker.service
+# Wait for network to be available
+After=network-online.target
+
+[Service]
+Type=simple
+
+# Environment files
+EnvironmentFile=/etc/simpostcards/systemd.conf
+
+# Pull the image first if PULL is true/True/1
+ExecStartPre=/bin/bash -c '[ "$PULL" = "true" ] || [ "$PULL" = "1" ] && exec /usr/bin/docker pull "$IMAGE"'
+
+# Start the container in the foreground (no -d flag)
+ExecStart=/usr/bin/docker run \
+  --name simpostcards \
+  --rm \
+  -p 8004:8004 \
+  -v /etc/simpostcards/postcards.conf:/app/postcards.conf \
+  ${IMAGE}
+
+# Gracefully stop the container
+ExecStop=/usr/bin/docker stop -t 30 simpostcards
+
+# Timeout for start operation
+TimeoutStartSec=60
+# Timeout for stop operation
+TimeoutStopSec=35
+
+# Always restart on failure
+Restart=always
+RestartSec=45
+
+[Install]
+WantedBy=multi-user.target

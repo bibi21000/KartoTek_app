@@ -23,7 +23,7 @@ from libpostcards.model import Model
 from . import cli
 
 try:
-    from .libs.similar import PostcardSearcher
+    from libpostcards.similar import PostcardSearcher
     SEARCHER_AVAILABLE = True
 except ImportError:
     SEARCHER_AVAILABLE = False

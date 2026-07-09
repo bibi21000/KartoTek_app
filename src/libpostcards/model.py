@@ -963,6 +963,59 @@ class Model:
         cur = conn.execute(sql, params)
         return cur.fetchone()[0]
 
+    def list_unique_cards_with_coord(
+        self,
+        after_id: int = 0,
+        limit: int = 500,
+    ) -> list[dict]:
+        """
+        Cartes uniques (sans doublons) possédant des coordonnées GPS,
+        triées par id numérique croissant, avec pagination par curseur.
+
+        Contrairement à une pagination OFFSET/LIMIT classique, le
+        curseur ``after_id`` (dernier id numérique vu par le client)
+        reste valide même si des cartes sont ajoutées, modifiées ou
+        supprimées entre deux appels : chaque page ne dépend que de la
+        position du dernier id vu, jamais du nombre de lignes qui la
+        précèdent. Cela élimine les doublons/cartes manquantes que
+        produit une pagination OFFSET quand la base change pendant le
+        parcours des pages (écriture concurrente, sync, publication).
+        """
+        conditions = [
+            self._UNIQUE_CARD_CONDITION,
+            "cards.coord_lat IS NOT NULL",
+            "cards.coord_lon IS NOT NULL",
+            "CAST(cards.id AS INTEGER) > ?",
+        ]
+        params: list[Any] = [after_id]
+        where = f"WHERE {' AND '.join(conditions)}"
+        sql = (
+            f"SELECT * FROM cards {where} "
+            f"ORDER BY CAST(id AS INTEGER) LIMIT {int(limit)}"
+        )
+        conn = self._get_conn()
+        cur = conn.execute(sql, params)
+        return [_row_to_card(r) for r in cur.fetchall()]
+
+    def count_unique_cards_with_coord(self) -> int:
+        """
+        Nombre total de cartes uniques (sans doublons) possédant des
+        coordonnées GPS. Utilise exactement le même filtre que
+        :meth:`list_unique_cards_with_coord`, pour que ``total`` soit
+        toujours cohérent avec ce que la pagination peut réellement
+        renvoyer.
+        """
+        conditions = [
+            self._UNIQUE_CARD_CONDITION,
+            "cards.coord_lat IS NOT NULL",
+            "cards.coord_lon IS NOT NULL",
+        ]
+        where = f"WHERE {' AND '.join(conditions)}"
+        sql = f"SELECT COUNT(*) FROM cards {where}"
+        conn = self._get_conn()
+        cur = conn.execute(sql)
+        return cur.fetchone()[0]
+
     # ------------------------------------------------------------------
     # Suppression d'une carte
     # ------------------------------------------------------------------

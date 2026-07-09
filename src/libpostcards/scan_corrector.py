@@ -450,9 +450,9 @@ class ScanCorrector:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage : python scan_corrector.py <image_entrée> [image_sortie]")
+        print("Usage : python -m libpostcards.scan_corrector <image_entrée> [image_sortie]")
         print("Formats supportés : tiff, jpg, jpeg, png, bmp")
-        print("Exemple : python scan_corrector.py scan.tiff scan_corrige.jpg")
+        print("Exemple : python -m libpostcards.scan_corrector scan.tiff scan_corrige.jpg")
         sys.exit(1)
 
     entree = sys.argv[1]

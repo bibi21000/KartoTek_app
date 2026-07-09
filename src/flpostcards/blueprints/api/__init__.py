@@ -4,7 +4,7 @@ localisation de cartes postales.
 
 Routes :
   GET  /api/v1/dbid          → hash du fichier postcards.sqlite (détection de changement)
-  GET  /api/v1/gps           → coordonnées GPS paginées (sans doublons)
+  GET  /api/v1/gps           → coordonnées GPS paginées (sans doublons, curseur after_id)
   GET  /api/v1/bounds        → zone GPS couverte par les cartes (rectangle)
   GET  /api/v1/nearby        → cartes dans un rayon autour d'une position
   GET  /api/v1/next-update   → délai recommandé avant le prochain poll
@@ -18,6 +18,7 @@ Authentification (endpoint POST) :
 
 from __future__ import annotations
 
+import os
 import hashlib
 import json
 import math
@@ -109,88 +110,86 @@ def gps():
     ayant une position renseignée, triées par id numérique croissant.
 
     Paramètres de requête (optionnels) :
-      start  : index de départ dans la liste complète (défaut 0)
-      offset : nombre de résultats à retourner (défaut 500, max 2000)
+      after_id : id numérique de la dernière carte reçue à la page
+                 précédente (défaut 0 pour démarrer). Pagination par
+                 curseur : stable même si la base change pendant le
+                 parcours des pages (ajout/màj/suppression de cartes).
+      offset   : nombre de résultats à retourner (défaut 500, max 2000)
+
+      start    : (déprécié) index OFFSET dans la liste. Conservé pour
+                 compatibilité ascendante uniquement si `after_id`
+                 n'est pas fourni. À éviter : une pagination OFFSET
+                 peut renvoyer des cartes en double ou en sauter si la
+                 base est modifiée entre deux appels (tri non figé
+                 entre requêtes distinctes). Migrer vers `after_id`.
 
     Réponse JSON :
       {
-        "count": 42,          -- nombre de résultats dans cette page
-        "total": 150,         -- nombre total de cartes GPS sans doublons
+        "count": 42,             -- nombre de résultats dans cette page
+        "total": 150,            -- nombre total de cartes GPS sans doublons
+        "next_after_id": "187",  -- à repasser en after_id pour la page suivante (null si fin)
         "cards": [
           { "id": "1", "lat": 46.749, "lon": 5.620 },
           ...
         ]
       }
 
-    Utilisation typique : appeler successivement avec start=0, puis
-    start+=offset jusqu'à ce que count < offset (fin de liste).
+    Utilisation typique (recommandée) : appeler avec after_id=0, puis
+    reprendre avec after_id=next_after_id jusqu'à ce que
+    next_after_id soit null (ou count < offset).
     """
     try:
-        start = max(int(request.args.get("start", 0)), 0)
         limit = min(int(request.args.get("offset", 500)), 2000)
     except ValueError:
-        return jsonify({"error": "start et offset doivent être des entiers"}), 400
+        return jsonify({"error": "offset doit être un entier"}), 400
 
     model = current_app.model
 
-    # Requête directe : cartes uniques avec coord, paginées par offset SQL.
-    # On filtre coord_lat IS NOT NULL au niveau SQL pour n'obtenir et
-    # paginer que les cartes réellement géolocalisées, sans avoir à
-    # surcharger list_unique_cards puis filtrer côté Python.
-    unique_cond = (
-        "("
-        "  (cards.coord_lat IS NOT NULL"
-        "   AND NOT EXISTS ("
-        "     SELECT 1 FROM cards AS cg"
-        "     WHERE cg.coord_lat IS NOT NULL"
-        "       AND CAST(cg.id AS INTEGER) < CAST(cards.id AS INTEGER)"
-        "       AND ("
-        "         EXISTS (SELECT 1 FROM json_each(cards.doubles)"
-        "                 WHERE CAST(json_each.value AS TEXT) = cg.id)"
-        "         OR EXISTS (SELECT 1 FROM json_each(cg.doubles)"
-        "                    WHERE CAST(json_each.value AS TEXT) = cards.id)"
-        "       )"
-        "   ))"
-        "  OR"
-        "  (cards.coord_lat IS NULL"
-        "   AND NOT EXISTS ("
-        "     SELECT 1 FROM cards AS cg"
-        "     WHERE cg.coord_lat IS NOT NULL"
-        "       AND ("
-        "         EXISTS (SELECT 1 FROM json_each(cards.doubles)"
-        "                 WHERE CAST(json_each.value AS TEXT) = cg.id)"
-        "         OR EXISTS (SELECT 1 FROM json_each(cg.doubles)"
-        "                    WHERE CAST(json_each.value AS TEXT) = cards.id)"
-        "       )"
-        "   )"
-        "   AND NOT EXISTS ("
-        "     SELECT 1 FROM cards AS c2, json_each(c2.doubles)"
-        "     WHERE CAST(json_each.value AS TEXT) = cards.id"
-        "   ))"
-        ")"
-    )
-    conn = model._get_conn()
-
-    sql_data = (
-        f"SELECT id, coord_lat, coord_lon FROM cards "
-        f"WHERE {unique_cond} AND coord_lat IS NOT NULL AND coord_lon IS NOT NULL "
-        f"ORDER BY CAST(id AS INTEGER) "
-        f"LIMIT ? OFFSET ?"
-    )
-    sql_count = (
-        f"SELECT COUNT(*) FROM cards "
-        f"WHERE {unique_cond} AND coord_lat IS NOT NULL AND coord_lon IS NOT NULL"
-    )
-
-    rows = conn.execute(sql_data, (limit, start)).fetchall()
-    total = conn.execute(sql_count).fetchone()[0]
+    if "start" in request.args and "after_id" not in request.args:
+        # Ancien mode OFFSET/LIMIT — conservé pour compatibilité
+        # ascendante, mais déconseillé : instable si la base change
+        # pendant la pagination (doublons / cartes manquantes).
+        try:
+            start = max(int(request.args.get("start", 0)), 0)
+        except ValueError:
+            return jsonify({"error": "start doit être un entier"}), 400
+        page_cards = [
+            c for c in model.list_unique_cards(limit=limit, offset=start)
+            if c.get("coord") and c["coord"][0] is not None and c["coord"][1] is not None
+        ]
+    else:
+        try:
+            after_id = max(int(request.args.get("after_id", 0)), 0)
+        except ValueError:
+            return jsonify({"error": "after_id doit être un entier"}), 400
+        page_cards = model.list_unique_cards_with_coord(
+            after_id=after_id, limit=limit
+        )
 
     cards = [
-        {"id": row["id"], "lat": row["coord_lat"], "lon": row["coord_lon"]}
-        for row in rows
+        {"id": c["id"], "lat": c["coord"][0], "lon": c["coord"][1]}
+        for c in page_cards
     ]
 
-    return jsonify({"count": len(cards), "total": total, "cards": cards})
+    # Total calculé avec exactement le même filtre (unique + GPS) que
+    # la pagination, pour que "total" corresponde à ce qui peut
+    # effectivement être renvoyé (auparavant ce total comptait aussi
+    # les cartes marquées doublons, qui ne sortent jamais des pages).
+    total = model.count_unique_cards_with_coord()
+
+    next_after_id = None
+    if len(cards) == limit:
+        try:
+            next_after_id = str(max(int(c["id"]) for c in cards))
+        except ValueError:
+            next_after_id = cards[-1]["id"]
+
+    return jsonify({
+        "count": len(cards),
+        "total": total,
+        "next_after_id": next_after_id,
+        "cards": cards,
+    })
 
 
 @bp.route("/api/v1/bounds")
@@ -202,21 +201,25 @@ def bounds():
       { "min_lat", "max_lat", "min_lon", "max_lon", "count" }
     """
     model = current_app.model
-    cards = _cards_with_coord(model)
+    conn = model._get_conn()
 
-    if not cards:
+    row = conn.execute(
+        "SELECT COUNT(*), MIN(coord_lat), MAX(coord_lat), "
+        "       MIN(coord_lon), MAX(coord_lon) "
+        "FROM cards WHERE coord_lat IS NOT NULL AND coord_lon IS NOT NULL"
+    ).fetchone()
+
+    count = row[0] if row else 0
+    if not count:
         return jsonify({"count": 0, "bounds": None})
 
-    lats = [c["coord"][0] for c in cards]
-    lons = [c["coord"][1] for c in cards]
-
     return jsonify({
-        "count": len(cards),
+        "count": count,
         "bounds": {
-            "min_lat": min(lats),
-            "max_lat": max(lats),
-            "min_lon": min(lons),
-            "max_lon": max(lons),
+            "min_lat": row[1],
+            "max_lat": row[2],
+            "min_lon": row[3],
+            "max_lon": row[4],
         },
     })
 
@@ -305,8 +308,6 @@ def next_update():
         "nearest_card_m": round(min_dist_in_radius, 1) if min_dist_in_radius is not None else None,
     })
 
-
-import os
 
 # ---------------------------------------------------------------------------
 # Lockfile

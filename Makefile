@@ -21,6 +21,7 @@ venv: venv-min
 
 venv-dev: venv
 	./venv/bin/pip install -e .[dev]
+	./venv/bin/pip install -e .[simpostcards]
 	./venv/bin/pip install -e .[flask]
 
 serve:
@@ -63,12 +64,19 @@ i18n-compile:
 
 i18n: i18n-update i18n-compile
 
-docker:
-	docker build -t flpostcards .
+dockerfl:
+	docker build -f docker_flpostcards/Dockerfile -t flpostcards .
 
-docker-push:
+dockerfl-push:
 	docker tag flpostcards localhost:5000/flpostcards
 	docker push localhost:5000/flpostcards
+
+dockersim:
+	docker build -f docker_simpostcards/Dockerfile -t simpostcards .
+
+dockersim-push:
+	docker tag simpostcards localhost:5000/simpostcards
+	docker push localhost:5000/simpostcards
 
 appimagetool-x86_64.AppImage:
 	wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage

@@ -78,7 +78,7 @@ def delete(common, pcid):
     from pathlib import Path
     from libpostcards.model import Model
     try:
-        from ..libs.similar import PostcardSearcher
+        from libpostcards.similar import PostcardSearcher
         SEARCHER_AVAILABLE = True
     except ImportError:
         SEARCHER_AVAILABLE = False
@@ -130,7 +130,7 @@ def prepare(common, prefix, white_threshold):
     from pathlib import Path
     from libpostcards.model import Model
     import cv2
-    from ..libs.scan_corrector import ScanCorrector
+    from libpostcards.scan_corrector import ScanCorrector
     from ..libs.transparency import TiffBackgroundRemover
 
     def _correct(bgtrans, scanc, infile, outfile):
@@ -193,7 +193,7 @@ def add(common, pcid):
     from ..libs.ocr import PostcardOCR
     from ..libs.size import PostcardSize
     try:
-        from ..libs.similar import PostcardSearcher
+        from libpostcards.similar import PostcardSearcher
         SEARCHER_AVAILABLE = True
     except ImportError:
         SEARCHER_AVAILABLE = False
@@ -301,7 +301,7 @@ def similar():
 def index(common):
     """Index similar postcards"""
     from pathlib import Path
-    from ..libs.similar import (
+    from libpostcards.similar import (
         PostcardSearcher
     )
 
@@ -335,7 +335,7 @@ def index(common):
 def files(common, query_dir, threshold, max_results):
     """Find similar postcards from directory"""
     from pathlib import Path
-    from ..similar import (
+    from libpostcards.similar import (
         PostcardSearcher
     )
 
@@ -377,7 +377,7 @@ def files(common, query_dir, threshold, max_results):
 def url(common, url, threshold, max_results):
     """Find similar postcard from url"""
     from pathlib import Path
-    from ..similar import (
+    from libpostcards.similar import (
         PostcardSearcher
     )
 
@@ -415,7 +415,7 @@ def url(common, url, threshold, max_results):
 def clipboard(common, threshold, max_results):
     """Find similar postcard from url"""
     from pathlib import Path
-    from ..similar import (
+    from libpostcards.similar import (
         PostcardSearcher
     )
 
@@ -452,7 +452,7 @@ def duplicates(common, threshold, max_results):
     """Check for missing ids and replace cards wih last ones"""
     from pathlib import Path
     from libpostcards.model import Model
-    from ..libs.similar import (
+    from libpostcards.similar import (
         PostcardSearcher
     )
 

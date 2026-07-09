@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # base python image for custom image
-FROM python:3.12-alpine
+FROM python:3.14-alpine
 
 ENV PIP_NO_CACHE_DIR=false
 
@@ -9,7 +9,7 @@ ENV PIP_NO_CACHE_DIR=false
 RUN mkdir -p /data
 COPY pyproject.toml /app/
 COPY src /app/src/
-COPY docker/postcards.conf /app/
+COPY docker_flpostcards/postcards.conf /app/
 WORKDIR /app
 RUN pip3 install . && pip3 install .[flask] && pip3 install .[prod]
 

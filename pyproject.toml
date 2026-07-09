@@ -20,7 +20,7 @@ maintainers = [
   {name = "bibi21000", email = "bibi21000@gmail.com"}
 ]
 description = "Scan, manage and publish your postcards collection"
-version = "2.7.4"
+version = "2.7.5"
 requires-python = ">=3.9"
 dependencies = [
     "pillow",
@@ -66,7 +66,6 @@ ocr = [
     "kraken",
 ]
 similar = [
-    "tqdm",
     "requests",
     "pillow",
     "imagehash",
@@ -77,6 +76,13 @@ similar = [
 scan = [
     "opencv-python",
     "numpy"
+]
+simpostcards = [
+    "Flask",
+    "opencv-python",
+    "numpy",
+    "pillow",
+    "imagehash",
 ]
 travel = [
     "ortools"
@@ -103,6 +109,7 @@ Issues = "https://github.com/bibi21000/pypostcards/issues"
 kttools = "tkpostcards.scripts.tktools:cli"
 ktmanager = "tkpostcards.tkmanager:run"
 ktscan = "tkpostcards.tkscan:run"
+simrun = "simpostcards.run:main"
 
 [tool.black]
 line-length = 88
