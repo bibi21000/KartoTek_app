@@ -18,4 +18,4 @@ EXPOSE 8004
 VOLUME ["/data"]
 
 # run the flask server
-CMD [ "gunicorn", "--workers=4", "--bind=0.0.0.0:8001", "simpostcards.run:app"]
+CMD [ "gunicorn", "--workers=4", "--bind=0.0.0.0:8004", "simpostcards.run:app"]

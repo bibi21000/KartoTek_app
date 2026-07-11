@@ -1,5 +1,5 @@
 [Unit]
-Description=Similar Postcards Docker Container
+Description=KartoTek Similar Docker Container
 # Only start after Docker is ready
 After=docker.service
 Requires=docker.service
@@ -10,24 +10,24 @@ After=network-online.target
 Type=simple
 
 # Environment files
-EnvironmentFile=/etc/simpostcards/systemd.conf
+EnvironmentFile=/etc/kartotek/similar/systemd.conf
 
 # Pull the image first if PULL is true/True/1
 ExecStartPre=/bin/bash -c '[ "$PULL" = "true" ] || [ "$PULL" = "1" ] && exec /usr/bin/docker pull "$IMAGE"'
 
 # Start the container in the foreground (no -d flag)
 ExecStart=/usr/bin/docker run \
-  --name simpostcards \
+  --name kartotek_similar \
   --rm \
   -p 8004:8004 \
-  -v /etc/simpostcards/postcards.conf:/app/postcards.conf \
+  -v /etc/kartotek/similar/postcards.conf:/app/postcards.conf \
   ${IMAGE}
 
 # Gracefully stop the container
-ExecStop=/usr/bin/docker stop -t 30 simpostcards
+ExecStop=/usr/bin/docker stop -t 30 kartotek_similar
 
 # Timeout for start operation
-TimeoutStartSec=60
+TimeoutStartSec=120
 # Timeout for stop operation
 TimeoutStopSec=35
 

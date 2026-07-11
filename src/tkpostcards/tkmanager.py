@@ -2285,7 +2285,7 @@ class App(tk.Tk):
 
         def worker():
             try:
-                s = PostcardSearcher()
+                s = PostcardSearcher(datadir=self.datadir)
                 s.load_index(str(index_path))
                 self.after(0, lambda: self._on_searcher_loaded(s))
             except Exception as e:

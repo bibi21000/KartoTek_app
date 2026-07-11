@@ -1,0 +1,50 @@
+[Unit]
+Description=KartoTech site %i Docker Container
+# Only start after Docker is ready
+After=docker.service
+Requires=docker.service
+# Wait for network to be available
+After=network-online.target
+ConditionPathExists=/etc/kartotek/sites/systemd-sites.conf
+PartOf=docker-kartotek-sites.service
+Before=docker-kartotek-sites.service
+ReloadPropagatedFrom=docker-kartotek-sites.service
+
+[Service]
+Type=simple
+
+# Environment files
+EnvironmentFile=/etc/kartotek/sites/systemd.conf
+EnvironmentFile=/etc/kartotek/sites/systemd-sites.conf
+
+# Pull the image first if PULL is true/1
+ExecStartPre=/bin/bash -c '[ "$PULL" = "true" ] || [ "$PULL" = "1" ] && exec /usr/bin/docker pull "$IMAGE"'
+
+# Start the container in the foreground (no -d flag)
+ExecStart=/usr/bin/docker run \
+  --name $NAME_%i \
+  --rm \
+  -p $PORT_%i:8010 \
+  -v $MOUNT_%i:/data \
+  -v /etc/kartotek/sites/%i.conf:/app/postcards.conf \
+  ${IMAGE}
+
+# Gracefully stop the container
+ExecStop=/usr/bin/docker stop -t 30 $DOCKERNAME_%i
+
+# Timeout for start operation
+TimeoutStartSec=60
+# Timeout for stop operation
+TimeoutStopSec=35
+
+# Always restart on failure
+Restart=always
+RestartSec=45
+
+[Install]
+WantedBy=docker-kartotek-sites.service
+RequiredBy=docker-kartotek-sites.service
+
+
+
+

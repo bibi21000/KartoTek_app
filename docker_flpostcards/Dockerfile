@@ -13,9 +13,9 @@ COPY docker_flpostcards/postcards.conf /app/
 WORKDIR /app
 RUN pip3 install . && pip3 install .[flask] && pip3 install .[prod]
 
-EXPOSE 8001
+EXPOSE 8010
 
 VOLUME ["/data"]
 
 # run the flask server
-CMD [ "gunicorn", "--workers=4", "--bind=0.0.0.0:8001", "flpostcards.run:app"]
+CMD [ "gunicorn", "--workers=4", "--bind=0.0.0.0:8010", "flpostcards.run:app"]

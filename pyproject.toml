@@ -20,7 +20,7 @@ maintainers = [
   {name = "bibi21000", email = "bibi21000@gmail.com"}
 ]
 description = "Scan, manage and publish your postcards collection"
-version = "2.7.5"
+version = "3.0.5"
 requires-python = ">=3.9"
 dependencies = [
     "pillow",
@@ -44,6 +44,8 @@ flask = [
     "MarkupSafe",
     "Flask-Cachecontrol",
     "itsdangerous",
+    "requests",
+    "PyJWT",
 ]
 tkinter = [
     "click",
@@ -79,7 +81,7 @@ scan = [
 ]
 simpostcards = [
     "Flask",
-    "opencv-python",
+    "opencv-python-headless",
     "numpy",
     "pillow",
     "imagehash",

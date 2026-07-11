@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tkpostcards 2.0.0\n"
 "Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
-"POT-Creation-Date: 2026-07-09 13:32+0200\n"
+"POT-Creation-Date: 2026-07-11 11:35+0200\n"
 "PO-Revision-Date: 2026-06-12 15:21+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -1030,11 +1030,11 @@ msgstr ""
 msgid "Extract cards in directory"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:559
+#: src/tkpostcards/scripts/tktools.py:562
 msgid "Update all data (travel, ...) before publihing"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:614
+#: src/tkpostcards/scripts/tktools.py:576
 msgid "Do not update files"
 msgstr ""
 

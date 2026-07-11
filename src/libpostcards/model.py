@@ -151,9 +151,22 @@ CREATE TABLE IF NOT EXISTS auths (
 );
 """
 
+_DDL_REFRESH_TOKENS = """
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    email         TEXT NOT NULL,
+    token_hash    TEXT NOT NULL UNIQUE,   -- sha256 du refresh token, jamais le token en clair
+    created_at    INTEGER NOT NULL,
+    expires_at    INTEGER NOT NULL,
+    revoked_at    INTEGER,
+    device_info   TEXT                    -- optionnel : user-agent / identifiant appareil, pour affichage "sessions actives"
+);
+"""
+
 _DDL_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_cards_cdate ON cards (cdate);
 CREATE INDEX IF NOT EXISTS idx_cards_mdate ON cards (mdate);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_email ON refresh_tokens(email);
 """
 
 # Valeurs par défaut pour une carte vide
@@ -349,6 +362,19 @@ class Model:
             self._conn.execute("PRAGMA journal_mode=WAL;")
             self._conn.execute("PRAGMA foreign_keys=ON;")
             self._db_signature = self._current_db_signature()
+
+            # Garantit la présence de auths/refresh_tokens même sur une
+            # base existante générée avant l'ajout de refresh_tokens
+            # (IF NOT EXISTS : sans effet si déjà présentes). Utile car
+            # generate() supprime et recrée tout le fichier sqlite à
+            # partir des JSON de cards/ — ces deux tables n'en font pas
+            # partie et seraient sinon perdues à la prochaine
+            # régénération sans cette création défensive.
+            self._conn.executescript(
+                _DDL_AUTHS + _DDL_REFRESH_TOKENS +
+                "CREATE INDEX IF NOT EXISTS idx_refresh_tokens_email ON refresh_tokens(email);"
+            )
+            self._conn.commit()
 
             # Fonction SQL personnalisée pour les recherches insensibles
             # aux accents et à la casse (ex: "dodanes", "dôdanes" et
@@ -579,7 +605,7 @@ class Model:
         self.datadir.mkdir(parents=True, exist_ok=True)
 
         conn = self._get_conn()
-        conn.executescript(_DDL_CARDS + _DDL_TRAVELS + _DDL_POIS + _DDL_AUTHS + _DDL_INDEXES)
+        conn.executescript(_DDL_CARDS + _DDL_TRAVELS + _DDL_POIS + _DDL_AUTHS + _DDL_REFRESH_TOKENS + _DDL_INDEXES)
         conn.commit()
         logger.info("Base créée : %s", self.db_path)
 
@@ -1256,6 +1282,118 @@ class Model:
         conn.execute("DELETE FROM auths WHERE email = ?", (email,))
         conn.commit()
         return existed
+
+    # ------------------------------------------------------------------
+    # Refresh tokens (auth JWT — voir flpostcards/auth.py)
+    # ------------------------------------------------------------------
+    # Un refresh token est une chaîne aléatoire opaque, longue durée,
+    # dont seul le hash SHA-256 est stocké ici (jamais le token en
+    # clair) : permet de vérifier sa validité sans pouvoir le
+    # reconstituer à partir de la base, et de le révoquer à tout moment
+    # (déconnexion à distance, téléphone volé) — ce qu'un JWT stateless
+    # seul ne permet pas. L'access token (JWT signé, courte durée) n'a
+    # lui aucune trace en base : sa validité tient uniquement à sa
+    # signature et à son expiration.
+
+    def create_refresh_token(
+        self,
+        email: str,
+        expires_at: int,
+        device_info: str | None = None,
+    ) -> str:
+        """
+        Génère un nouveau refresh token pour ``email``, stocke son hash
+        SHA-256 en base, et retourne le token en clair — à transmettre
+        au client immédiatement : il n'est jamais stocké en clair côté
+        serveur et ne peut donc plus être récupéré ensuite.
+        """
+        token = secrets.token_urlsafe(48)
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        now = int(time.time())
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT INTO refresh_tokens "
+            "(email, token_hash, created_at, expires_at, device_info) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (email, token_hash, now, expires_at, device_info),
+        )
+        conn.commit()
+        return token
+
+    def verify_refresh_token(self, token: str) -> dict | None:
+        """
+        Retourne l'entrée ``refresh_tokens`` correspondant à ``token``
+        si elle existe, n'est pas expirée et n'a pas été révoquée.
+        Retourne ``None`` dans tous les autres cas (token inconnu,
+        expiré, révoqué, ou vide).
+        """
+        if not token:
+            return None
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT * FROM refresh_tokens WHERE token_hash = ?", (token_hash,)
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        entry = dict(row)
+        if entry["revoked_at"] is not None:
+            return None
+        if entry["expires_at"] <= int(time.time()):
+            return None
+        return entry
+
+    def revoke_refresh_token(self, token: str) -> bool:
+        """
+        Révoque un refresh token (déconnexion de cet appareil).
+        Retourne True s'il existait et n'était pas déjà révoqué.
+        """
+        if not token:
+            return False
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        conn = self._get_conn()
+        cur = conn.execute(
+            "UPDATE refresh_tokens SET revoked_at = ? "
+            "WHERE token_hash = ? AND revoked_at IS NULL",
+            (int(time.time()), token_hash),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+    def revoke_all_refresh_tokens(self, email: str) -> int:
+        """
+        Révoque tous les refresh tokens actifs de ``email`` (déconnexion
+        de tous les appareils, ex : téléphone volé). Retourne le nombre
+        de tokens révoqués.
+        """
+        conn = self._get_conn()
+        cur = conn.execute(
+            "UPDATE refresh_tokens SET revoked_at = ? "
+            "WHERE email = ? AND revoked_at IS NULL",
+            (int(time.time()), email),
+        )
+        conn.commit()
+        return cur.rowcount
+
+    def purge_expired_refresh_tokens(self, grace_days: int = 0) -> int:
+        """
+        Supprime définitivement les refresh tokens expirés, ou révoqués
+        depuis plus de ``grace_days`` jours (nettoyage périodique
+        optionnel, pour éviter que la table ne grossisse indéfiniment —
+        à appeler par exemple depuis une tâche cron/script de
+        maintenance, pas automatiquement à chaque requête). Retourne le
+        nombre de lignes supprimées.
+        """
+        cutoff = int(time.time()) - grace_days * 86400
+        conn = self._get_conn()
+        cur = conn.execute(
+            "DELETE FROM refresh_tokens WHERE expires_at <= ? "
+            "OR (revoked_at IS NOT NULL AND revoked_at <= ?)",
+            (cutoff, cutoff),
+        )
+        conn.commit()
+        return cur.rowcount
 
     # ------------------------------------------------------------------
     # Updates (updates.json)

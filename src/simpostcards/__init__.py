@@ -20,6 +20,7 @@ tkpostcards ou par un script de publication).
 from __future__ import annotations
 
 import configparser
+import logging
 from pathlib import Path
 
 from flask import Flask
@@ -67,6 +68,11 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
 def create_app(config_path: str | Path = "postcards.conf") -> Flask:
     app = Flask(__name__)
     load_config(app, config_path)
+
+    # Sans ça, seuls les WARNING+ remontent par défaut : les logs INFO
+    # de compute_hashes (taille de l'image reçue, timing du
+    # redressement + hashs) resteraient invisibles sous gunicorn.
+    app.logger.setLevel(logging.DEBUG if app.debug else logging.INFO)
 
     from simpostcards.blueprints.api import bp as api_bp
     app.register_blueprint(api_bp)

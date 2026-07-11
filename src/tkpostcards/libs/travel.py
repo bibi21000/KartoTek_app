@@ -17,6 +17,31 @@ class ParcoursCartes:
         self.cartes = cartes
 
     @staticmethod
+    def travels(datadir):
+
+        from pathlib import Path
+        import json
+        from libpostcards.model import Model
+
+        datadir = Path(datadir)
+        model = Model(datadir)
+        data = model.list_cards()
+        with open(datadir / "travels.json", "r", encoding="utf-8") as f:
+            travels = json.load(f)
+
+        travel = ParcoursCartes(data)
+        travel_data = {}
+        for tt in travels:
+            travel_data = travel.calculer(
+                *travels[tt]['start'],
+                collection=travels[tt]['collection'],
+                )
+            travel_data['id'] = travels[tt]['id']
+            travel_data['title'] = travels[tt]['title']
+            travel_data['title2'] = travels[tt]['title2']
+            model.write_travel(travel_data)
+
+    @staticmethod
     def haversine(lat1, lon1, lat2, lon2):
         """Distance en mètres."""
         R = 6371000

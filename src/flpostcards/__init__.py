@@ -5,6 +5,7 @@ flpostcards - Application Flask de consultation des cartes postales.
 from __future__ import annotations
 
 import configparser
+import logging
 from pathlib import Path
 
 from flask import Flask, request
@@ -80,17 +81,73 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 )
             elif key == "smtp_port":
                 app.config["SMTP_PORT"] = parser.getint("flask", "smtp_port")
+            elif key == "similar_default_threshold":
+                app.config["SIMILAR_DEFAULT_THRESHOLD"] = parser.getfloat(
+                    "flask", "similar_default_threshold"
+                )
+            elif key == "similar_max_results":
+                app.config["SIMILAR_MAX_RESULTS"] = parser.getint(
+                    "flask", "similar_max_results"
+                )
+            elif key == "similar_timeout_s":
+                app.config["SIMILAR_TIMEOUT_S"] = parser.getfloat(
+                    "flask", "similar_timeout_s"
+                )
+            elif key == "jwt_access_ttl_s":
+                app.config["JWT_ACCESS_TTL_S"] = parser.getint(
+                    "flask", "jwt_access_ttl_s"
+                )
+            elif key == "jwt_refresh_ttl_s":
+                app.config["JWT_REFRESH_TTL_S"] = parser.getint(
+                    "flask", "jwt_refresh_ttl_s"
+                )
             else:
                 app.config[key.upper()] = value
 
     app.config.setdefault("RECENT_DAYS", 30)
     app.config.setdefault("RECENT_FALLBACK_COUNT", 20)
     app.config.setdefault("SMTP_PORT", 587)
+    # URL du service simpostcards (POST /api/compute_hashes), utilisé
+    # par /api/v1/similar pour obtenir les hashs d'une photo envoyée
+    # par l'appli mobile, sans avoir à embarquer OpenCV côté flpostcards.
+    # Clé de configuration : [flask] similar_server
+    app.config.setdefault("SIMILAR_SERVER", "http://simpostcards:8004")
+    app.config.setdefault("SIMILAR_DEFAULT_THRESHOLD", 70.0)
+    app.config.setdefault("SIMILAR_MAX_RESULTS", 20)
+    app.config.setdefault("SIMILAR_TIMEOUT_S", 30.0)
+    # Auth JWT (flpostcards/auth.py) : durée de vie de l'access token
+    # (15 min) et du refresh token (30 jours) par défaut.
+    app.config.setdefault("JWT_ACCESS_TTL_S", 15 * 60)
+    app.config.setdefault("JWT_REFRESH_TTL_S", 30 * 86400)
+
+    secret_key = app.config.get("SECRET_KEY")
+    if secret_key in (None, "", "secret"):
+        app.logger.warning(
+            "postcards.conf [flask] secret_key n'est pas défini (ou vaut "
+            "encore la valeur d'exemple 'secret') : les access tokens JWT "
+            "seraient signés avec un secret faible/public. À changer avant "
+            "toute mise en production de l'authentification."
+        )
+    elif len(secret_key) < 32:
+        app.logger.warning(
+            "postcards.conf [flask] secret_key ne fait que %d caractères : "
+            "trop court pour signer des JWT en HMAC-SHA256 en toute "
+            "sécurité (32 caractères aléatoires minimum recommandés, ex. "
+            "`python3 -c \"import secrets; print(secrets.token_urlsafe(32))\"`).",
+            len(secret_key),
+        )
 
 
 def create_app(config_path: str | Path = "postcards.conf") -> Flask:
     app = Flask(__name__)
     load_config(app, config_path)
+
+    # Sans ça, seuls les WARNING+ remontent par défaut (que ce soit en
+    # dev ou sous gunicorn) : les logs INFO de /api/v1/similar (taille
+    # de la photo, timings, nombre de résultats — utiles pour
+    # diagnostiquer un 502/timeout côté reverse proxy) resteraient
+    # invisibles sans ce réglage explicite.
+    app.logger.setLevel(logging.DEBUG if app.debug else logging.INFO)
 
     app.config.setdefault("LANGUAGES", LANGUAGES)
     app.config.setdefault("BABEL_DEFAULT_LOCALE", "fr")
