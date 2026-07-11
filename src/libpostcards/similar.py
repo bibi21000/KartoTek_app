@@ -160,19 +160,46 @@ class PostcardSearcher:
         return {
             "path" : self.relative_path(image_path),
             "mpath" : image_path.stat().st_mtime,
-            "ahash" : imagehash.average_hash(image),
-            "dhash" : imagehash.dhash(image),
-            "phash" : imagehash.phash(image),
-            "whash" : imagehash.whash(image),
-            "embedding" : embedding,
+            # Stockés en hexadécimal (str), pas en imagehash.ImageHash :
+            # un pickle contenant des objets ImageHash nécessiterait
+            # `imagehash` installé rien que pour être désérialisé (même
+            # sans jamais s'en servir), exactement comme les embeddings
+            # torch ci-dessous. En hex, seul hash_similarity() peut en
+            # avoir besoin (et seulement s'il reçoit un ImageHash — voir
+            # plus bas, ce n'est plus le cas ici), pas le chargement de
+            # l'index.
+            "ahash" : str(imagehash.average_hash(image)),
+            "dhash" : str(imagehash.dhash(image)),
+            "phash" : str(imagehash.phash(image)),
+            "whash" : str(imagehash.whash(image)),
+            # Idem pour l'embedding : liste de float plutôt que
+            # torch.Tensor, pour que pickle.load() de l'index n'exige
+            # pas torch installé quand on n'a besoin que des hashs
+            # (flpostcards / search_hashes). Reconverti à la volée par
+            # embedding_similarity() quand un vrai calcul CLIP est fait.
+            "embedding" : embedding.tolist(),
         }
 
     # --------------------------------------------------
 
     @staticmethod
     def hash_similarity(h1, h2):
+        """
+        Similarité (0-100) entre deux hashs perceptuels de même taille.
 
-        distance = h1 - h2
+        Accepte aussi bien des hex strings (le format stocké dans
+        l'index depuis cette version — voir compute_hashes) que des
+        ``imagehash.ImageHash`` (compatibilité avec un appelant qui en
+        fournirait encore, ex. code externe). Le cas hex string est
+        calculé en pur Python (XOR + comptage de bits), sans avoir
+        besoin d'importer ``imagehash`` : c'est ce qui permet à
+        ``search_hashes`` (utilisée par flpostcards) de comparer des
+        hashs sans que ce paquet soit installé.
+        """
+        if isinstance(h1, str) and isinstance(h2, str):
+            distance = bin(int(h1, 16) ^ int(h2, 16)).count("1")
+        else:
+            distance = h1 - h2
 
         return max(
             0.0,
@@ -311,8 +338,48 @@ class PostcardSearcher:
             with open(filename, "rb") as f:
 
                 self.index = pickle.load(f)
+
+            self._migrate_index_format()
         else:
             self.index = {}
+
+    def _migrate_index_format(self) -> int:
+        """
+        Convertit en place les entrées d'index construites par une
+        version antérieure de cette lib, qui stockait les hashs sous
+        forme d'``imagehash.ImageHash`` (plutôt que de hex string) et
+        les embeddings sous forme de ``torch.Tensor`` (plutôt que de
+        liste de float) — voir compute_hashes. Sans effet (et sans
+        import) si l'index est déjà au nouveau format — ce qui est le
+        cas normal une fois que l'index a été régénéré/sauvegardé au
+        moins une fois avec cette version.
+
+        Comme le pickle contenant des ``ImageHash``/``Tensor`` a
+        nécessairement déjà été désérialisé avec succès pour qu'on
+        arrive ici (donc avec ``imagehash``/``torch`` disponibles à ce
+        moment-là), cette migration ne nécessite aucun import
+        supplémentaire : ``str(value)``/``.tolist()`` suffisent sur des
+        objets déjà construits. Retourne le nombre de champs convertis.
+
+        L'intérêt : une fois l'index sauvegardé après cette migration
+        (``save_index``), le fichier obtenu ne contient plus que des
+        types Python natifs (str, float, int, dict, list) — il peut
+        alors être chargé par ``load_index`` sans que ``imagehash`` ni
+        ``torch`` soient installés, ce qui est le cas de flpostcards
+        (voir search_hashes).
+        """
+        converted = 0
+        for item in self.index.values():
+            for key in ("ahash", "dhash", "phash", "whash"):
+                value = item.get(key)
+                if value is not None and not isinstance(value, str):
+                    item[key] = str(value)
+                    converted += 1
+            embedding = item.get("embedding")
+            if embedding is not None and not isinstance(embedding, list):
+                item["embedding"] = embedding.tolist()
+                converted += 1
+        return converted
 
     # --------------------------------------------------
 
@@ -340,8 +407,19 @@ class PostcardSearcher:
 
     @staticmethod
     def embedding_similarity(e1, e2):
-
+        """
+        Similarité cosinus (0-100) entre deux embeddings CLIP déjà
+        normalisés (voir compute_embedding). Accepte des ``torch.Tensor``
+        aussi bien que des listes de float (format stocké dans l'index
+        depuis cette version — voir compute_hashes) : converties en
+        tenseur au besoin avant le produit scalaire.
+        """
         import torch
+
+        if not torch.is_tensor(e1):
+            e1 = torch.tensor(e1)
+        if not torch.is_tensor(e2):
+            e2 = torch.tensor(e2)
 
         score = torch.dot(e1, e2).item()
 
@@ -430,12 +508,16 @@ class PostcardSearcher:
         """
         Convertit un dict de hashs sous forme hexadécimale (tel que
         renvoyé par ``simpostcards`` : ``{"ahash": "...", "dhash": "...",
-        "phash": "...", "whash": "..."}``) en dict d'``imagehash.ImageHash``,
-        utilisable par ``multi_hash_similarity`` / ``search_hashes``.
+        "phash": "...", "whash": "..."}``) en dict d'``imagehash.ImageHash``.
 
-        Les valeurs déjà sous forme d'``imagehash.ImageHash`` sont
-        laissées telles quelles (tolérance : permet de rappeler cette
-        fonction sur un dict partiellement converti).
+        Fournie pour un appelant qui aurait explicitement besoin de
+        vrais objets ``ImageHash`` (ex : appeler ``h1 - h2`` soi-même).
+        ``search_hashes`` ne l'utilise plus en interne — ``hash_similarity``
+        compare directement deux hex strings sans cette conversion,
+        justement pour ne pas dépendre d'``imagehash`` à ce niveau. Les
+        valeurs déjà sous forme d'``imagehash.ImageHash`` sont laissées
+        telles quelles (tolérance : permet de rappeler cette fonction
+        sur un dict partiellement converti).
         """
         import imagehash
 
@@ -462,14 +544,25 @@ class PostcardSearcher:
         embedding CLIP, donc sans avoir besoin de charger le modèle
         (``self.model`` peut rester ``None``).
 
+        N'importe pas ``imagehash`` : les hex strings sont comparées
+        directement (``hash_similarity``), et l'index chargé par
+        ``load_index`` est automatiquement dans ce format (voir
+        ``compute_hashes`` / ``_migrate_index_format``). C'est ce qui
+        permet à flpostcards d'utiliser cette méthode sans avoir
+        ``imagehash`` installé.
+
         ``hashes`` : dict avec les clés ``ahash``/``dhash``/``phash``/
-        ``whash``, en hexadécimal (str) ou déjà en ``imagehash.ImageHash``.
+        ``whash``, en hexadécimal (str).
 
         Retourne la liste des correspondances ``{"score": ..., "path": ...}``
         triée par score décroissant, filtrée sur ``threshold`` (0-100),
         et limitée à ``max_results`` si fourni (pas de limite par défaut).
         """
-        query_hashes = self.hashes_from_hex(hashes)
+        query_hashes = {
+            key: value
+            for key, value in hashes.items()
+            if key in ("ahash", "dhash", "phash", "whash")
+        }
 
         results = []
 
