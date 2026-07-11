@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import gettext
 import locale
+import logging
+import queue
 import sys
 import threading
 import webbrowser
@@ -21,6 +23,7 @@ from tkinter import messagebox, ttk
 from libpostcards.model import Model
 
 from . import cli
+from .libs.publish import PostcardPublish
 
 try:
     from libpostcards.similar import PostcardSearcher
@@ -108,6 +111,20 @@ def _translatable_field_labels():  # pragma: no cover
         # App._build_thumbs
         _("side_recto"),
         _("side_verso"),
+        # Publish on quit
+        _("publish_confirm_title"),
+        _("publish_confirm_msg"),
+        _("publish_full_checkbox"),
+        _("btn_publish"),
+        _("btn_skip_publish"),
+        _("publish_progress_title"),
+        _("publish_progress_msg"),
+        _("publish_details_show"),
+        _("publish_details_hide"),
+        _("publish_success_title"),
+        _("publish_success_msg"),
+        _("publish_error_title"),
+        _("publish_error_msg"),
     ]
 
 
@@ -1456,6 +1473,290 @@ class DoublesEditor(tk.Toplevel):
 # ─────────────────────────────────────────────────────────────────────────────
 #  Main application
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+#  Publish confirmation dialog (shown when quitting tkmanager)
+# ─────────────────────────────────────────────────────────────────────────────
+class PublishConfirmDialog(tk.Toplevel):
+    """Ask the user, on quit, whether the collection should be published to
+    the remote server, with an option to also recompute the travel routes
+    (the "full" publish).
+    """
+
+    def __init__(self, parent, t, full_default: bool = False):
+        super().__init__(parent)
+        self._t = t
+        self.title(_("publish_confirm_title"))
+        self.configure(bg=BG_MAIN)
+        self.resizable(False, False)
+
+        self.result: bool = False
+        self.full: bool = full_default
+
+        self._full_var = tk.BooleanVar(value=full_default)
+
+        tk.Label(self, text=_("publish_confirm_msg"),
+                 bg=BG_MAIN, fg=FG_TEXT, font=FONT_LABEL,
+                 wraplength=340, justify=tk.LEFT).pack(padx=16, pady=(16, 10))
+
+        tk.Checkbutton(self, text=_("publish_full_checkbox"),
+                       variable=self._full_var,
+                       bg=BG_MAIN, fg=FG_TEXT, selectcolor=BG_FIELD,
+                       activebackground=BG_MAIN, activeforeground=FG_ACCENT2,
+                       font=FONT_LABEL, relief=tk.FLAT,
+                       cursor="hand2").pack(padx=16, pady=(0, 14), anchor=tk.W)
+
+        bot = tk.Frame(self, bg=BG_MAIN)
+        bot.pack(fill=tk.X, padx=16, pady=(0, 16))
+        tk.Button(bot, text=_("btn_publish"), command=self._publish,
+                  bg=FG_ACCENT, fg="#fff", font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10).pack(side=tk.RIGHT, padx=4)
+        tk.Button(bot, text=_("btn_skip_publish"), command=self._skip,
+                  bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10).pack(side=tk.RIGHT, padx=4)
+
+        self.protocol("WM_DELETE_WINDOW", self._skip)
+        self.transient(parent)
+        self._center_on(parent)
+        self.after_idle(self._safe_grab)
+
+    def _center_on(self, parent):
+        self.update_idletasks()
+        w = self.winfo_reqwidth()
+        h = self.winfo_reqheight()
+        try:
+            x = parent.winfo_rootx() + (parent.winfo_width() - w) // 2
+            y = parent.winfo_rooty() + (parent.winfo_height() - h) // 2
+        except tk.TclError:
+            x, y = 100, 100
+        self.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+
+    def _safe_grab(self):
+        try:
+            if self.winfo_exists():
+                self.deiconify()
+                self.lift()
+                self.focus_force()
+                self.grab_set()
+        except tk.TclError:
+            pass
+
+    def _publish(self):
+        self.result = True
+        self.full = self._full_var.get()
+        self.destroy()
+
+    def _skip(self):
+        # Keep the checkbox's current state so the caller can still persist
+        # the user's preference even when publication itself is skipped.
+        self.result = False
+        self.full = self._full_var.get()
+        self.destroy()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Logging handler that feeds formatted records into a thread-safe queue,
+#  so a Tk widget on the main thread can display them via polling.
+# ─────────────────────────────────────────────────────────────────────────────
+class _QueueLogHandler(logging.Handler):
+    def __init__(self, log_queue: "queue.Queue[str]"):
+        super().__init__()
+        self._queue = log_queue
+        self.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s",
+                                             datefmt="%H:%M:%S"))
+
+    def emit(self, record):
+        try:
+            self._queue.put_nowait(self.format(record))
+        except Exception:
+            pass
+
+
+class _QueueWriter:
+    """File-like object that pushes complete lines into a queue as soon as
+    they're written, so ``print()`` calls made by publish() (or the modules
+    it calls) show up live instead of waiting for stdout to flush/close."""
+
+    def __init__(self, log_queue: "queue.Queue[str]"):
+        self._queue = log_queue
+        self._buf = ""
+
+    def write(self, text):
+        if not text:
+            return
+        self._buf += text
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            if line.strip():
+                try:
+                    self._queue.put_nowait(line)
+                except Exception:
+                    pass
+
+    def flush(self):
+        if self._buf.strip():
+            try:
+                self._queue.put_nowait(self._buf)
+            except Exception:
+                pass
+        self._buf = ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Publish progress dialog
+# ─────────────────────────────────────────────────────────────────────────────
+class PublishProgressDialog(tk.Toplevel):
+    """Modal, non-closable dialog shown while data is published to the
+    remote server. Runs :meth:`PostcardPublish.publish` in a background
+    thread so the Tk mainloop stays responsive, then calls ``on_done``
+    with the exception raised (or ``None`` on success). A collapsible
+    "details" panel streams the log lines emitted by ``publish()`` as
+    they arrive.
+    """
+
+    def __init__(self, parent, datadir: Path, conf_file: Path, section: str,
+                 full: bool, t, on_done=None):
+        super().__init__(parent)
+        self._t = t
+        self._on_done = on_done
+        self.error: Exception | None = None
+        self._details_visible = True
+        self._log_queue: "queue.Queue[str]" = queue.Queue()
+        self._log_handler = _QueueLogHandler(self._log_queue)
+        self._running = True
+
+        self.title(_("publish_progress_title"))
+        self.configure(bg=BG_MAIN)
+        self.resizable(False, False)
+        self.protocol("WM_DELETE_WINDOW", lambda: None)  # not user-closable
+
+        tk.Label(self, text=_("publish_progress_msg"),
+                 bg=BG_MAIN, fg=FG_TEXT, font=FONT_LABEL).pack(padx=20, pady=(20, 10))
+
+        self._bar = ttk.Progressbar(self, mode="indeterminate", length=280)
+        self._bar.pack(padx=20, pady=(0, 8))
+        self._bar.start(12)
+
+        self._toggle_btn = tk.Button(
+            self, text=_("publish_details_hide"), command=self._toggle_details,
+            bg=BG_MAIN, fg=FG_LINK, font=FONT_SMALL, relief=tk.FLAT,
+            bd=0, cursor="hand2", anchor=tk.W)
+        self._toggle_btn.pack(padx=20, pady=(0, 6), anchor=tk.W)
+
+        self._details_frame = tk.Frame(self, bg=BG_MAIN)
+        log_frm = tk.Frame(self._details_frame, bg=BG_INPUT)
+        log_frm.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 12))
+        vsb = ttk.Scrollbar(log_frm, orient=tk.VERTICAL)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self._log_text = tk.Text(
+            log_frm, height=10, width=56, bg=BG_INPUT, fg=FG_TEXT,
+            font=FONT_SMALL, relief=tk.FLAT, wrap=tk.NONE, state=tk.DISABLED,
+            yscrollcommand=vsb.set)
+        self._log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        vsb.config(command=self._log_text.yview)
+        self._details_frame.pack(fill=tk.BOTH, expand=True)  # shown by default
+
+        self._collapsed_h = 130
+        self._expanded_h = 360
+        self.geometry(f"420x{self._expanded_h}")
+        self.transient(parent)
+        self._center_on(parent)
+        self.after_idle(self._safe_grab)
+
+        logging.getLogger().addHandler(self._log_handler)
+        logging.getLogger().setLevel(logging.INFO)
+
+        self._thread = threading.Thread(
+            target=self._run, args=(datadir, conf_file, section, full), daemon=True)
+        self._thread.start()
+        self._poll_log()
+
+    def _toggle_details(self):
+        self._details_visible = not self._details_visible
+        if self._details_visible:
+            self._details_frame.pack(fill=tk.BOTH, expand=True)
+            self._toggle_btn.config(text=_("publish_details_hide"))
+            self.geometry(f"420x{self._expanded_h}")
+        else:
+            self._details_frame.pack_forget()
+            self._toggle_btn.config(text=_("publish_details_show"))
+            self.geometry(f"420x{self._collapsed_h}")
+
+    def _center_on(self, parent):
+        self.update_idletasks()
+        w = self.winfo_reqwidth()
+        h = self.winfo_reqheight()
+        try:
+            x = parent.winfo_rootx() + (parent.winfo_width() - w) // 2
+            y = parent.winfo_rooty() + (parent.winfo_height() - h) // 2
+        except tk.TclError:
+            x, y = 100, 100
+        self.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+
+    def _safe_grab(self):
+        try:
+            if self.winfo_exists():
+                self.deiconify()
+                self.lift()
+                self.focus_force()
+                self.grab_set()
+        except tk.TclError:
+            pass
+
+    def _poll_log(self):
+        """Drain queued log lines into the Text widget. Runs on the Tk
+        main thread via `after`, so it's safe to touch widgets here."""
+        drained = False
+        while True:
+            try:
+                line = self._log_queue.get_nowait()
+            except queue.Empty:
+                break
+            drained = True
+            try:
+                self._log_text.config(state=tk.NORMAL)
+                self._log_text.insert(tk.END, line + "\n")
+                self._log_text.see(tk.END)
+                self._log_text.config(state=tk.DISABLED)
+            except tk.TclError:
+                break
+        if drained:
+            try:
+                self.update_idletasks()
+            except tk.TclError:
+                pass
+        if self._running or drained:
+            try:
+                self.after(60, self._poll_log)
+            except tk.TclError:
+                pass
+
+    def _run(self, datadir, conf_file, section, full):
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        writer = _QueueWriter(self._log_queue)
+        sys.stdout = writer
+        sys.stderr = writer
+        try:
+            PostcardPublish.publish(datadir, conf_file, section, full=full)
+        except Exception as e:
+            self.error = e
+        finally:
+            writer.flush()
+            sys.stdout, sys.stderr = old_stdout, old_stderr
+            self.after(0, self._finish)
+
+    def _finish(self):
+        self._running = False
+        logging.getLogger().removeHandler(self._log_handler)
+        try:
+            self._bar.stop()
+        except tk.TclError:
+            pass
+        callback = self._on_done
+        self.destroy()
+        if callback:
+            callback(self.error)
+
+
 class App(tk.Tk):
     # (key, label_key, single_line, height)
     TEXT_FIELDS: list[tuple] = [
@@ -1488,6 +1789,12 @@ class App(tk.Tk):
         gallery_subdir = section.get("gallery_images_dir", "size_div3")
         self.images_dir = datadir / images_subdir          # full resolution PNGs
         self.gallery_images_dir = datadir / gallery_subdir  # gallery thumbnails
+
+        # Config section used for RemoteSync when publishing on quit.
+        # Override with the "publish_section" key in the [tkmanager]
+        # section of postcards.conf if your remote credentials live under
+        # a different RemoteSync section name.
+        self.publish_section = section.get("publish_section", "sync_default")
 
         self._t = setup_i18n()
 
@@ -2228,9 +2535,53 @@ class App(tk.Tk):
             self._load_card(self._ids.index(cid))
 
     def _on_close(self):
-        if self._ask_save_if_dirty():
-            self.model.close()
+        if not self._ask_save_if_dirty():
+            return
+
+        # The database must be closed before publication starts.
+        self.model.close()
+
+        full_default = self.get_search_conf("tkmanager", "publish_full", "0") == "1"
+
+        do_publish, full = False, full_default
+        try:
+            dlg = PublishConfirmDialog(self, self._t, full_default=full_default)
+            self.wait_window(dlg)
+            do_publish, full = dlg.result, dlg.full
+        except Exception as e:
+            print(f"[publish] confirm dialog failed, falling back: {e}", file=sys.stderr)
+            do_publish = messagebox.askyesno(
+                _("publish_confirm_title"), _("publish_confirm_msg"), parent=self)
+            full = full_default
+
+        # Remember the checkbox choice for next time, whether or not the
+        # user actually chose to publish.
+        self.save_search_conf("tkmanager", publish_full="1" if full else "0")
+
+        if do_publish:
+            self._publish_then_quit(full)
+        else:
             self.destroy()
+
+    def _publish_then_quit(self, full: bool):
+        """Run the publish step in the background, then close the app."""
+
+        def on_done(error: Exception | None):
+            if error is not None:
+                messagebox.showerror(
+                    _("publish_error_title"),
+                    _("publish_error_msg").format(error=error),
+                    parent=self)
+            else:
+                messagebox.showinfo(
+                    _("publish_success_title"),
+                    _("publish_success_msg"),
+                    parent=self)
+            self.destroy()
+
+        PublishProgressDialog(
+            self, self.datadir, self.conf_file, self.publish_section,
+            full, self._t, on_done=on_done)
 
     # ── "More" dropdown menu ──────────────────────────────────────────────────
     def _open_more_menu(self):

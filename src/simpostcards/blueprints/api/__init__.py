@@ -90,7 +90,19 @@ def compute_hashes_route():
         )
         return jsonify({"error": str(exc)}), 400
 
-    hashes = compute_hashes(image)
+    # Calcule les hashs perceptuels pour les 4 rotations de l'image
+    # corrigée (0°, 90°, 180°, 270°), afin de pouvoir retrouver une
+    # correspondance quelle que soit l'orientation dans laquelle la
+    # carte postale a été numérisée.
+    hashes_per_rotation = []
+    rotated = image
+    for angle in (0, 90, 180, 270):
+        if angle:
+            rotated = image.rotate(-angle, expand=True)
+        hashes_per_rotation.append({
+            "angle": angle,
+            "hashes": compute_hashes(rotated),
+        })
 
     elapsed = time.perf_counter() - start
     current_app.logger.info(
@@ -100,6 +112,6 @@ def compute_hashes_route():
 
     return jsonify({
         "status": "ok",
-        "hashes": hashes,
+        "hashes": hashes_per_rotation,
         "correction": report,
     })

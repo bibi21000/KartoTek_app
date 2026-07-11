@@ -10,6 +10,7 @@ from pathlib import Path
 
 from flask import Flask, request
 from flask_babel import Babel
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from libpostcards.model import Model
 
@@ -101,6 +102,10 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["JWT_REFRESH_TTL_S"] = parser.getint(
                     "flask", "jwt_refresh_ttl_s"
                 )
+            elif key == "trusted_proxies":
+                app.config["TRUSTED_PROXIES"] = parser.getint(
+                    "flask", "trusted_proxies"
+                )
             else:
                 app.config[key.upper()] = value
 
@@ -119,6 +124,12 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     # (15 min) et du refresh token (30 jours) par défaut.
     app.config.setdefault("JWT_ACCESS_TTL_S", 15 * 60)
     app.config.setdefault("JWT_REFRESH_TTL_S", 30 * 86400)
+    # Nombre de reverse proxies "de confiance" en amont de flpostcards
+    # (ex : BunkerWeb = 1) — voir ProxyFix dans create_app(). Détermine
+    # combien de valeurs, en partant de la droite, sont prises en
+    # compte dans des en-têtes potentiellement à plusieurs valeurs
+    # comme X-Forwarded-Proto/X-Forwarded-For.
+    app.config.setdefault("TRUSTED_PROXIES", 1)
 
     secret_key = app.config.get("SECRET_KEY")
     if secret_key in (None, "", "secret"):
@@ -148,6 +159,25 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
     # diagnostiquer un 502/timeout côté reverse proxy) resteraient
     # invisibles sans ce réglage explicite.
     app.logger.setLevel(logging.DEBUG if app.debug else logging.INFO)
+
+    # Sans ça, Flask ignore les en-têtes X-Forwarded-* posés par un
+    # reverse proxy (BunkerWeb, nginx, ...) qui termine le TLS devant
+    # flpostcards : request.is_secure reste False et url_for(...,
+    # _external=True) génère des URLs en http:// au lieu de https://
+    # (cassait uri_div3/uri_div10 dans /api/v1/similar, /api/v1/news,
+    # etc.). TRUSTED_PROXIES (postcards.conf [flask] trusted_proxies,
+    # 1 par défaut) doit correspondre au nombre de proxies en amont ;
+    # une valeur trop élevée permettrait à un en-tête X-Forwarded-*
+    # forgé par le client d'être pris en compte à tort.
+    trusted_proxies = app.config["TRUSTED_PROXIES"]
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=trusted_proxies,
+        x_proto=trusted_proxies,
+        x_host=trusted_proxies,
+        x_port=trusted_proxies,
+        x_prefix=trusted_proxies,
+    )
 
     app.config.setdefault("LANGUAGES", LANGUAGES)
     app.config.setdefault("BABEL_DEFAULT_LOCALE", "fr")

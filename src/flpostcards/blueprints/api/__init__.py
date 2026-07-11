@@ -802,9 +802,13 @@ def similar(auth_email: str):
     Déroulé :
       1. La photo est transmise telle quelle au service ``simpostcards``
          (``SIMILAR_SERVER``, voir postcards.conf [flask]) qui la
-         redresse/détoure et renvoie ses hashs perceptuels.
-      2. Ces hashs sont comparés (``PostcardSearcher.search_hashes``,
-         sans embedding CLIP) à l'index ``datadir/postcards.pkl``.
+         redresse/détoure et renvoie ses hashs perceptuels pour ses 4
+         rotations (0°, 90°, 180°, 270°) — la photo peut avoir été prise
+         dans n'importe quel sens.
+      2. Chaque jeu de hashs est comparé (``PostcardSearcher.search_hashes``,
+         sans embedding CLIP) à l'index ``datadir/postcards.pkl`` ; pour
+         chaque carte, seul le meilleur score toutes rotations confondues
+         est conservé.
       3. Chaque carte trouvée au-dessus du seuil est mise en
          correspondance avec ses PNG ``size_div3``/``size_div10``
          (le chemin indexé, ``<cardid>_R.tiff``, donne l'id de carte).
@@ -899,14 +903,37 @@ def similar(auth_email: str):
         return jsonify({"error": f"simpostcards : {upstream_error}"}), status
 
     try:
-        hashes = upstream.json()["hashes"]
+        rotations = upstream.json()["hashes"]
     except (ValueError, KeyError):
         current_app.logger.error("similar : réponse simpostcards invalide : %r", upstream.text[:500])
         return jsonify({"error": "Réponse invalide du service simpostcards"}), 502
 
+    # Depuis la mise à jour de simpostcards, "hashes" est une liste de 4
+    # entrées {"angle": 0|90|180|270, "hashes": {...}}, une par rotation
+    # de la photo — la carte a pu être photographiée dans n'importe quel
+    # sens. On interroge l'index pour chaque rotation, puis on fusionne
+    # les résultats en ne gardant, par carte, que le meilleur score
+    # obtenu (celui de l'orientation qui correspond réellement).
     searcher = _get_searcher()
     max_results = current_app.config["SIMILAR_MAX_RESULTS"]
-    matches = searcher.search_hashes(hashes, threshold=threshold, max_results=max_results)
+
+    best_by_path: dict[str, dict] = {}
+    for rotation in rotations:
+        angle = rotation.get("angle")
+        rotation_hashes = rotation.get("hashes")
+        if not rotation_hashes:
+            continue
+        rotation_matches = searcher.search_hashes(
+            rotation_hashes, threshold=threshold, max_results=max_results
+        )
+        for match in rotation_matches:
+            path = match["path"]
+            best = best_by_path.get(path)
+            if best is None or match["score"] > best["score"]:
+                match["angle"] = angle
+                best_by_path[path] = match
+
+    matches = sorted(best_by_path.values(), key=lambda m: m["score"], reverse=True)[:max_results]
 
     results = []
     for match in matches:
