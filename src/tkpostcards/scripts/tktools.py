@@ -126,132 +126,43 @@ def scan():
 @click.pass_obj
 def prepare(common, prefix, white_threshold):
     _("""Prepare scanned postcards for import""")
-    import re
-    from pathlib import Path
     from libpostcards.model import Model
-    import cv2
-    from libpostcards.scan_corrector import ScanCorrector
-    from ..libs.transparency import TiffBackgroundRemover
+    from ..libs.scan_prepare import prepare_pairs
 
-    def _correct(bgtrans, scanc, infile, outfile):
-        img = scanc.load_image(infile)
-        img = scanc.process_image(img)
-        img = bgtrans.make_border_white_transparent_cv2(img)
-        params: list[int] = []
-        if ext in (".jpg", ".jpeg"):
-            params = [cv2.IMWRITE_JPEG_QUALITY, 95]
-        elif ext == ".png":
-            params = [cv2.IMWRITE_PNG_COMPRESSION, 3]
-        cv2.imwrite(outfile, img, params)
+    def _on_pair(pair):
+        click.echo('%s -> %s' % (pair.recto_src.name, pair.recto_dst.name))
+        click.echo('%s -> %s' % (pair.verso_src.name, pair.verso_dst.name))
 
     next_id = Model(common.datadir).next_id()
 
-    scanc = ScanCorrector(white_threshold=white_threshold, verbose=False)
-    bgtrans = TiffBackgroundRemover(white_threshold=white_threshold)
-    fl1 = [f for f in os.listdir(common.importdir) if re.match(r'%s.*'%prefix, f)]
-    fl2 = []
-    for f in fl1:
-        s = re.search( r'%s \((.*)\)\..*'%prefix, f)
-        if s is None:
-            s = re.search( r'%s_(.*)\..*'%prefix, f)
-            if s is None:
-                fl2.append((1, f))
-            else:
-                fl2.append((int(s.group(1)), f))
-        else:
-            fl2.append((int(s.group(1)), f))
-    fl2 = sorted(fl2)
-
-    for i in range(0, len(fl2) - 1, 2):
-
-        infile = os.path.join(common.importdir, fl2[i][1])
-        ext = Path(infile).suffix.lower()
-        print(fl2[i][1], '->', '%s_R%s'%(next_id, ext))
-        outfile = os.path.join(common.importdir, '%s_R%s'%(next_id, ext))
-        if os.path.exists(outfile):
-            raise RuntimeError("%s exists" % outfile)
-        _correct(bgtrans, scanc, infile, outfile)
-
-        infile = os.path.join(common.importdir, fl2[i+1][1])
-        ext = Path(infile).suffix.lower()
-        print(fl2[i][1], '->', '%s_V%s'%(next_id, ext))
-        outfile = os.path.join(common.importdir, '%s_V%s'%(next_id, ext))
-        if os.path.exists(outfile):
-            raise RuntimeError("%s exists" % outfile)
-        _correct(bgtrans, scanc, infile, outfile)
-
-        next_id += 1
+    prepare_pairs(
+        common.importdir, next_id,
+        prefix=prefix, white_threshold=white_threshold,
+        on_pair=_on_pair,
+    )
 
 @scan.command()
 @click.argument('pcid', default=None, nargs=-1)
 @click.pass_obj
 def add(common, pcid):
     _("""Add postcards""")
-    import shutil
-    from pathlib import Path
-    from libpostcards.model import Model
-    from ..libs.ocr import PostcardOCR
-    from ..libs.size import PostcardSize
-    try:
-        from libpostcards.similar import PostcardSearcher
-        SEARCHER_AVAILABLE = True
-    except ImportError:
-        SEARCHER_AVAILABLE = False
+    from ..libs.scan_add import add_pairs
 
     if pcid is None:
         raise RuntimeError(_("Give me id(s) to add"))
 
-    force = True
-    mod = Model(common.datadir)
-    ocr = PostcardOCR()
-    pcs = PostcardSize(common.datadir)
-    # ~ ocr = PostcardOCR(common.datadir, lang=lang)
-
-    if SEARCHER_AVAILABLE is True:
-        index_file = Path(common.datadir) / "postcards.pkl"
-        searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir)
-        searcher.load_index(
-            index_file
-        )
-        output_original = Path(common.datadir) / "size_div1"
-
     ids = split_ids(pcid)
     pbar = tqdm(total=len(ids), desc=_("Postcards"))
-    ext = 'tiff'
-    for pci in ids:
-        click.echo(f'Work on {pci}')
-        updated = False
-        outfileR = os.path.join(common.datadir, "cards", '%s_R.%s'%(pci, ext))
-        if os.path.exists(outfileR):
-            raise RuntimeError("%s exists" % outfileR)
-        outfileF = os.path.join(common.datadir, "cards", '%s_V.%s'%(pci, ext))
-        if os.path.exists(outfileF):
-            raise RuntimeError("%s exists" % outfileF)
-        shutil.copyfile(os.path.join(common.importdir, '%s_R.%s'%(pci, ext)), outfileR)
-        shutil.copyfile(os.path.join(common.importdir, '%s_V.%s'%(pci, ext)), outfileF)
-        card = mod.load_json(pci)
-        if card['recto_ocr'] is None or force is True:
-            updated = True
-            card['recto_ocr'] = ocr.to_string(os.path.join(common.datadir, "cards", '%s_R.%s' % (pci, common.file_format)))
-        if card['verso_ocr'] is None or force is True:
-            updated = True
-            card['verso_ocr'] = ocr.to_string(os.path.join(common.datadir, "cards", '%s_V.%s' % (pci, common.file_format)))
-        if updated is True:
-            mod.write_json(card)
-        pcs.export_one(Path(outfileR))
-        pcs.export_one(Path(outfileF))
 
-        if SEARCHER_AVAILABLE is True:
-            base_name = Path(outfileR).stem
-            searcher.build_index(
-                output_original / ('%s.png' % base_name)
-            )
+    def _on_progress(i, total, added):
+        if added is not None:
+            click.echo(f'Work on {added.pcid}')
         pbar.update(1)
 
-    if SEARCHER_AVAILABLE is True:
-        searcher.save_index(
-            index_file
-        )
+    try:
+        add_pairs(common.datadir, common.importdir, ids, on_progress=_on_progress)
+    finally:
+        pbar.close()
 
 @cli.group()
 def backup():
@@ -559,7 +470,7 @@ def travels(common):
 
 @cli.command()
 @click.argument('config', default='sync_default')
-@click.option('--full', is_flag=True, help=_("Update all data (travel, ...) before publihing"))
+@click.option('--full', is_flag=True, help=_("Update all data (travel, ...) before publishing"))
 @click.pass_obj
 def publish(common, config, full):
     """Publish data to a remote web server"""

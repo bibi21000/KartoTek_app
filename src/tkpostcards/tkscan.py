@@ -339,6 +339,164 @@ def save_config(cfg: configparser.ConfigParser) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Startup check of the import directory
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Matches "<int>_R.<ext>" or "<int>_V.<ext>" (recto / verso), e.g. "3_R.tiff"
+_IMPORT_RV_RE = re.compile(
+    r"^\d+_[RV]\.(?:tiff|png|jpeg)$", re.IGNORECASE
+)
+
+
+def _scan_importdir(importdir: Path) -> tuple[list[Path], list[Path]]:
+    """Inspect *importdir* and split its content in two lists:
+
+    - rv_files: files matching the "<int>_R.<ext>" / "<int>_V.<ext>" pattern
+    - other_files: any other file found in the directory
+
+    Sub-directories are ignored. Returns two empty lists if the directory
+    is empty.
+    """
+    rv_files: list[Path] = []
+    other_files: list[Path] = []
+    for entry in sorted(importdir.iterdir()):
+        if not entry.is_file():
+            continue
+        if _IMPORT_RV_RE.match(entry.name):
+            rv_files.append(entry)
+        else:
+            other_files.append(entry)
+    return rv_files, other_files
+
+
+class _ImportDirDialog(tk.Toplevel):
+    """Modal dialog shown at startup when importdir already has content.
+
+    Sets self.result to one of "delete", "add" or "quit" depending on the
+    button pressed by the user.
+    """
+
+    def __init__(self, parent: tk.Tk, gettext_func: callable,
+                 files: list[Path], allow_add: bool) -> None:
+        super().__init__(parent)
+        self._ = gettext_func
+        _ = self._
+        self.result: str = "quit"
+
+        self.title(_("Import folder is not empty"))
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self._on_quit)
+
+        msg = _("The import folder already contains files:")
+        ttk.Label(self, text=msg, padding=(10, 10, 10, 4)).pack(anchor="w")
+
+        list_frame = ttk.Frame(self, padding=(10, 0))
+        list_frame.pack(fill=tk.BOTH, expand=True)
+
+        listbox = tk.Listbox(list_frame, height=min(10, max(3, len(files))),
+                              width=50)
+        vsb = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=listbox.yview)
+        listbox.configure(yscrollcommand=vsb.set)
+        for f in files:
+            listbox.insert(tk.END, f.name)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        ttk.Label(self, text=_("What do you want to do?"),
+                  padding=(10, 8, 10, 4)).pack(anchor="w")
+
+        btn_frame = ttk.Frame(self, padding=10)
+        btn_frame.pack(fill=tk.X)
+
+        ttk.Button(btn_frame, text=_("Delete files and continue"),
+                   command=self._on_delete).pack(side=tk.LEFT, padx=4)
+        if allow_add:
+            ttk.Button(btn_frame, text=_("Continue and add files"),
+                       command=self._on_add).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_frame, text=_("Quit"),
+                   command=self._on_quit).pack(side=tk.RIGHT, padx=4)
+
+        self.update_idletasks()
+        # Center on parent
+        try:
+            px, py = parent.winfo_x(), parent.winfo_y()
+            pw, ph = parent.winfo_width(), parent.winfo_height()
+            w, h = self.winfo_width(), self.winfo_height()
+            self.geometry(f"+{px + (pw - w) // 2}+{py + (ph - h) // 2}")
+        except Exception:
+            pass
+
+    def _on_delete(self) -> None:
+        self.result = "delete"
+        self.destroy()
+
+    def _on_add(self) -> None:
+        self.result = "add"
+        self.destroy()
+
+    def _on_quit(self) -> None:
+        self.result = "quit"
+        self.destroy()
+
+
+def check_importdir_at_startup(parent: tk.Tk, cfg: configparser.ConfigParser,
+                                gettext_func: callable) -> bool:
+    """Inspect the configured import directory before the app starts.
+
+    - Creates the import directory if it does not exist yet.
+    - If it contains "<int>_R.<ext>" / "<int>_V.<ext>" files (whether or not
+      other files are also present), the user is offered to delete
+      everything and continue, or quit.
+    - If it only contains files that do NOT match that pattern, the user is
+      offered to delete and continue, to continue without deleting (the app
+      will add its own scanned files alongside), or to quit.
+
+    Returns True if the application should continue starting, False if it
+    should quit (user cancelled).
+    """
+    _ = gettext_func
+    importdir = Path(cfg["tkscan"].get("importdir", "import"))
+    importdir.mkdir(parents=True, exist_ok=True)
+
+    rv_files, other_files = _scan_importdir(importdir)
+
+    # Empty folder: nothing to do, continue.
+    if not rv_files and not other_files:
+        return True
+
+    if rv_files:
+        # <int>_R/_V files present, alone or mixed with other files:
+        # only "delete and continue" or "quit" are offered.
+        all_files = sorted(rv_files + other_files, key=lambda p: p.name)
+        dialog = _ImportDirDialog(parent, gettext_func, all_files, allow_add=False)
+        parent.wait_window(dialog)
+        if dialog.result == "delete":
+            for f in all_files:
+                try:
+                    f.unlink()
+                except OSError as exc:
+                    logging.warning("Could not delete %s: %s", f, exc)
+            return True
+        return False  # quit
+
+    # Only files that do NOT match the <int>_R/_V pattern are present.
+    dialog = _ImportDirDialog(parent, gettext_func, other_files, allow_add=True)
+    parent.wait_window(dialog)
+    if dialog.result == "delete":
+        for f in other_files:
+            try:
+                f.unlink()
+            except OSError as exc:
+                logging.warning("Could not delete %s: %s", f, exc)
+        return True
+    if dialog.result == "add":
+        return True  # keep existing files, the app will add its own
+    return False  # quit
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Thumbnail window
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -1021,8 +1179,35 @@ def main(common, prefix, resolution, fmt):
     if fmt:
         cfg["tkscan"]["file_format"] = fmt
 
-    # Launch GUI
+    # Build the main window first (but keep it hidden) so that the startup
+    # dialogs can be centered on it instead of on a throwaway 1x1 window.
     app = PostcardScannerApp(cfg, gettext_func)
+    app.update_idletasks()
+
+    # Explicitly center the main window on the screen. Without this, the
+    # window manager decides its initial position, which would make
+    # "centered on the main window" meaningless for the startup dialogs.
+    w = app.winfo_reqwidth()
+    h = app.winfo_reqheight()
+    sw = app.winfo_screenwidth()
+    sh = app.winfo_screenheight()
+    x = max(0, (sw - w) // 2)
+    y = max(0, (sh - h) // 2)
+    app.geometry(f"{w}x{h}+{x}+{y}")
+
+    # NE PAS withdraw() : une fenêtre "transient" d'un parent withdrawn
+    # n'est pas mappée par la plupart des WM Linux -> boîte de dialogue invisible,
+    # wait_window() bloque indéfiniment ("rien ne se passe" au démarrage).
+    # On garde donc la fenêtre principale mappée mais transparente le temps
+    # de la vérification, puis on la rend visible juste avant le mainloop.
+    app.attributes("-alpha", 0.0)
+    should_continue = check_importdir_at_startup(app, cfg, gettext_func)
+    if not should_continue:
+        app.destroy()
+        return
+
+    # Reveal the (already centered) main window and start the app.
+    app.attributes("-alpha", 1.0)
     app.mainloop()
 
 

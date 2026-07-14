@@ -46,14 +46,53 @@ from typing import Any
 import requests
 from flask import Blueprint, current_app, jsonify, request, url_for
 
-from flpostcards.auth import issue_token_pair, require_auth
+from flpostcards.auth import current_auth_email, issue_token_pair, require_auth
+from flpostcards.extensions import limiter
 from flpostcards.images import SIZE_MAIN, SIZE_SMALL, SIZE_THUMB, card_images
 from flpostcards.blueprints.gallery import DEFAULT_PER_PAGE, PER_PAGE_CHOICES
-
-from flpostcards.images import SIZE_MAIN, SIZE_SMALL, SIZE_THUMB, card_images
-from flpostcards.blueprints.gallery import DEFAULT_PER_PAGE, PER_PAGE_CHOICES
+from flask_limiter.util import get_remote_address
 
 bp = Blueprint("api_v1", __name__)
+
+
+@bp.errorhandler(429)
+def _rate_limit_exceeded(exc):
+    """
+    Par défaut flask-limiter renvoie un corps texte brut sur 429 ;
+    l'API étant entièrement JSON, on aligne le format sur les autres
+    erreurs ({"error": "..."}) plutôt que de laisser passer le texte
+    brut par défaut.
+    """
+    return jsonify({"error": "too many requests, please retry later"}), 429
+
+
+def _login_target_key() -> str:
+    """
+    Clé de rate limit basée sur le compte ciblé (email envoyé dans le
+    corps JSON de /check_auth ou /auth/login), et non sur l'IP.
+
+    Complète la limite par IP (get_remote_address, clé par défaut du
+    limiter) : celle-ci ne suffit pas seule à empêcher un bruteforce
+    ciblé sur un compte précis mené depuis plusieurs IP (botnet,
+    rotation de proxy, ...). À l'inverse, la limite par IP protège
+    contre un attaquant qui teste beaucoup d'emails différents depuis
+    une même source. Les deux limites sont donc appliquées ensemble.
+    """
+    data: dict[str, Any] = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    return f"login-email:{email}" if email else get_remote_address()
+
+
+def _similar_user_key() -> str:
+    """
+    Clé de rate limit pour /api/v1/similar : email authentifié (le
+    token JWT a nécessairement été validé par @require_auth avant que
+    ce décorateur ne s'exécute, voir l'ordre des décorateurs sur la
+    route) plutôt que l'IP, pour ne pas mélanger plusieurs
+    utilisateurs derrière une même IP/NAT et ne pas être contournable
+    en changeant simplement d'IP avec un token volé.
+    """
+    return current_auth_email() or get_remote_address()
 
 # ---------------------------------------------------------------------------
 # Constantes
@@ -629,6 +668,13 @@ def gallery():
 
 
 @bp.route("/api/v1/check_auth", methods=["POST"])
+# Bruteforce : limite par IP (défaut du limiter) et par compte ciblé
+# (voir _login_target_key) -- les deux sont nécessaires, voir sa
+# docstring. Les mêmes valeurs que /auth/login : check_auth vérifie
+# le même mot de passe (model.check_auth), donc présente le même
+# risque de bruteforce.
+@limiter.limit("10 per minute;100 per hour")
+@limiter.limit("8 per minute;50 per hour", key_func=_login_target_key)
 def check_auth():
     """
     Vérifie un couple email/password (table ``auths``, mots de passe
@@ -673,6 +719,9 @@ def _device_info() -> str | None:
 
 
 @bp.route("/api/v1/auth/login", methods=["POST"])
+# Bruteforce : voir la même remarque que check_auth ci-dessus.
+@limiter.limit("10 per minute;100 per hour")
+@limiter.limit("8 per minute;50 per hour", key_func=_login_target_key)
 def auth_login():
     """
     Authentifie un utilisateur (table ``auths``) et délivre une
@@ -790,6 +839,12 @@ def auth_logout_all(auth_email: str):
 
 @bp.route("/api/v1/similar", methods=["POST"])
 @require_auth
+# Abus : endpoint coûteux (appel réseau à simpostcards, calcul de
+# hashs perceptuels sur l'image envoyée) -- limite par utilisateur
+# authentifié (voir _similar_user_key) plutôt que par IP, appliquée
+# après @require_auth pour ne pas consommer de budget de requêtes
+# non authentifiées.
+@limiter.limit("20 per minute;200 per hour", key_func=_similar_user_key)
 def similar(auth_email: str):
     """
     Recherche les cartes postales de la collection ressemblant à une
@@ -1012,9 +1067,10 @@ def update(auth_email: str):
 
     Corps JSON (Content-Type: application/json) :
       {
-        "card_id" : "123",
-        "lat"     : 46.749,
-        "lon"     : 5.620
+        "card_id"  : "123",
+        "lat"      : 46.749,
+        "lon"      : 5.620,
+        "accuracy" : 12.5   (optionnel, précision GPS en mètres)
       }
 
     L'écriture dans ``updates.json`` est protégée par un lockfile
@@ -1023,7 +1079,8 @@ def update(auth_email: str):
     écritures concurrentes depuis plusieurs workers gunicorn).
 
     En cas de succès, enregistre le repérage dans datadir/updates.json :
-      { "card_id", "email", "lat", "lon", "ts" (timestamp UNIX) }
+      { "card_id", "email", "lat", "lon", "accuracy", "ts" (timestamp UNIX) }
+      ("accuracy" vaut ``None`` si absent ou invalide dans la requête)
 
     Codes de retour :
       200 { "status": "ok", "card_id": "...", "ts": ... }
@@ -1045,8 +1102,20 @@ def update(auth_email: str):
     except (KeyError, ValueError, TypeError):
         return jsonify({"error": "lat et lon sont obligatoires (float)"}), 400
 
+    try:
+        accuracy = float(data["accuracy"])
+    except (KeyError, ValueError, TypeError):
+        accuracy = None
+
     ts = int(time.time())
-    entry = {"card_id": card_id, "email": email, "lat": lat, "lon": lon, "ts": ts}
+    entry = {
+        "card_id": card_id,
+        "email": email,
+        "lat": lat,
+        "lon": lon,
+        "accuracy": accuracy,
+        "ts": ts,
+    }
 
     datadir = Path(current_app.config["DATADIR"])
     updates_path = datadir / "updates.json"

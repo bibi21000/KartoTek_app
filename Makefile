@@ -78,25 +78,5 @@ dockersim-push:
 	docker tag simpostcards localhost:5000/simpostcards
 	docker push localhost:5000/simpostcards
 
-appimagetool-x86_64.AppImage:
-	wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-	chmod +x appimagetool-x86_64.AppImage
-
-KartoTek.AppDir:
-	python3 -m venv venv.AppImage
-	./venv.AppImage/bin/pip install .
-	./venv.AppImage/bin/pip install .[tkinter]
-	./venv.AppImage/bin/pip install .[similar]
-	./venv.AppImage/bin/pip install .[scan]
-	./venv.AppImage/bin/pip install .[travel]
-	mkdir KartoTek.AppDir
-	./venv.AppImage/bin/pip freeze > KartoTek.AppDir/requirements.txt
-	cp appimage/AppRun KartoTek.AppDir/
-	chmod +x KartoTek.AppDir/AppRun      # +x pas -x !
-	cp appimage/KartoTek.desktop KartoTek.AppDir/
-	cp pyproject.toml KartoTek.AppDir/
-	cp logos/kartotek_tkinter_256.png KartoTek.AppDir/kartotek.png  # minuscule !
-	./venv/bin/python-appimage build app \
-		--name KartoTek \
-		--python-version 3.12 \
-		KartoTek.AppDir/
+AppImage:
+	PYTHON_BIN=/usr/bin/python3 TESSERACT_LANGS=fra+eng+deu ./build-appimage.sh --gpu=cpu --proxy=http://127.0.0.1:3128

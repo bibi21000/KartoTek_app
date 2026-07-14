@@ -13,6 +13,7 @@ from flask_babel import Babel
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from libpostcards.model import Model
+from flpostcards.extensions import limiter
 
 # Langues disponibles pour l'application Flask
 LANGUAGES = ["fr", "en"]
@@ -106,6 +107,10 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["TRUSTED_PROXIES"] = parser.getint(
                     "flask", "trusted_proxies"
                 )
+            elif key == "rate_limit_storage_uri":
+                app.config["RATELIMIT_STORAGE_URI"] = value
+            elif key == "rate_limit_key_prefix":
+                app.config["RATELIMIT_KEY_PREFIX"] = value
             else:
                 app.config[key.upper()] = value
 
@@ -130,6 +135,23 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     # compte dans des en-têtes potentiellement à plusieurs valeurs
     # comme X-Forwarded-Proto/X-Forwarded-For.
     app.config.setdefault("TRUSTED_PROXIES", 1)
+    # Backend de comptage pour le rate limiting (flpostcards/extensions.py) :
+    # "memory://" (défaut) suffit en dev ou avec un seul worker, mais
+    # chaque worker gunicorn a alors ses propres compteurs en mémoire
+    # -> la limite réelle est multipliée par le nombre de workers.
+    # En production avec plusieurs workers/instances, définir
+    # [flask] rate_limit_storage_uri = redis://host:6379/0 (nécessite
+    # le paquet Python "redis") pour un comptage partagé et fiable.
+    app.config.setdefault("RATELIMIT_STORAGE_URI", "memory://")
+    # Préfixe des clés de rate limiting (flask-limiter, config
+    # RATELIMIT_KEY_PREFIX) : indispensable si plusieurs serveurs
+    # flpostcards distincts (plusieurs sites KartoTek) partagent la
+    # même instance Redis pour RATELIMIT_STORAGE_URI -- sans préfixe
+    # différent par serveur, leurs compteurs se mélangeraient (ex :
+    # un attaquant bloqué sur le serveur A épuiserait aussi le quota
+    # du serveur B). Définir [flask] rate_limit_key_prefix = <nom du
+    # site> pour chaque serveur.
+    app.config.setdefault("RATELIMIT_KEY_PREFIX", "")
 
     secret_key = app.config.get("SECRET_KEY")
     if secret_key in (None, "", "secret"):
@@ -198,6 +220,29 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
         if path.endswith("?"):
             path = path[:-1]
         return {"current_path": path}
+
+    limiter.init_app(app)
+
+    if app.config["RATELIMIT_STORAGE_URI"] == "memory://" and not app.debug:
+        app.logger.warning(
+            "rate limiting : stockage en mémoire (memory://) utilisé hors "
+            "debug -- avec plusieurs workers gunicorn, les compteurs ne "
+            "sont pas partagés entre processus, ce qui affaiblit la "
+            "limite réelle. Définir [flask] rate_limit_storage_uri "
+            "(ex : redis://host:6379/0) pour un déploiement multi-workers."
+        )
+    elif (
+        app.config["RATELIMIT_STORAGE_URI"].startswith("redis")
+        and not app.config["RATELIMIT_KEY_PREFIX"]
+    ):
+        app.logger.warning(
+            "rate limiting : rate_limit_storage_uri pointe vers Redis mais "
+            "[flask] rate_limit_key_prefix n'est pas défini -- si cette "
+            "instance Redis est partagée entre plusieurs serveurs "
+            "flpostcards, leurs compteurs de rate limiting vont se "
+            "mélanger. Définir un préfixe distinct par serveur (ex : nom "
+            "du site) si c'est le cas."
+        )
 
     # Modèle partagé (lecture uniquement côté Flask)
     app.model = Model(app.config["DATADIR"])
