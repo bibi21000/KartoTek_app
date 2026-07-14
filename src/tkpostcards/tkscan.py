@@ -839,6 +839,10 @@ class PostcardScannerApp(tk.Tk):
                                      command=self._manual_scan, style="Accent.TButton")
         self._scan_btn.pack(side=tk.LEFT, padx=2)
 
+        self._preview_btn = ttk.Button(action_frame, text=_("Preview"),
+                                        command=self._preview_scan)
+        self._preview_btn.pack(side=tk.LEFT, padx=2)
+
         self._status_var = tk.StringVar(value=f"{_('Status:')} {_('Ready')}")
         ttk.Label(action_frame, textvariable=self._status_var,
                   font=("TkDefaultFont", 10)).pack(side=tk.LEFT, padx=12)
@@ -1039,6 +1043,95 @@ class PostcardScannerApp(tk.Tk):
     def _manual_scan(self) -> None:
         self._save_settings_from_ui()
         threading.Thread(target=self._do_scan, daemon=True).start()
+
+    # ── Preview (no save) ───────────────────────────────────────────────────
+
+    def _preview_scan(self) -> None:
+        """Launch a scan for preview purposes only: nothing is written to
+        the import folder and no file is kept on disk afterwards."""
+        self._save_settings_from_ui()
+        self._scan_btn.config(state=tk.DISABLED)
+        self._preview_btn.config(state=tk.DISABLED)
+        threading.Thread(target=self._do_preview_scan, daemon=True).start()
+
+    def _do_preview_scan(self) -> None:
+        """Run one scan cycle into a throwaway temp file, load it into
+        memory, delete the temp file, then show it in a window."""
+        scanner = self._scanner_var.get()
+        resolution_str = self._resolution_var.get().split()[0]
+        resolution = int(resolution_str) if resolution_str.isdigit() else 300
+        fmt = self._format_var.get()
+
+        area = None
+        if self._area_enabled_var.get():
+            try:
+                area = (
+                    float(self._area_left_var.get()),
+                    float(self._area_top_var.get()),
+                    float(self._area_width_var.get()),
+                    float(self._area_height_var.get()),
+                )
+            except ValueError:
+                area = None
+
+        try:
+            crop_px = int(self._crop_border_var.get() or 0)
+        except ValueError:
+            crop_px = 0
+
+        self.after(0, self._set_status, self._("Previewing..."))
+
+        with tempfile.NamedTemporaryFile(suffix=f".{fmt}", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+
+        try:
+            if scanner:
+                self.after(0, self._log, f"-> {self._('Preview')}: {scanner} @ {resolution} dpi")
+                do_scan(scanner, resolution, fmt, tmp_path,
+                        scan_area=area, crop_border=crop_px,
+                        jpeg_quality=int(self._jpeg_quality_var.get() or 85),
+                        png_compress=int(self._png_compress_var.get() or 6),
+                        tiff_compression=self._tiff_compress_var.get() or "deflate")
+            else:
+                simulate_scan(tmp_path, fmt)
+                self.after(0, self._log, f"! {self._('Simulated preview (no scanner)')}")
+
+            # Load fully into memory so the temp file can be removed right away.
+            img = Image.open(tmp_path)
+            img.load()
+            self.after(0, self._show_preview, img)
+            self.after(0, self._set_status, self._("Preview complete"))
+        except Exception as exc:
+            self.after(0, self._on_preview_error, str(exc))
+        finally:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            self.after(0, self._preview_scan_done)
+
+    def _preview_scan_done(self) -> None:
+        self._scan_btn.config(state=tk.NORMAL)
+        self._preview_btn.config(state=tk.NORMAL)
+
+    def _on_preview_error(self, msg: str) -> None:
+        self._set_status(self._("Preview failed"))
+        self._log(f"x {self._('Preview failed')}: {msg}")
+
+    def _show_preview(self, img: Image.Image) -> None:
+        """Display a scanned image in a standalone window. Nothing is saved to disk."""
+        win = tk.Toplevel(self)
+        win.title(f"{self._('Preview')} — {datetime.now().strftime('%H:%M:%S')}")
+        win.geometry("1024x768")
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        max_w, max_h = sw - 40, sh - 80
+        display_img = img.copy()
+        display_img.thumbnail((max_w, max_h), Image.LANCZOS)
+        photo = ImageTk.PhotoImage(display_img)
+        lbl = tk.Label(win, image=photo, bg="black")
+        lbl.image = photo  # keep a reference alive
+        lbl.pack(fill=tk.BOTH, expand=True)
+        ttk.Button(win, text=self._("Close"), command=win.destroy).pack(pady=4)
 
     # ── Batch logic ─────────────────────────────────────────────────────────
 

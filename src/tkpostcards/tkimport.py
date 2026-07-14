@@ -119,24 +119,171 @@ def _load_thumb(path: Path, size=THUMB_SIZE) -> ImageTk.PhotoImage | None:
         return None
 
 
-def _show_full_image(parent: tk.Widget, path: Path, title: str) -> None:
-    try:
-        img = Image.open(path)
-    except Exception as exc:
-        messagebox.showerror("Error", str(exc), parent=parent)
-        return
-    win = tk.Toplevel(parent)
-    win.title(title)
-    win.geometry("1024x768")
-    win.update_idletasks()
-    sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-    max_w, max_h = sw - 40, sh - 80
-    img.thumbnail((max_w, max_h), Image.LANCZOS)
-    photo = ImageTk.PhotoImage(img)
-    lbl = tk.Label(win, image=photo, bg="black")
-    lbl.image = photo  # keep a reference
-    lbl.pack(fill=tk.BOTH, expand=True)
-    ttk.Button(win, text="Close", command=win.destroy).pack(pady=4)
+class ImageViewer(tk.Toplevel):
+    """Full-size image viewer with a zoomable, scrollable canvas.
+
+    Provides a toolbar with zoom in/out, "fit to window", "actual size"
+    (100 %) and rotation buttons, plus keyboard/mouse shortcuts:
+      * ``+`` / ``-`` or ``Ctrl`` + mouse wheel  → zoom in / out
+      * ``0``                                     → actual size
+      * ``[`` / ``]``                             → rotate left / right
+      * ``Escape``                                → close
+
+    Rotation actually rewrites the file on disk (via *on_rotate*, typically
+    :func:`libs.scan_editor.rotate_file`), then reloads it here and asks the
+    caller to refresh its own thumbnail so the main window stays in sync.
+    """
+
+    ZOOM_STEP = 1.25
+    MIN_ZOOM = 0.05
+    MAX_ZOOM = 8.0
+
+    def __init__(self, parent: tk.Widget, path: Path, title: str,
+                 gettext_func=None, on_rotate=None) -> None:
+        super().__init__(parent)
+        self._ = gettext_func or (lambda s: s)
+        self._path = path
+        # on_rotate(degrees_cw) -> bool: performs the actual rotation (e.g.
+        # rewriting the file on disk) and refreshes the caller's own UI
+        # (thumbnail in the main window). Returns True on success.
+        self._on_rotate = on_rotate
+        if not self._load_image():
+            self.destroy()
+            return
+
+        self.title(title)
+        self._zoom = 1.0
+        self._fit_mode = True
+        self._photo = None  # keep a reference
+
+        self._build_ui()
+
+        self.update_idletasks()
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        self.geometry(f"{min(sw - 40, 1024)}x{min(sh - 80, 768)}")
+
+        self._canvas.bind("<Configure>", self._on_canvas_resize)
+        self.bind("<Control-MouseWheel>", self._on_wheel_zoom)      # Windows / macOS
+        self.bind("<Control-Button-4>", lambda e: self._zoom_by(self.ZOOM_STEP))   # Linux
+        self.bind("<Control-Button-5>", lambda e: self._zoom_by(1 / self.ZOOM_STEP))
+        self.bind("<plus>", lambda e: self._zoom_by(self.ZOOM_STEP))
+        self.bind("<KP_Add>", lambda e: self._zoom_by(self.ZOOM_STEP))
+        self.bind("<minus>", lambda e: self._zoom_by(1 / self.ZOOM_STEP))
+        self.bind("<KP_Subtract>", lambda e: self._zoom_by(1 / self.ZOOM_STEP))
+        self.bind("<Key-0>", lambda e: self._set_zoom(1.0))
+        self.bind("<bracketleft>", lambda e: self._rotate(270))
+        self.bind("<bracketright>", lambda e: self._rotate(90))
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.focus_set()
+
+        # First render once the window has its final size on screen.
+        self.after_idle(self._fit_to_window)
+
+    # ── UI construction ────────────────────────────────────────────────
+
+    def _build_ui(self) -> None:
+        _ = self._
+
+        toolbar = ttk.Frame(self, padding=4)
+        toolbar.pack(side=tk.TOP, fill=tk.X)
+
+        ttk.Button(toolbar, text="−", width=3,
+                   command=lambda: self._zoom_by(1 / self.ZOOM_STEP)
+                   ).pack(side=tk.LEFT)
+        ttk.Button(toolbar, text="+", width=3,
+                   command=lambda: self._zoom_by(self.ZOOM_STEP)
+                   ).pack(side=tk.LEFT, padx=(2, 8))
+
+        self._zoom_lbl = ttk.Label(toolbar, text="100%", width=6, anchor="center")
+        self._zoom_lbl.pack(side=tk.LEFT)
+
+        ttk.Button(toolbar, text=_("Fit to window"),
+                   command=self._fit_to_window).pack(side=tk.LEFT, padx=(8, 2))
+        ttk.Button(toolbar, text=_("Actual size"),
+                   command=lambda: self._set_zoom(1.0)).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(toolbar, text="⟲", width=3,
+                   command=lambda: self._rotate(270)).pack(side=tk.LEFT, padx=(8, 2))
+        ttk.Button(toolbar, text="⟳", width=3,
+                   command=lambda: self._rotate(90)).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(toolbar, text=_("Close"), command=self.destroy).pack(side=tk.RIGHT)
+
+        body = ttk.Frame(self)
+        body.pack(fill=tk.BOTH, expand=True)
+        body.rowconfigure(0, weight=1)
+        body.columnconfigure(0, weight=1)
+
+        self._canvas = tk.Canvas(body, bg="black", highlightthickness=0)
+        vbar = ttk.Scrollbar(body, orient=tk.VERTICAL, command=self._canvas.yview)
+        hbar = ttk.Scrollbar(body, orient=tk.HORIZONTAL, command=self._canvas.xview)
+        self._canvas.configure(yscrollcommand=vbar.set, xscrollcommand=hbar.set)
+
+        self._canvas.grid(row=0, column=0, sticky="nsew")
+        vbar.grid(row=0, column=1, sticky="ns")
+        hbar.grid(row=1, column=0, sticky="ew")
+
+        self._image_item = self._canvas.create_image(0, 0, anchor="nw")
+
+    # ── loading / rotation ───────────────────────────────────────────
+
+    def _load_image(self) -> bool:
+        """(Re)load the image from disk. Returns True on success."""
+        try:
+            img = Image.open(self._path)
+            img.load()  # force full read now, release the file handle
+        except Exception as exc:
+            messagebox.showerror("Error", str(exc), parent=self.master)
+            return False
+        self._orig = img
+        return True
+
+    def _rotate(self, degrees_cw: int) -> None:
+        """Rotate the file on disk (via *on_rotate*) then refresh the view."""
+        if self._on_rotate is None:
+            return
+        if not self._on_rotate(degrees_cw):
+            return
+        if not self._load_image():
+            return
+        self._render(self._compute_fit_zoom() if self._fit_mode else self._zoom)
+
+    # ── zoom logic ────────────────────────────────────────────────────
+
+    def _on_canvas_resize(self, _event=None) -> None:
+        if self._fit_mode:
+            self._render(self._compute_fit_zoom())
+
+    def _compute_fit_zoom(self) -> float:
+        cw = max(self._canvas.winfo_width(), 1)
+        ch = max(self._canvas.winfo_height(), 1)
+        ow, oh = self._orig.size
+        return max(min(cw / ow, ch / oh), self.MIN_ZOOM)
+
+    def _fit_to_window(self) -> None:
+        self._fit_mode = True
+        self._render(self._compute_fit_zoom())
+
+    def _set_zoom(self, zoom: float) -> None:
+        self._fit_mode = False
+        self._render(zoom)
+
+    def _zoom_by(self, factor: float) -> None:
+        self._set_zoom(self._zoom * factor)
+
+    def _on_wheel_zoom(self, event) -> None:
+        self._zoom_by(self.ZOOM_STEP if event.delta > 0 else 1 / self.ZOOM_STEP)
+
+    def _render(self, zoom: float) -> None:
+        zoom = max(self.MIN_ZOOM, min(self.MAX_ZOOM, zoom))
+        self._zoom = zoom
+        ow, oh = self._orig.size
+        w, h = max(1, round(ow * zoom)), max(1, round(oh * zoom))
+        resized = self._orig.resize((w, h), Image.LANCZOS)
+        self._photo = ImageTk.PhotoImage(resized)
+        self._canvas.itemconfig(self._image_item, image=self._photo)
+        self._canvas.configure(scrollregion=(0, 0, w, h))
+        self._zoom_lbl.config(text=f"{round(zoom * 100)}%")
 
 
 def _disable_recursive(widget) -> None:
@@ -259,16 +406,17 @@ class PairRow(ttk.Frame):
         self._photo_refs[side] = photo  # keep a reference
         img_lbl.config(image=photo, text="")
 
-    def _rotate(self, side: str, degrees_cw: int) -> None:
+    def _rotate(self, side: str, degrees_cw: int) -> bool:
         path = self.paths.get(side)
         if path is None:
-            return
+            return False
         try:
             rotate_file(path, degrees_cw)
         except Exception as exc:
             messagebox.showerror(self.app._("Error"), str(exc), parent=self)
-            return
+            return False
         self._refresh_thumb(side)
+        return True
 
     def _open_external(self, side: str) -> None:
         path = self.paths.get(side)
@@ -284,7 +432,9 @@ class PairRow(ttk.Frame):
         path = self.paths.get(side)
         if path is None or not path.exists():
             return
-        _show_full_image(self, path, f"#{self.pcid} - {side}")
+        ImageViewer(self, path, f"#{self.pcid} - {side}",
+                    gettext_func=self.app._,
+                    on_rotate=lambda degrees, s=side: self._rotate(s, degrees))
 
     def mark_added(self) -> None:
         self.added = True

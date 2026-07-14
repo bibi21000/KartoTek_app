@@ -3094,7 +3094,7 @@ class SearchView(tk.Toplevel):
         for pos, item in enumerate(self._results):
             # ── Extract score and path from the dict ─────────────────────────
             pct  = float(item.get("score", 0))
-            path = Path(item["path"]) if item.get("path") else None
+            path = self._resolve_path(item.get("path"))
 
             # Derive cid and side from the file name (<cid>_R.ext)
             cid, side = self._parse_path(path)
@@ -3186,6 +3186,17 @@ class SearchView(tk.Toplevel):
         ImageViewer(self, path, id_str, self._t)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+    def _resolve_path(self, raw: "str | None") -> "Path | None":
+        """Resolve a path returned by PostcardSearcher against the configured
+        datadir ([tkmanager] / datadir), since the index stores paths
+        relative to that directory."""
+        if not raw:
+            return None
+        p = Path(raw)
+        if p.is_absolute():
+            return p
+        return self._app.datadir / p
+
     @staticmethod
     def _parse_path(path: "Path | None") -> tuple["int | None", str]:
         """Extract (cid, side) from a file name such as '<cid>_R.ext'.
@@ -3468,8 +3479,8 @@ class DoublesSearchView(tk.Toplevel):
 
         for pos, item in enumerate(self._results):
             pct   = float(item.get("score", 0))
-            file1 = Path(item["file1"]) if item.get("file1") else None
-            file2 = Path(item["file2"]) if item.get("file2") else None
+            file1 = self._resolve_path(item.get("file1"))
+            file2 = self._resolve_path(item.get("file2"))
             id1   = item.get("id1")
             id2   = item.get("id2")
 
@@ -3606,6 +3617,17 @@ class DoublesSearchView(tk.Toplevel):
         self._app.focus_force()
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+    def _resolve_path(self, raw: "str | None") -> "Path | None":
+        """Resolve a path returned by PostcardSearcher against the configured
+        datadir ([tkmanager] / datadir), since the index stores paths
+        relative to that directory."""
+        if not raw:
+            return None
+        p = Path(raw)
+        if p.is_absolute():
+            return p
+        return self._app.datadir / p
+
     @staticmethod
     def _pct_color(pct: float) -> str:
         if pct >= 90:

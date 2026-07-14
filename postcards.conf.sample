@@ -1,185 +1,186 @@
 # ==============================================================================
 # postcards.conf.example
 #
-# Fichier de configuration d'exemple pour l'application "tkpostcards"
-# (tkscan, tkimport, tkmanager, tktools) et la librairie "libpostcards".
+# Example configuration file for the "tkpostcards" application
+# (tkscan, tkimport, tkmanager, tktools) and the "libpostcards" library.
 #
-# Format : INI (module Python "configparser").
-# À copier sous le nom "postcards.conf" (ou le nom passé via --conffile)
-# à la racine du projet, ou dans le dossier tkpostcards/ selon l'outil utilisé.
+# Format: INI (Python "configparser" module).
+# Copy this to "postcards.conf" (or the name passed via --conffile)
+# at the root of the project, or in the tkpostcards/ folder depending on
+# the tool used.
 #
-# Toute clé placée dans [DEFAULT] est héritée automatiquement par toutes les
-# autres sections (comportement natif de configparser).
+# Any key placed in [DEFAULT] is automatically inherited by all other
+# sections (native configparser behavior).
 # ==============================================================================
 
 
 # ------------------------------------------------------------------------------
-# [DEFAULT] - paramètres communs à tous les outils / toutes les sections
+# [DEFAULT] - settings common to all tools / all sections
 # ------------------------------------------------------------------------------
 [DEFAULT]
 
-# Dossier où sont stockées les images et les métadonnées JSON/SQLite
+# Folder where images and JSON/SQLite metadata are stored
 datadir = data
 
-# Dossier de dépôt des images scannées à importer (tkscan -> tkimport)
+# Drop folder for scanned images to be imported (tkscan -> tkimport)
 importdir = import
 
-# Dossier temporaire utilisé par les traitements (conversions, etc.)
+# Temporary folder used by processing tasks (conversions, etc.)
 tmpdir = tmp
 
-# Format de fichier par défaut pour les images (tiff, png, jpeg)
+# Default file format for images (tiff, png, jpeg)
 file_format = tiff
 
-# Dossier de stockage des logs de session pour la synchronisation distante
-# (hérité par la section [sync_default] ci-dessous)
+# Folder for storing session logs for remote synchronization
+# (inherited by the [sync_default] section below)
 logdir = logs
 
 
 # ------------------------------------------------------------------------------
-# [tkscan] - application de numérisation par lots (scanner)
+# [tkscan] - batch scanning application (scanner)
 # ------------------------------------------------------------------------------
 [tkscan]
 
-# Identifiant du scanner (ex : device SANE "escl:https://192.168.1.28:443")
-# Laisser vide pour choisir le scanner dans l'interface graphique
+# Scanner identifier (e.g. SANE device "escl:https://192.168.1.28:443")
+# Leave empty to choose the scanner from the graphical interface
 scanner =
 
-# Résolution de numérisation en DPI
+# Scan resolution in DPI
 resolution = 300
 
-# Format d'enregistrement des scans (tiff, png, jpeg)
+# File format for saving scans (tiff, png, jpeg)
 file_format = tiff
 
-# Préfixe des fichiers générés lors du scan
+# Prefix for files generated during scanning
 prefix = scanned
 
-# Intervalle (en secondes) entre deux scans en mode "batch"
+# Interval (in seconds) between two scans in "batch" mode
 batch_interval = 30
 
-# Langue de l'interface (code ISO 2 lettres : fr, en, ...). Vide = auto-détection
+# Interface language (2-letter ISO code: fr, en, ...). Empty = auto-detect
 language =
 
-# Activer une zone de numérisation personnalisée (recadrage à la source)
+# Enable a custom scan area (cropping at the source)
 scan_area_enabled = false
 
-# Coordonnées de la zone de numérisation (en mm)
+# Scan area coordinates (in mm)
 scan_area_left = 0
 scan_area_top = 0
 scan_area_width = 148
 scan_area_height = 105
 
-# Rognage des bords après scan (en pixels)
+# Edge trimming after scan (in pixels)
 crop_border = 0
 
-# Qualité JPEG (0-100), utilisée uniquement si file_format = jpeg
+# JPEG quality (0-100), used only if file_format = jpeg
 jpeg_quality = 85
 
-# Niveau de compression PNG (0-9), utilisé uniquement si file_format = png
+# PNG compression level (0-9), used only if file_format = png
 png_compress = 6
 
-# Type de compression TIFF (ex : deflate, lzw, none), utilisé si file_format = tiff
+# TIFF compression type (e.g. deflate, lzw, none), used if file_format = tiff
 tiff_compression = deflate
 
 
 # ------------------------------------------------------------------------------
-# [tkimport] - application de relecture/validation entre tkscan et tkmanager
+# [tkimport] - review/validation application between tkscan and tkmanager
 # ------------------------------------------------------------------------------
 [tkimport]
 
-# Préfixe utilisé lors de l'ajout des cartes à la collection
+# Prefix used when adding cards to the collection
 prefix =
 
-# Seuil de blanc (0-255) utilisé pour détecter le fond transparent
+# White threshold (0-255) used to detect the transparent background
 white_threshold = 240
 
-# Langue de l'interface (code ISO 2 lettres). Vide = auto-détection
+# Interface language (2-letter ISO code). Empty = auto-detect
 language =
 
-# Supprimer les fichiers du dossier d'import une fois ajoutés à la collection
+# Remove files from the import folder once added to the collection
 remove_after_add = false
 
-# Application externe préférée pour éditer une image, par plateforme
-# (laisser vide pour utiliser l'application par défaut du système)
+# Preferred external application for editing an image, per platform
+# (leave empty to use the system's default application)
 editor_linux =
 editor_macos =
 editor_windows =
 
 
 # ------------------------------------------------------------------------------
-# [tkmanager] - application de gestion / consultation de la collection
+# [tkmanager] - collection management / browsing application
 # ------------------------------------------------------------------------------
 [tkmanager]
 
-# Liste des collections connues, séparées par des virgules
+# List of known collections, comma-separated
 collections = collection1, collection2
 
-# Dernier filtre de collection utilisé (géré automatiquement par l'appli)
+# Last collection filter used (managed automatically by the app)
 last_filter =
 
-# Dernier identifiant de carte affiché (géré automatiquement par l'appli)
+# Last card ID displayed (managed automatically by the app)
 last_id =
 
-# Publier l'intégralité des données (parcours, ...) par défaut lors du publish
+# Publish the full data set (routes, ...) by default during publish
 publish_full = 0
 
-# Seuil de similarité par défaut (%) pour la recherche de cartes similaires
+# Default similarity threshold (%) for similar card search
 search_threshold = 70
 
-# Nombre maximum de résultats par défaut pour la recherche de similarité
+# Default maximum number of results for similarity search
 search_max_results = 20
 
-# Seuil de similarité par défaut (%) pour la détection des doublons
+# Default similarity threshold (%) for duplicate detection
 doubles_threshold = 90
 
 
 # ------------------------------------------------------------------------------
-# [sync_default] - section de synchronisation distante (utilisée par
-# "tktools publish"). Le nom de cette section est libre : il correspond à
-# l'argument "config" passé à la commande "publish" (ex: tktools publish
-# sync_default). On peut définir plusieurs sections de ce type pour publier
-# vers différentes destinations (ex : [sync_prod], [sync_staging], ...).
+# [sync_default] - remote synchronization section (used by
+# "tktools publish"). The name of this section is free: it corresponds to
+# the "config" argument passed to the "publish" command (e.g. tktools publish
+# sync_default). Several sections of this type can be defined to publish
+# to different destinations (e.g. [sync_prod], [sync_staging], ...).
 # ------------------------------------------------------------------------------
 [sync_default]
 
-# Protocole de transfert : ftp, ftps, ftptls ou sftp
+# Transfer protocol: ftp, ftps, ftptls or sftp
 protocol = sftp
 
-# Adresse du serveur distant
+# Remote server address
 host = ftp.example.com
 
-# Port de connexion (par défaut : 21=ftp/ftptls, 990=ftps, 22=sftp)
+# Connection port (default: 21=ftp/ftptls, 990=ftps, 22=sftp)
 port = 22
 
-# Identifiants de connexion
-username = mon_utilisateur
-password = mon_mot_de_passe
+# Login credentials
+username = my_username
+password = my_password
 
-# Chemin vers une clé privée SSH (utilisé uniquement en SFTP, remplace le mot de passe)
+# Path to an SSH private key (used only for SFTP, replaces the password)
 ssh_key_path =
 
-# Dossier distant de base où seront déposés les fichiers
+# Base remote folder where files will be uploaded
 remote_base_dir = /postcards
 
-# Mode passif pour les connexions FTP/FTPS/FTPTLS
+# Passive mode for FTP/FTPS/FTPTLS connections
 passive_mode = true
 
-# Délai d'attente réseau (en secondes)
+# Network timeout (in seconds)
 timeout = 30
 
-# Supprimer côté distant les fichiers qui n'existent plus en local
+# Delete files on the remote side that no longer exist locally
 delete_orphans = false
 
-# Simuler la synchronisation sans transférer réellement les fichiers
+# Simulate synchronization without actually transferring files
 dry_run = false
 
-# Nombre de transferts simultanés lors de la synchronisation d'un dossier
+# Number of simultaneous transfers when syncing a folder
 max_workers = 5
 
-# Suffixe du fichier verrou utilisé pour le verrouillage distant (fetch_locked)
+# Suffix of the lock file used for remote locking (fetch_locked)
 lock_suffix = .lck
 
-# Intervalle (en secondes) entre deux vérifications du verrou distant
+# Interval (in seconds) between two checks of the remote lock
 lock_poll_interval = 2.0
 
-# Délai (en secondes) avant abandon si le verrou distant reste posé trop longtemps
+# Delay (in seconds) before giving up if the remote lock stays in place too long
 lock_timeout = 60.0

@@ -114,6 +114,11 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
             else:
                 app.config[key.upper()] = value
 
+    # Identifiant du site (siteId) pour le suivi Matomo, utilisé dans
+    # base.html avec [flask] site_matomo. Clé de configuration :
+    # [flask] id_matomo (1 par défaut si non renseigné).
+    app.config.setdefault("ID_MATOMO", "1")
+
     app.config.setdefault("RECENT_DAYS", 30)
     app.config.setdefault("RECENT_FALLBACK_COUNT", 20)
     app.config.setdefault("SMTP_PORT", 587)

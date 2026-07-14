@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-14 01:13+0200\n"
+"POT-Creation-Date: 2026-07-14 17:51+0200\n"
 "PO-Revision-Date: 2026-06-14 12:15+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -23,7 +23,7 @@ msgid "Nouveau message depuis le site"
 msgstr "New message from the website"
 
 #: src/flpostcards/blueprints/contact/__init__.py:85
-#: src/flpostcards/templates/base.html:61
+#: src/flpostcards/templates/base.html:79
 msgid "Contact"
 msgstr "Contact"
 
@@ -62,7 +62,7 @@ msgid "Galerie - %(collection)s"
 msgstr "Gallery - %(collection)s"
 
 #: src/flpostcards/blueprints/gallery/__init__.py:112
-#: src/flpostcards/templates/base.html:49
+#: src/flpostcards/templates/base.html:67
 msgid "Galerie"
 msgstr "Gallery"
 
@@ -118,7 +118,7 @@ msgid "Carte - %(collection)s"
 msgstr "Map - %(collection)s"
 
 #: src/flpostcards/blueprints/map/__init__.py:34
-#: src/flpostcards/templates/base.html:57
+#: src/flpostcards/templates/base.html:75
 msgid "Carte"
 msgstr "Map"
 
@@ -132,7 +132,7 @@ msgid "Diaporama - %(collection)s"
 msgstr "Slideshow - %(collection)s"
 
 #: src/flpostcards/blueprints/slideshow/__init__.py:46
-#: src/flpostcards/templates/base.html:45
+#: src/flpostcards/templates/base.html:63
 msgid "Diaporama"
 msgstr "Slideshow"
 
@@ -141,7 +141,7 @@ msgid "Toutes mes cartes postales en diaporama."
 msgstr "All my postcards in a slideshow."
 
 #: src/flpostcards/blueprints/travel/__init__.py:22
-#: src/flpostcards/templates/base.html:53
+#: src/flpostcards/templates/base.html:71
 msgid "Parcours"
 msgstr "Itineraries"
 
@@ -160,7 +160,7 @@ msgstr "Itinerary #%(id)s"
 msgid "Cartes postales"
 msgstr "Postcards"
 
-#: src/flpostcards/templates/base.html:41
+#: src/flpostcards/templates/base.html:59
 msgid "Accueil"
 msgstr "Home"
 

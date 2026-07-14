@@ -1090,6 +1090,65 @@ class Model:
 
         return existed
 
+    def delete_card_full(
+        self,
+        card_id: str | int,
+        file_format: str = "tiff",
+        update_index: bool = True,
+    ) -> bool:
+        """
+        Supprime complètement une carte : entrée en base/JSON
+        (cf. :meth:`delete_card`), images sources (``cards/``),
+        vignettes (``size_div1``, ``size_div3``, ``size_div10``,
+        ``size_div20``) et référence dans l'index de recherche par
+        similarité, si celui-ci est disponible.
+
+        :param file_format: extension des images sources dans ``cards/``
+            (ex. ``"tiff"``).
+        :param update_index: si True, retire la carte de l'index de
+            similarité (``postcards.pkl``) lorsque le module
+            correspondant est disponible.
+
+        Retourne True si la carte existait en base/JSON et a été
+        supprimée, False si elle n'existait pas.
+        """
+        card_id = str(card_id)
+
+        existed = self.delete_card(card_id)
+
+        for rv in ("R", "V"):
+            fname = self.cards_dir / f"{card_id}_{rv}.{file_format}"
+            if fname.is_file():
+                fname.unlink()
+
+        for d in ("size_div1", "size_div3", "size_div10", "size_div20"):
+            for rv in ("R", "V"):
+                fname = self.datadir / d / f"{card_id}_{rv}.png"
+                if fname.is_file():
+                    fname.unlink()
+
+        if update_index:
+            try:
+                from libpostcards.similar import PostcardSearcher
+            except ImportError:
+                logger.debug(
+                    "delete_card_full : PostcardSearcher indisponible, "
+                    "index non mis à jour pour la carte %s", card_id,
+                )
+            else:
+                index_file = self.datadir / "postcards.pkl"
+                searcher = PostcardSearcher(datadir=self.datadir)
+                searcher.load_index(index_file)
+                searcher.index.pop(
+                    searcher.relative_path(
+                        self.datadir / "size_div1" / f"{card_id}_R.png"
+                    ),
+                    None,
+                )
+                searcher.save_index(index_file)
+
+        return existed
+
     def _remove_double(self, card_id: str, double_id: str) -> None:
         """
         Retire ``double_id`` du champ ``doubles`` de la carte ``card_id``

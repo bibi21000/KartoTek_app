@@ -75,13 +75,7 @@ def sync(common):
 @click.pass_obj
 def delete(common, pcid):
     _("""Delete card in database and its linked json and images""")
-    from pathlib import Path
     from libpostcards.model import Model
-    try:
-        from libpostcards.similar import PostcardSearcher
-        SEARCHER_AVAILABLE = True
-    except ImportError:
-        SEARCHER_AVAILABLE = False
 
     if pcid is None:
         raise RuntimeError(_("Give me id(s) to add"))
@@ -89,32 +83,7 @@ def delete(common, pcid):
     click.confirm(_('Do you want to delete card with id {pcid} ?').format(pcid=pcid), abort=True)
 
     with Model(common.datadir) as data:
-        data.delete_card(pcid)
-
-    datadir = Path(common.datadir)
-
-    for rv in ['R', 'V']:
-        fname = datadir / 'cards' / ('%s_%s.%s' % (pcid, rv, common.file_format))
-        if fname.is_file() is True:
-            fname.unlink()
-
-    for d in ['size_div1', 'size_div3', 'size_div10', 'size_div20']:
-        for rv in ['R', 'V']:
-            fname = datadir / d / ('%s_%s.png' % (pcid, rv))
-            if fname.is_file() is True:
-                fname.unlink()
-
-    if SEARCHER_AVAILABLE:
-
-        index_file = Path(common.datadir) / "postcards.pkl"
-        searcher = PostcardSearcher(datadir=common.datadir)
-        searcher.load_index(
-            index_file
-        )
-        searcher.index.pop(searcher.relative_path(datadir / 'size_div1' / ('%s_R.png' % (pcid))), None)
-        searcher.save_index(
-            index_file
-        )
+        data.delete_card_full(pcid, file_format=common.file_format)
 
 @cli.group()
 def scan():
