@@ -230,8 +230,11 @@ def sitemap():
     Sitemap XML listant les pages principales, toutes les fiches cartes
     (avec lastmod basé sur mdate) et les parcours.
 
-    Les doublons ne sont pas listés séparément : ils ne possèdent pas
-    de fiche propre destinée à être indexée (cf. list_unique_cards).
+    Les pages de "listing" (accueil, diaporama, galerie, index des
+    parcours, carte) n'ont pas de date de mise à jour qui leur est
+    propre : on leur affecte la date de modification la plus récente
+    parmi toutes les cartes, ce qui donne à Google une info utile pour
+    prioriser le re-crawl plutôt que d'omettre <lastmod>.
     """
     from flask import Response
 
@@ -242,13 +245,18 @@ def sitemap():
     def add(loc: str, lastmod: int | None = None, changefreq: str | None = None):
         urls.append({"loc": loc, "lastmod": lastmod, "changefreq": changefreq})
 
-    add(url_for("home.index", _external=True), changefreq="daily")
-    add(url_for("slideshow.index", _external=True), changefreq="daily")
-    add(url_for("gallery.index", _external=True), changefreq="weekly")
-    add(url_for("travel.index", _external=True), changefreq="weekly")
-    add(url_for("map.index", _external=True), changefreq="weekly")
+    all_cards = model.list_unique_cards()
 
-    for card in model.list_unique_cards():
+    card_mdates = [c.get("mdate") for c in all_cards if c.get("mdate")]
+    last_card_update = max(card_mdates) if card_mdates else None
+
+    add(url_for("home.index", _external=True), lastmod=last_card_update, changefreq="daily")
+    add(url_for("slideshow.index", _external=True), lastmod=last_card_update, changefreq="daily")
+    add(url_for("gallery.index", _external=True), lastmod=last_card_update, changefreq="weekly")
+    add(url_for("travel.index", _external=True), lastmod=last_card_update, changefreq="weekly")
+    add(url_for("map.index", _external=True), lastmod=last_card_update, changefreq="weekly")
+
+    for card in all_cards:
         add(
             url_for("home.card_detail", card_id=card["id"], _external=True),
             lastmod=card.get("mdate"),
@@ -258,6 +266,7 @@ def sitemap():
     for travel in model.list_travels():
         add(
             url_for("travel.detail", travel_id=travel["id"], _external=True),
+            lastmod=travel.get("mdate") or last_card_update,
             changefreq="monthly",
         )
 
@@ -308,7 +317,7 @@ def card_detail(card_id: str):
     if back_url.startswith("/gallery/"):
         back_label = gettext("Retour à la galerie")
     elif back_url.startswith("/travel/"):
-        back_label = gettext("Retour au parcours")
+        back_label = gettext("Retour à la balade")
     elif back_url.startswith("/map/") or back_url.startswith("/map?"):
         back_label = gettext("Retour à la carte")
     elif back_url.startswith("/slideshow/") or back_url.startswith("/slideshow?"):

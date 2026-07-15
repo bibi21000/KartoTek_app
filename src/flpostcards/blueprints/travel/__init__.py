@@ -19,7 +19,7 @@ def index():
     model = current_app.model
     travels = model.list_travels()
 
-    page_title = gettext("Parcours")
+    page_title = gettext("Balades dans le temps au fil des cartes postales")
 
     return render_template(
         "travel/index.html",

@@ -17,7 +17,9 @@ venv-min:
 
 venv: venv-min
 	./venv/bin/pip install -e .[similar]
+	./venv/bin/pip install -e .[ocr]
 	./venv/bin/pip install -e .[travel]
+	./venv/bin/pip install -e .[objdetect]
 
 venv-dev: venv
 	./venv/bin/pip install -e .[dev]
@@ -65,14 +67,20 @@ i18n-compile:
 i18n: i18n-update i18n-compile
 
 dockerfl:
-	docker build -f docker_flpostcards/Dockerfile -t flpostcards .
+	docker build -f docker_flpostcards/Dockerfile \
+	--build-arg HTTP_PROXY=http://172.17.0.1:3128 \
+	--build-arg HTTPS_PROXY=http://172.17.0.1:3128 \
+	-t flpostcards .
 
 dockerfl-push:
 	docker tag flpostcards localhost:5000/flpostcards
 	docker push localhost:5000/flpostcards
 
 dockersim:
-	docker build -f docker_simpostcards/Dockerfile -t simpostcards .
+	docker build -f docker_simpostcards/Dockerfile \
+	--build-arg HTTP_PROXY=http://172.17.0.1:3128 \
+	--build-arg HTTPS_PROXY=http://172.17.0.1:3128 \
+	-t simpostcards .
 
 dockersim-push:
 	docker tag simpostcards localhost:5000/simpostcards

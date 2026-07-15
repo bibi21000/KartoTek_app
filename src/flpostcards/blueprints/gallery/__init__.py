@@ -106,10 +106,10 @@ def index():
 
     if collection:
         page_title = gettext(
-            "Galerie - %(collection)s", collection=collection
+            "Toutes les cartes postales - %(collection)s", collection=collection
         )
     else:
-        page_title = gettext("Galerie")
+        page_title = gettext("Toutes les cartes postales")
 
     return render_template(
         "gallery/index.html",

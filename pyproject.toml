@@ -20,7 +20,7 @@ maintainers = [
   {name = "bibi21000", email = "bibi21000@gmail.com"}
 ]
 description = "Scan, manage and publish your postcards collection"
-version = "3.2.7"
+version = "3.2.9"
 requires-python = ">=3.9"
 dependencies = [
     "pillow",
@@ -51,42 +51,30 @@ flask = [
 ]
 tkinter = [
     "click",
-    "pytesseract",
-    "deskew",
-    "opencv-python-headless",
-    "click",
     "numpy",
     "tqdm",
-    #"zstandard",
     "pyzstd",
     "paramiko",
 ]
 ocr = [
-    "python-doctr[torch]",
-    "transformers",
-    "torch",
-    "torchvision",
-    "wordfreq",
-    "kraken",
+    "pytesseract",
 ]
 similar = [
     "requests",
-    "pillow",
     "imagehash",
     "torch",
     "torchvision",
     "open-clip-torch",
 ]
-scan = [
-    "opencv-python",
-    "numpy"
+objdetect = [
+    "ultralytics",
+    "transformers",
+    "torch",
 ]
-simpostcards = [
-    "Flask",
+scan = [
+    "deskew",
     "opencv-python-headless",
-    "numpy",
-    "pillow",
-    "imagehash",
+    "numpy"
 ]
 travel = [
     "ortools"

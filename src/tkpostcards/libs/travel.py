@@ -25,7 +25,8 @@ class ParcoursCartes:
 
         datadir = Path(datadir)
         model = Model(datadir)
-        data = model.list_cards()
+        data = model.list_unique_cards_with_coord(limit=1000)
+
         with open(datadir / "travels.json", "r", encoding="utf-8") as f:
             travels = json.load(f)
 

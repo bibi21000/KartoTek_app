@@ -68,7 +68,7 @@
         </a>
         <a class="site-nav-link {% if request.endpoint and request.endpoint.startswith('travel.') %}active{% endif %}"
            href="{{ url_for('travel.index') }}">
-            {{ _("Parcours") }}
+            {{ _("Balades") }}
         </a>
         <a class="site-nav-link {% if request.endpoint and request.endpoint.startswith('map.') %}active{% endif %}"
            href="{{ url_for('map.index') }}">
