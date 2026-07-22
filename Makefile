@@ -1,5 +1,5 @@
 #!/usr/bin/make -f
--include makefile.local
+-include Makefile.local
 
 ifndef PYTHON
 PYTHON:=python3
@@ -12,8 +12,8 @@ VERSION := $(shell grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr
 venv-min:
 	${PYTHON} -m venv venv
 	./venv/bin/pip install -e .
-	./venv/bin/pip install -e .[tkinter]
-	./venv/bin/pip install -e .[scan]
+	./venv/bin/pip install -e .[ktmanager]
+	./venv/bin/pip install -e .[ktimport]
 
 venv: venv-min
 	./venv/bin/pip install -e .[similar]
@@ -22,9 +22,9 @@ venv: venv-min
 	./venv/bin/pip install -e .[objdetect]
 
 venv-dev: venv
-	./venv/bin/pip install -e .[dev]
-	./venv/bin/pip install -e .[simpostcards]
 	./venv/bin/pip install -e .[flask]
+	./venv/bin/pip install -e .[prod]
+	./venv/bin/pip install -e .[dev]
 
 serve:
 	./venv/bin/python src/run.py
@@ -66,25 +66,4 @@ i18n-compile:
 
 i18n: i18n-update i18n-compile
 
-dockerfl:
-	docker build -f docker_flpostcards/Dockerfile \
-	--build-arg HTTP_PROXY=http://172.17.0.1:3128 \
-	--build-arg HTTPS_PROXY=http://172.17.0.1:3128 \
-	-t flpostcards .
 
-dockerfl-push:
-	docker tag flpostcards localhost:5000/flpostcards
-	docker push localhost:5000/flpostcards
-
-dockersim:
-	docker build -f docker_simpostcards/Dockerfile \
-	--build-arg HTTP_PROXY=http://172.17.0.1:3128 \
-	--build-arg HTTPS_PROXY=http://172.17.0.1:3128 \
-	-t simpostcards .
-
-dockersim-push:
-	docker tag simpostcards localhost:5000/simpostcards
-	docker push localhost:5000/simpostcards
-
-AppImage:
-	PYTHON_BIN=/usr/bin/python3 TESSERACT_LANGS=fra+eng+deu ./build-appimage.sh --gpu=cpu --proxy=http://127.0.0.1:3128

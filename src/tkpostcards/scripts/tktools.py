@@ -112,13 +112,20 @@ def prepare(common, prefix, white_threshold):
 
 @scan.command()
 @click.argument('pcid', default=None, nargs=-1)
+@click.option('--ocr-langs', default=None,
+              help=_("OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"). "
+                     "Defaults to the [tkimport] ocr_langs setting in the "
+                     "configuration file."))
 @click.pass_obj
-def add(common, pcid):
+def add(common, pcid, ocr_langs):
     _("""Add postcards""")
     from ..libs.scan_add import add_pairs
 
     if pcid is None:
         raise RuntimeError(_("Give me id(s) to add"))
+
+    if not ocr_langs:
+        ocr_langs = common.conf.get("tkimport", "ocr_langs", fallback="fra")
 
     ids = split_ids(pcid)
     pbar = tqdm(total=len(ids), desc=_("Postcards"))
@@ -129,7 +136,8 @@ def add(common, pcid):
         pbar.update(1)
 
     try:
-        add_pairs(common.datadir, common.importdir, ids, on_progress=_on_progress)
+        add_pairs(common.datadir, common.importdir, ids, on_progress=_on_progress,
+                  ocr_lang=ocr_langs)
     finally:
         pbar.close()
 
@@ -150,6 +158,7 @@ def create(common, level, archive):
 
     with tqdm(unit='B', unit_scale=True, desc='Sauvegarde') as pbar:
         PostcardBackup.create_backup(common.datadir,
+            common.conffile,
             archive,
             compression_level=level,
             progress=pbar)
@@ -383,15 +392,22 @@ def duplicates(common, threshold, max_results):
 
 @cli.command()
 @click.argument('pcid', default=None, nargs=-1)
+@click.option('--ocr-langs', default=None,
+              help=_("OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"). "
+                     "Defaults to the [tkimport] ocr_langs setting in the "
+                     "configuration file."))
 @click.pass_obj
-def ocr(common, pcid):
+def ocr(common, pcid, ocr_langs):
     """Redo OCR for postcards"""
     from libpostcards.model import Model
     from ..libs.ocr import PostcardOCR
     if pcid is None:
         raise RuntimeError("Give me a name")
 
-    ocr = PostcardOCR()
+    if not ocr_langs:
+        ocr_langs = common.conf.get("tkimport", "ocr_langs", fallback="fra")
+
+    ocr = PostcardOCR(lang=ocr_langs)
     ids = split_ids(pcid)
 
     pbar = tqdm(total=len(ids), desc="Postcards")

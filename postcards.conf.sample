@@ -96,6 +96,9 @@ white_threshold = 240
 # Interface language (2-letter ISO code). Empty = auto-detect
 language =
 
+# Tesseract languages
+ocr_langs = fra+eng
+
 # Remove files from the import folder once added to the collection
 remove_after_add = false
 

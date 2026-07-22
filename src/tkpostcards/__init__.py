@@ -18,18 +18,18 @@ class Common(object):
         self.conf = config(self.conffile)
 
         if datadir is None:
-            datadir = config().get('DEFAULT', 'datadir', fallback=None)
+            datadir = self.conf.get('DEFAULT', 'datadir', fallback=None)
         self.datadir = os.path.abspath(datadir or 'data')
 
         if importdir is None:
-            importdir = config().get('DEFAULT', 'importdir', fallback=None)
+            importdir = self.conf.get('DEFAULT', 'importdir', fallback=None)
         self.importdir = os.path.abspath(importdir or 'import')
 
         if tmpdir is None:
-            tmpdir = config().get('DEFAULT', 'tmpdir', fallback=None)
+            tmpdir = self.conf.get('DEFAULT', 'tmpdir', fallback=None)
         self.tmpdir = os.path.abspath(tmpdir or 'tmp')
 
-        self.file_format = config().get('DEFAULT', 'file_format', fallback='tiff')
+        self.file_format = self.conf.get('DEFAULT', 'file_format', fallback='tiff')
 
         self.debug = debug
 
@@ -43,4 +43,3 @@ class Common(object):
 def cli(ctx, conffile, datadir, importdir, tmpdir, debug):
     """Command group."""
     ctx.obj = Common(conffile, datadir, importdir, tmpdir, debug)
-

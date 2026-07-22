@@ -77,6 +77,7 @@ DEFAULT_CONFIG = {
     "prefix": "",
     "white_threshold": "240",
     "language": "",
+    "ocr_langs": "fra",
     "remove_after_add": "false",
     "editor_linux": "",
     "editor_macos": "",
@@ -821,8 +822,10 @@ class PostcardImportApp(tk.Tk):
         def _progress(i, total, added):
             self.after(0, self._on_add_progress, i, total, added)
 
+        ocr_langs = self.cfg["tkimport"].get("ocr_langs", "fra") or "fra"
         try:
-            add_pairs(str(self.datadir), self.importdir, ids, on_progress=_progress)
+            add_pairs(str(self.datadir), self.importdir, ids, on_progress=_progress,
+                      ocr_lang=ocr_langs)
             self.after(0, self._on_add_done, None)
         except Exception as exc:
             self.after(0, self._on_add_done, str(exc))
@@ -918,7 +921,7 @@ def main(common, prefix, white_threshold):
 
 def run():
     """Standalone entry point (tkimport script): runs `cli main`."""
-    sys.argv.insert(1, "main")
+    sys.argv.append("main")   # was: sys.argv.insert(1, "main")
     cli()
 
 

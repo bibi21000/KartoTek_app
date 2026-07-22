@@ -10,6 +10,7 @@ import locale
 import logging
 import queue
 import sys
+import textwrap
 import threading
 import webbrowser
 from datetime import date, datetime
@@ -18,6 +19,7 @@ from pathlib import Path
 import click
 import configparser
 import tkinter as tk
+from tkinter import font as tkfont
 from tkinter import messagebox, ttk
 
 from libpostcards.model import Model
@@ -30,6 +32,11 @@ try:
     SEARCHER_AVAILABLE = True
 except ImportError:
     SEARCHER_AVAILABLE = False
+
+try:
+    from .libs.travel import ORTOOLS_AVAILABLE as TRAVEL_AVAILABLE
+except ImportError:
+    TRAVEL_AVAILABLE = False
 
 try:
     from PIL import Image, ImageTk
@@ -895,6 +902,15 @@ class GalleryView(tk.Toplevel):
         self._pending_draw: str | None = None
         self._last_cv_w    = 0   # remembered canvas width
 
+        # Throttled progressive redraw while images stream in from the
+        # background loader (see _poll_queue): we redraw at most every
+        # _DRAW_THROTTLE seconds instead of on every single image, so the
+        # gallery fills in visibly instead of freezing until everything
+        # is loaded.
+        self._dirty         = False
+        self._last_draw_ts  = 0.0
+        self._DRAW_THROTTLE = 0.15  # seconds
+
         import queue
         self._queue: "queue.Queue" = queue.Queue()
 
@@ -1002,25 +1018,46 @@ class GalleryView(tk.Toplevel):
 
     def _poll_queue(self):
         import queue as qm
-        needs_draw = False
+        import time
+        got_item = False
         try:
             while True:
                 item = self._queue.get_nowait()
+                got_item = True
                 if item is None:
                     self._loading = False
                     self._status.set(
                         _("gallery_ready").format(total=len(self._app._ids)))
-                    needs_draw = True
                 else:
                     cid, side, img, done, total = item
                     self._pil[(cid, side)] = img
                     self._status.set(
                         _("gallery_loading").format(done=done, total=total))
-                    needs_draw = True
         except qm.Empty:
             pass
-        if needs_draw:
-            self._schedule_draw()
+
+        if got_item:
+            self._dirty = True
+
+        # Throttled redraw: as long as new images keep arriving we redraw
+        # at most every _DRAW_THROTTLE seconds (instead of endlessly
+        # postponing the redraw like _schedule_draw's debounce would),
+        # so tiles appear progressively while the loader is still running.
+        # Once loading is finished we always draw immediately to show the
+        # final state.
+        if self._dirty:
+            now = time.monotonic()
+            if (not self._loading) or (now - self._last_draw_ts) >= self._DRAW_THROTTLE:
+                self._last_draw_ts = now
+                self._dirty = False
+                if self._pending_draw:
+                    try:
+                        self.after_cancel(self._pending_draw)
+                    except Exception:
+                        pass
+                    self._pending_draw = None
+                self._draw()
+
         if self.winfo_exists():
             self.after(30, self._poll_queue)
 
@@ -1490,9 +1527,9 @@ class PublishConfirmDialog(tk.Toplevel):
         self.resizable(False, False)
 
         self.result: bool = False
-        self.full: bool = full_default
+        self.full: bool = full_default and TRAVEL_AVAILABLE
 
-        self._full_var = tk.BooleanVar(value=full_default)
+        self._full_var = tk.BooleanVar(value=self.full)
 
         tk.Label(self, text=_("publish_confirm_msg"),
                  bg=BG_MAIN, fg=FG_TEXT, font=FONT_LABEL,
@@ -1500,6 +1537,7 @@ class PublishConfirmDialog(tk.Toplevel):
 
         tk.Checkbutton(self, text=_("publish_full_checkbox"),
                        variable=self._full_var,
+                       state=tk.NORMAL if TRAVEL_AVAILABLE else tk.DISABLED,
                        bg=BG_MAIN, fg=FG_TEXT, selectcolor=BG_FIELD,
                        activebackground=BG_MAIN, activeforeground=FG_ACCENT2,
                        font=FONT_LABEL, relief=tk.FLAT,
@@ -1508,10 +1546,10 @@ class PublishConfirmDialog(tk.Toplevel):
         bot = tk.Frame(self, bg=BG_MAIN)
         bot.pack(fill=tk.X, padx=16, pady=(0, 16))
         tk.Button(bot, text=_("btn_publish"), command=self._publish,
-                  bg=FG_ACCENT, fg="#fff", font=FONT_LABEL,
+                  bg=BTN_DIRTY, fg="#fff", font=FONT_LABEL,
                   relief=tk.FLAT, padx=10).pack(side=tk.RIGHT, padx=4)
         tk.Button(bot, text=_("btn_skip_publish"), command=self._skip,
-                  bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
+                  bg=BTN_CLEAN, fg="#fff", font=FONT_LABEL,
                   relief=tk.FLAT, padx=10).pack(side=tk.RIGHT, padx=4)
 
         self.protocol("WM_DELETE_WINDOW", self._skip)
@@ -1803,8 +1841,6 @@ class App(tk.Tk):
         self.collections: list[str] = self._load_collections()
         self.title(_("app_title"))
         self.configure(bg=BG_MAIN)
-        self.geometry("1380x860")
-        self.minsize(1200, 700)
 
         # Application icon
         # wm_class must match the .desktop file's StartupWMClass for GNOME
@@ -1843,6 +1879,7 @@ class App(tk.Tk):
         self._poi_win: "PoiManagerView | None" = None
         self._auth_win: "AuthManagerView | None" = None
         self._travel_win: "TravelManagerView | None" = None
+        self._settings_win: "SettingsView | None" = None
         # Shared PostcardSearcher instance — loaded once, reused by all
         # sub-windows (SearchView, DoublesSearchView) to avoid loading
         # the CLIP model multiple times and saturating GPU memory.
@@ -1861,6 +1898,7 @@ class App(tk.Tk):
             self._scan_ids()
 
         self._build_ui()
+        self._fit_window_to_screen()
         self._nav_filter_var.set(self._nav_collection if self._nav_collection else _("tsearch_all"))
         self._nav_missing_var.set(_("tsearch_all"))
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -1877,6 +1915,48 @@ class App(tk.Tk):
                     parent=self)
             except tk.TclError:
                 print(_("no_cards_msg").format(dir=self.cards_dir))
+
+    # ── Taille de fenêtre ────────────────────────────────────────────────────
+    def _fit_window_to_screen(self):
+        """Dimensionne la fenêtre principale au démarrage :
+
+        taille = min(taille de l'écran, taille nécessaire pour voir
+                     l'intégralité de la barre de navigation / des menus)
+
+        La fenêtre ne dépasse jamais l'écran disponible, mais est aussi
+        large/haute que nécessaire (dans cette limite) pour que la nav bar
+        et son contenu ne soient pas tronqués.
+        """
+        self.update_idletasks()
+
+        # Taille "naturelle" requise pour afficher tous les widgets sans
+        # rien couper (nav bar comprise) — c'est winfo_reqwidth/reqheight
+        # une fois tout empilé (pack) au moins une fois.
+        req_w = self.winfo_reqwidth()
+        req_h = self.winfo_reqheight()
+
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+
+        # Petite marge pour laisser de la place aux bordures/decorations
+        # de fenêtre et à la barre des tâches.
+        avail_w = max(1, screen_w - 20)
+        avail_h = max(1, screen_h - 80)
+
+        target_w = min(req_w, avail_w)
+        target_h = min(req_h, avail_h)
+
+        # Taille minimale raisonnable (sans jamais dépasser l'écran).
+        min_w = min(1200, avail_w)
+        min_h = min(700, avail_h)
+        target_w = max(target_w, min_w)
+        target_h = max(target_h, min_h)
+
+        self.minsize(min_w, min_h)
+
+        x = max(0, (screen_w - target_w) // 2)
+        y = max(0, (screen_h - target_h) // 2)
+        self.geometry(f"{target_w}x{target_h}+{x}+{y}")
 
     # ── Configuration ─────────────────────────────────────────────────────────
     def _load_config(self) -> configparser.ConfigParser:
@@ -2541,7 +2621,10 @@ class App(tk.Tk):
         # The database must be closed before publication starts.
         self.model.close()
 
-        full_default = self.get_search_conf("tkmanager", "publish_full", "0") == "1"
+        full_default = (
+            self.get_search_conf("tkmanager", "publish_full", "0") == "1"
+            and TRAVEL_AVAILABLE
+        )
 
         do_publish, full = False, full_default
         try:
@@ -2588,12 +2671,17 @@ class App(tk.Tk):
         m = tk.Menu(self, tearoff=0, bg=BG_FIELD, fg=FG_TEXT,
                     activebackground=FG_ACCENT, activeforeground="#fff")
         m.add_command(label=_("nav_textsearch"), command=self._open_text_search)
-        m.add_command(label=_("nav_similar"), command=self._open_search)
-        m.add_command(label=_("nav_doubles"), command=self._open_doubles_search)
+        m.add_command(label=_("nav_similar"), command=self._open_search,
+                      state=tk.NORMAL if SEARCHER_AVAILABLE else tk.DISABLED)
+        m.add_command(label=_("nav_doubles"), command=self._open_doubles_search,
+                      state=tk.NORMAL if SEARCHER_AVAILABLE else tk.DISABLED)
         m.add_command(label=_("nav_pois"), command=self._open_poi_manager)
         m.add_command(label=_("nav_auths"), command=self._open_auth_manager)
-        m.add_command(label=_("nav_travels"), command=self._open_travel_manager)
+        m.add_command(label=_("nav_travels"), command=self._open_travel_manager,
+                      state=tk.NORMAL if TRAVEL_AVAILABLE else tk.DISABLED)
         m.add_command(label=_("nav_gallery"), command=self._open_gallery)
+        m.add_separator()
+        m.add_command(label=_("nav_settings"), command=self._open_settings)
 
         # Close the menu as soon as it loses focus (click outside,
         # Escape, etc.) instead of relying on tk_popup's own grab.
@@ -2720,6 +2808,14 @@ class App(tk.Tk):
             self._travel_win.focus_force()
             return
         self._travel_win = TravelManagerView(self, self._t)
+
+    # ── Settings ──────────────────────────────────────────────────────────────
+    def _open_settings(self):
+        if self._settings_win and self._settings_win.winfo_exists():
+            self._settings_win.lift()
+            self._settings_win.focus_force()
+            return
+        self._settings_win = SettingsView(self, self._t)
 
     # ── Viewer ────────────────────────────────────────────────────────────────
     def _open_viewer(self, side: str):
@@ -2855,6 +2951,15 @@ class SearchView(tk.Toplevel):
         self._last_cv_w = 0
         self._pending_draw: str | None = None
 
+        # Progressive thumbnail loading: images are decoded/resized in
+        # background threads and applied to the canvas as they become
+        # ready, instead of blocking _draw() until every thumbnail is
+        # loaded (which is what made them all pop in together).
+        self._img_result_queue: "queue.Queue" = queue.Queue()
+        self._img_pending: set = set()
+        self._img_coords: dict = {}
+        self._draw_gen = 0
+
         # Load saved parameters
         self._def_threshold   = self._app.get_search_conf("tkmanager", "search_threshold", "70")
         self._def_max_results = self._app.get_search_conf("tkmanager", "search_max_results", "20")
@@ -2871,6 +2976,7 @@ class SearchView(tk.Toplevel):
 
         # Use the shared PostcardSearcher from App (loaded once, no GPU reload)
         self._load_index_async()
+        self._poll_img_queue()
 
     # ── Index loading ─────────────────────────────────────────────────────────
     def _load_index_async(self):
@@ -3046,6 +3152,8 @@ class SearchView(tk.Toplevel):
     def _clear_results(self):
         self._results = []
         self._tkimg.clear()
+        self._img_coords = {}
+        self._draw_gen += 1  # invalidate any thumbnails still loading
         self._url_var.set("")
         self._status.set("")
         self._cv.delete("all")
@@ -3074,6 +3182,12 @@ class SearchView(tk.Toplevel):
         if cv_w < 10:
             self._pending_draw = self.after(100, self._draw)
             return
+
+        # Bump the generation so thumbnails still loading for a previous
+        # layout are discarded when they land (their canvas coordinates
+        # would no longer be valid).
+        self._draw_gen += 1
+        self._img_coords = {}
 
         self._cv.delete("all")
         self._hits = []
@@ -3132,7 +3246,7 @@ class SearchView(tk.Toplevel):
             # Image from the provided path directly
             iy0 = by1 + M
             iy1 = iy0 + self.RES_H
-            self._draw_img(path, x0 + M, iy0, x1 - M, iy1)
+            self._draw_img(path, x0 + M, iy0, x1 - M, iy1, pos)
 
             # Clickable area — store the full path for the ImageViewer
             self._hits.append((x0, y0, x1, y1, cid, path))
@@ -3141,34 +3255,81 @@ class SearchView(tk.Toplevel):
         total_h = n_rows * (tile_h + M) + M
         self._cv.configure(scrollregion=(0, 0, cv_w, total_h))
 
-    def _draw_img(self, path: "Path | None", x0: int, y0: int, x1: int, y1: int):
-        """Display the image from its full path (provided by search_url)."""
+    def _draw_img(self, path: "Path | None", x0: int, y0: int, x1: int, y1: int, pos: int):
+        """Display the image from its full path (provided by search_url).
+
+        If the thumbnail is already cached it is drawn immediately.
+        Otherwise a placeholder is shown right away and the decode/resize
+        happens in a background thread; the real thumbnail is swapped in
+        by ``_poll_img_queue`` as soon as it's ready, so results appear
+        one by one instead of all at once after every image has loaded.
+        """
         w = x1 - x0
         h = y1 - y0
         if w <= 0 or h <= 0:
             return
-        self._cv.create_rectangle(x0, y0, x1, y1, fill="#0a0a1a", outline="")
+        tag = f"imgph{pos}"
+        self._cv.create_rectangle(x0, y0, x1, y1, fill="#0a0a1a", outline="", tags=(tag,))
         if path is None or not path.exists():
             self._cv.create_text((x0 + x1) // 2, (y0 + y1) // 2,
-                                 text="—", fill=FG_LABEL, font=("Courier", 9))
+                                 text="—", fill=FG_LABEL, font=("Courier", 9), tags=(tag,))
             return
         # Key = (absolute path, w, h) for the permanent PhotoImage cache
         key = (str(path), w, h)
-        if key not in self._tkimg:
-            pil = load_pil(path, w, h)
-            if pil is None:
-                self._cv.create_text((x0 + x1) // 2, (y0 + y1) // 2,
-                                     text="—", fill=FG_LABEL, font=("Courier", 9))
-                return
-            pw, ph = pil.size
-            scale   = min(w / pw, h / ph)
-            nw, nh  = max(1, int(pw * scale)), max(1, int(ph * scale))
-            resized = pil.resize((nw, nh), Image.LANCZOS)
-            self._tkimg[key] = ImageTk.PhotoImage(resized)
+        if key in self._tkimg:
+            self._place_image(key, x0, y0, w, h)
+            return
+        # Not cached yet: show a lightweight placeholder and load it async.
+        self._cv.create_text((x0 + x1) // 2, (y0 + y1) // 2,
+                             text="…", fill=FG_LABEL, font=("Courier", 12), tags=(tag,))
+        self._img_coords[key] = (x0, y0, w, h, tag)
+        if key not in self._img_pending:
+            self._img_pending.add(key)
+            threading.Thread(target=self._load_img_worker,
+                             args=(self._draw_gen, key, path, w, h),
+                             daemon=True).start()
+
+    def _place_image(self, key: tuple, x0: int, y0: int, w: int, h: int):
+        """Draw an already-cached PhotoImage centered in the given box."""
         tkimg = self._tkimg[key]
         cx = x0 + (w - tkimg.width())  // 2
         cy = y0 + (h - tkimg.height()) // 2
         self._cv.create_image(cx, cy, image=tkimg, anchor=tk.NW)
+
+    def _load_img_worker(self, gen: int, key: tuple, path: "Path", w: int, h: int):
+        """Background thread: decode + resize a thumbnail (no Tk calls here,
+        PhotoImage must only be created on the main thread)."""
+        pil = load_pil(path, w, h)
+        if pil is not None:
+            try:
+                pw, ph = pil.size
+                scale  = min(w / pw, h / ph)
+                nw, nh = max(1, int(pw * scale)), max(1, int(ph * scale))
+                pil = pil.resize((nw, nh), Image.LANCZOS)
+            except Exception:
+                pil = None
+        self._img_result_queue.put((gen, key, pil))
+
+    def _poll_img_queue(self):
+        """Runs continuously (via `after`) on the main thread: pick up
+        thumbnails finished by background workers and draw them in as
+        soon as they arrive, one at a time."""
+        if not self.winfo_exists():
+            return
+        try:
+            while True:
+                gen, key, pil = self._img_result_queue.get_nowait()
+                self._img_pending.discard(key)
+                if gen == self._draw_gen and pil is not None:
+                    self._tkimg[key] = ImageTk.PhotoImage(pil)
+                    coords = self._img_coords.get(key)
+                    if coords:
+                        x0, y0, w, h, tag = coords
+                        self._cv.delete(tag)
+                        self._place_image(key, x0, y0, w, h)
+        except queue.Empty:
+            pass
+        self.after(30, self._poll_img_queue)
 
     # ── Click → ImageViewer ───────────────────────────────────────────────────
     def _on_click(self, event):
@@ -4367,6 +4528,154 @@ class AuthManagerView(tk.Toplevel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  Application settings ([DEFAULT] section of postcards.conf)
+# ─────────────────────────────────────────────────────────────────────────────
+class SettingsView(tk.Toplevel):
+    """Edit the application-wide settings stored in the ``[DEFAULT]``
+    section of ``postcards.conf`` (shared with ``tkscan``, ``tktools`` and
+    the web app, thanks to configparser's ``[DEFAULT]`` inheritance):
+
+    - ``collections``: comma-separated list of collection names, used
+      throughout tkmanager (filters, checkboxes on each card, ...).
+    - ``collections_map``: comma-separated subset of ``collections``
+      shown on the public map (web app).
+    - ``file_format``: extension of the scanned images stored in
+      ``datadir/cards`` (e.g. ``tiff``).
+    """
+
+    FIELDS = (
+        # (config key, label key, help key)
+        ("collections",     "settings_collections",     "settings_collections_help"),
+        ("collections_map", "settings_collections_map", "settings_collections_map_help"),
+    )
+
+    FORMAT_CHOICES = ("tiff", "jpg", "jpeg", "png")
+
+    def __init__(self, parent: "App", t):
+        super().__init__(parent)
+        self._app = parent
+        self._t   = t
+        self.title(_("settings_title"))
+        self.configure(bg=BG_MAIN)
+        self.geometry("560x420")
+        self.minsize(480, 360)
+        self.resizable(True, True)
+
+        self._vars: dict[str, tk.StringVar] = {}
+
+        self._build_ui()
+        self._reload()
+
+        self.transient(parent)
+        self.grab_set()
+
+    # ── Construction ─────────────────────────────────────────────────────────
+    def _build_ui(self):
+        body = tk.Frame(self, bg=BG_CARD)
+        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        tk.Label(body, text=_("settings_title"), bg=BG_CARD, fg=FG_ACCENT,
+                 font=FONT_TITLE).pack(anchor=tk.W, padx=10, pady=(10, 6))
+
+        for key, label_key, help_key in self.FIELDS:
+            frm = tk.Frame(body, bg=BG_CARD)
+            frm.pack(fill=tk.X, padx=10, pady=6)
+            tk.Label(frm, text=_(label_key), bg=BG_CARD, fg=FG_LABEL,
+                     font=FONT_LABEL, anchor=tk.W).pack(anchor=tk.W)
+            var = tk.StringVar()
+            entry = tk.Entry(frm, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
+                              insertbackground=FG_TEXT, font=FONT_INPUT,
+                              relief=tk.FLAT)
+            entry.pack(fill=tk.X, pady=(2, 0))
+            context_menu(entry)
+            tk.Label(frm, text=_(help_key), bg=BG_CARD, fg=FG_LABEL,
+                     font=FONT_SMALL, anchor=tk.W, wraplength=520,
+                     justify=tk.LEFT).pack(anchor=tk.W, pady=(2, 0))
+            self._vars[key] = var
+
+        # file_format: dropdown rather than free text (must match one of
+        # the extensions the rest of the app knows how to read/write).
+        fmt_frm = tk.Frame(body, bg=BG_CARD)
+        fmt_frm.pack(fill=tk.X, padx=10, pady=6)
+        tk.Label(fmt_frm, text=_("settings_file_format"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, anchor=tk.W).pack(anchor=tk.W)
+        fmt_var = tk.StringVar()
+        fmt_combo = ttk.Combobox(fmt_frm, textvariable=fmt_var,
+                                  values=self.FORMAT_CHOICES, state="normal")
+        fmt_combo.pack(fill=tk.X, pady=(2, 0))
+        tk.Label(fmt_frm, text=_("settings_file_format_help"), bg=BG_CARD,
+                 fg=FG_LABEL, font=FONT_SMALL, anchor=tk.W, wraplength=520,
+                 justify=tk.LEFT).pack(anchor=tk.W, pady=(2, 0))
+        self._vars["file_format"] = fmt_var
+
+        tk.Label(body, text=_("settings_restart_notice"), bg=BG_CARD,
+                 fg=FG_ACCENT2, font=FONT_SMALL, anchor=tk.W,
+                 wraplength=520, justify=tk.LEFT).pack(
+            anchor=tk.W, padx=10, pady=(10, 0))
+
+        actions = tk.Frame(self, bg=BG_MAIN)
+        actions.pack(fill=tk.X, padx=10, pady=10, side=tk.BOTTOM)
+        tk.Button(actions, text=_("btn_save_close"), command=self._save,
+                  bg=FG_ACCENT, fg="#fff", font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10, cursor="hand2").pack(
+            side=tk.LEFT, padx=(0, 6))
+        tk.Button(actions, text=_("btn_cancel"), command=self.destroy,
+                  bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10, cursor="hand2").pack(side=tk.LEFT)
+
+        self._status = tk.StringVar(value="")
+        tk.Label(self, textvariable=self._status, bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_SMALL, anchor=tk.W, padx=8).pack(fill=tk.X)
+
+    # ── Data ──────────────────────────────────────────────────────────────────
+    def _reload(self):
+        cfg = self._app.config_parser
+        for key, var in self._vars.items():
+            var.set(cfg.get("DEFAULT", key, fallback=""))
+
+    def _save(self):
+        collections_raw = self._vars["collections"].get()
+        map_raw = self._vars["collections_map"].get()
+        file_format = self._vars["file_format"].get().strip()
+
+        collections = [c.strip() for c in collections_raw.split(",") if c.strip()]
+        collections_map = [c.strip() for c in map_raw.split(",") if c.strip()]
+
+        unknown = [c for c in collections_map if c not in collections]
+        if unknown:
+            messagebox.showwarning(
+                _("info_title"),
+                _("settings_map_unknown").format(names=", ".join(unknown)),
+                parent=self)
+            return
+
+        if not file_format:
+            messagebox.showwarning(_("info_title"), _("settings_format_required"),
+                                    parent=self)
+            return
+
+        cfg = self._app.config_parser
+        try:
+            cfg.set("DEFAULT", "collections", ", ".join(collections))
+            cfg.set("DEFAULT", "collections_map", ", ".join(collections_map))
+            cfg.set("DEFAULT", "file_format", file_format)
+            with open(self._app.conf_file, "w", encoding="utf-8") as f:
+                cfg.write(f)
+        except Exception as e:
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            return
+
+        # Keep the in-memory collection list in sync for the rest of this
+        # session (checkboxes, filters); other settings (collections_map,
+        # file_format) are only read by other tools/processes and take
+        # effect on their next run.
+        self._app.collections = collections
+
+        self._status.set(_("settings_saved"))
+        self.destroy()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  Full-text search over the database
 # ─────────────────────────────────────────────────────────────────────────────
 class TextSearchView(tk.Toplevel):
@@ -4374,8 +4683,17 @@ class TextSearchView(tk.Toplevel):
 
     - Free text: words are searched with AND across all text fields.
     - Optional collection filter (dropdown).
-    - Results listed in a Listbox; double-click or Open button → editor.
+    - Results shown as a thumbnail grid: recto image + title underneath.
+      Clicking the image opens it full-size (like the similarity search);
+      clicking the title loads that card into the main editor window.
     """
+
+    # Tile dimensions (canvas pixels)
+    RES_W   = 150
+    RES_H   = 105
+    RES_PAD = 8
+    HDR_H   = 18
+    TITLE_H = 34
 
     def __init__(self, parent: "App", t):
         super().__init__(parent)
@@ -4383,16 +4701,38 @@ class TextSearchView(tk.Toplevel):
         self._t   = t
         self.title(_("tsearch_title"))
         self.configure(bg=BG_MAIN)
-        self.geometry("800x560")
-        self.minsize(600, 400)
+        self.geometry("900x640")
+        self.minsize(600, 420)
         self.resizable(True, True)
 
-        self._results: list[int] = []   # list of ids
+        self._results: list[dict] = []   # [{cid, title, colls, dlink}, …]
+
+        self._tkimg: dict[tuple, "ImageTk.PhotoImage"] = {}
+        self._hits_img: list[tuple] = []     # (x0, y0, x1, y1, cid)
+        self._hits_title: list[tuple] = []   # (x0, y0, x1, y1, cid)
+        self._last_cv_w = 0
+        self._pending_draw: str | None = None
+
+        # Progressive thumbnail loading: images are decoded/resized in
+        # background threads and drawn in as they become ready, instead
+        # of blocking until every thumbnail in the grid has loaded (see
+        # SearchView, which uses the same technique).
+        self._img_result_queue: "queue.Queue" = queue.Queue()
+        self._img_pending: set = set()
+        self._img_coords: dict = {}
+        self._draw_gen = 0
+
+        # Used to measure how many characters fit per title line so long
+        # titles wrap onto at most 2 lines with an ellipsis instead of
+        # overflowing into the thumbnail below.
+        self._title_font = tkfont.Font(family="Courier", size=9)
 
         self._build_form()
         self._build_results()
         self._build_statusbar()
+        self._cv.bind("<Configure>", self._on_cv_configure)
         self._run_search()
+        self._poll_img_queue()
 
     # ── Construction ─────────────────────────────────────────────────────────
     def _build_form(self):
@@ -4443,28 +4783,20 @@ class TextSearchView(tk.Toplevel):
 
         tk.Frame(self, bg=FG_ACCENT, height=1).pack(fill=tk.X)
 
+    # ── Results area (canvas grid, same technique as SearchView) ───────────────
     def _build_results(self):
-        frm = tk.Frame(self, bg=BG_MAIN)
-        frm.pack(fill=tk.BOTH, expand=True, padx=8, pady=6)
-
-        # Listbox + scrollbar
+        frm = tk.Frame(self, bg=BG_GALLERY)
+        frm.pack(fill=tk.BOTH, expand=True)
         vsb = ttk.Scrollbar(frm, orient=tk.VERTICAL)
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        self._lb = tk.Listbox(frm, bg=BG_INPUT, fg=FG_TEXT,
-                              selectbackground=FG_ACCENT,
-                              font=FONT_INPUT, relief=tk.FLAT,
-                              activestyle="none",
-                              yscrollcommand=vsb.set)
-        self._lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        vsb.config(command=self._lb.yview)
-        self._lb.bind("<Double-Button-1>", lambda _: self._open_selected())
-
-        # Open button
-        bot = tk.Frame(self, bg=BG_MAIN)
-        bot.pack(fill=tk.X, padx=8, pady=(0, 8))
-        tk.Button(bot, text=_("tsearch_open"), command=self._open_selected,
-                  bg=FG_ACCENT, fg="#fff", font=FONT_LABEL,
-                  relief=tk.FLAT, padx=12, cursor="hand2").pack(side=tk.LEFT)
+        self._cv = tk.Canvas(frm, bg=BG_GALLERY, highlightthickness=0,
+                             yscrollcommand=vsb.set, cursor="hand2")
+        self._cv.pack(fill=tk.BOTH, expand=True)
+        vsb.config(command=self._cv.yview)
+        self._cv.bind("<MouseWheel>", self._wheel)
+        self._cv.bind("<Button-4>",   self._wheel)
+        self._cv.bind("<Button-5>",   self._wheel)
+        self._cv.bind("<Button-1>",   self._on_click)
 
     def _build_statusbar(self):
         self._status = tk.StringVar(value="")
@@ -4478,6 +4810,19 @@ class TextSearchView(tk.Toplevel):
         coll_filter = self._coll_var.get()
         all_label   = _("tsearch_all")
 
+        # Avoid hitting the DB and loading thumbnails on every keystroke,
+        # and avoid showing anything at all when the window first opens:
+        # require at least 3 characters before running the search / drawing
+        # any thumbnail (an empty query no longer lists everything).
+        if len(query) < 3:
+            self._results = []
+            self._tkimg.clear()
+            self._img_coords = {}
+            self._draw_gen += 1
+            self._status.set(_("tsearch_type_more"))
+            self._draw()
+            return
+
         collection = None if (not coll_filter or coll_filter == all_label) else coll_filter
         search = query or None
 
@@ -4488,8 +4833,6 @@ class TextSearchView(tk.Toplevel):
             return
 
         self._results = []
-        self._lb.delete(0, tk.END)
-
         seen: set[int] = set()
 
         for data in cards:
@@ -4516,31 +4859,239 @@ class TextSearchView(tk.Toplevel):
                 if entry_cid in seen:
                     continue
                 seen.add(entry_cid)
-                self._results.append(entry_cid)
                 title = entry_data.get("title") or entry_data.get("title2") or ""
                 colls = ", ".join(entry_data.get("collections") or [])
                 doubles = entry_data.get("doubles") or []
-                label = f"#{entry_cid:>5}  {title[:35]}"
-                if colls:
-                    label += f"  [{colls}]"
-                if doubles and entry_cid != cid:
-                    label += f"  ↔#{cid}"
-                self._lb.insert(tk.END, label)
+                dlink = cid if (doubles and entry_cid != cid) else None
+                self._results.append({
+                    "cid": entry_cid, "title": title,
+                    "colls": colls, "dlink": dlink,
+                })
 
         n = len(self._results)
         self._status.set(_("tsearch_results").format(n=n))
+
+        # Fresh search: drop old thumbnails/coords and redraw from scratch.
+        self._tkimg.clear()
+        self._img_coords = {}
+        self._draw_gen += 1
+        self._draw()
 
     def _clear(self):
         self._query_var.set("")
         self._coll_var.set(_("tsearch_all"))
         self._run_search()
 
-    # ── Open ──────────────────────────────────────────────────────────────────
-    def _open_selected(self):
-        sel = self._lb.curselection()
-        if not sel:
+    # ── Canvas drawing ────────────────────────────────────────────────────────
+    def _on_cv_configure(self, event):
+        if event.width != self._last_cv_w:
+            self._last_cv_w = event.width
+            self._schedule_draw()
+
+    def _schedule_draw(self):
+        if self._pending_draw:
+            try:
+                self.after_cancel(self._pending_draw)
+            except Exception:
+                pass
+        self._pending_draw = self.after(60, self._draw)
+
+    def _draw(self):
+        self._pending_draw = None
+        if not self.winfo_exists():
             return
-        cid = self._results[sel[0]]
+        self.update_idletasks()
+        cv_w = self._cv.winfo_width()
+        if cv_w < 10:
+            self._pending_draw = self.after(100, self._draw)
+            return
+
+        # Bump the generation so thumbnails still loading for a previous
+        # layout are discarded when they land.
+        self._draw_gen += 1
+        self._img_coords = {}
+
+        self._cv.delete("all")
+        self._hits_img = []
+        self._hits_title = []
+
+        if not self._results:
+            self._cv.create_text(cv_w // 2, 60,
+                                 text=_("search_empty"),
+                                 fill=FG_LABEL, font=FONT_TITLE)
+            self._cv.configure(scrollregion=(0, 0, cv_w, 120))
+            return
+
+        M      = self.RES_PAD
+        tile_w = self.RES_W + 2 * M
+        cols   = max(1, cv_w // tile_w)
+        tile_w = (cv_w - M * (cols + 1)) // cols
+        tile_h = self.HDR_H + self.RES_H + self.TITLE_H + 2 * M
+
+        for pos, item in enumerate(self._results):
+            cid   = item["cid"]
+            title = item["title"]
+            colls = item["colls"]
+            dlink = item["dlink"]
+            path  = self._app._find_gallery_image(cid, "R")
+
+            row, col = divmod(pos, cols)
+            x0 = M + col * (tile_w + M)
+            y0 = M + row * (tile_h + M)
+            x1 = x0 + tile_w
+            y1 = y0 + tile_h
+
+            self._cv.create_rectangle(x0, y0, x1, y1,
+                                      fill=BG_CARD, outline=GALL_BORDER, width=1)
+
+            # Header: id [+ collections] [+ double link]
+            self._cv.create_rectangle(x0, y0, x1, y0 + self.HDR_H,
+                                      fill=BG_FIELD, outline="")
+            hdr = f"#{cid}"
+            if colls:
+                hdr += f"  [{colls}]"
+            if dlink is not None:
+                hdr += f"  ↔#{dlink}"
+            self._cv.create_text(x0 + 5, y0 + self.HDR_H // 2,
+                                 text=hdr[:40], anchor=tk.W,
+                                 fill=FG_ACCENT2, font=("Courier", 8, "bold"))
+
+            # Image (clickable → full-size ImageViewer)
+            iy0 = y0 + self.HDR_H + M
+            iy1 = iy0 + self.RES_H
+            self._draw_img(path, x0 + M, iy0, x1 - M, iy1, pos)
+            self._hits_img.append((x0 + M, iy0, x1 - M, iy1, cid))
+
+            # Title (clickable → load card in the main editor)
+            ty0 = iy1 + 2
+            disp_title = title.strip() or "—"
+            wrapped = self._wrap_title(disp_title, tile_w - 8)
+            self._cv.create_text((x0 + x1) // 2, ty0 + 4,
+                                 text=wrapped, anchor=tk.N,
+                                 fill=FG_LINK, font=("Courier", 9, "underline"),
+                                 justify=tk.CENTER)
+            self._hits_title.append((x0, ty0, x1, y1, cid))
+
+        n_rows  = (len(self._results) + cols - 1) // cols
+        total_h = n_rows * (tile_h + M) + M
+        self._cv.configure(scrollregion=(0, 0, cv_w, total_h))
+
+    def _wrap_title(self, text: str, max_w: int, max_lines: int = 2) -> str:
+        """Wrap ``text`` to fit within ``max_w`` pixels, at most
+        ``max_lines`` lines, truncating the last line with an ellipsis if
+        there's more text than fits. Prevents long titles from spilling
+        over into the thumbnail of the row below."""
+        char_w = max(1, self._title_font.measure("0"))
+        chars_per_line = max(4, max_w // char_w)
+
+        lines = textwrap.wrap(text, width=chars_per_line) or [""]
+        if len(lines) <= max_lines:
+            return "\n".join(lines)
+
+        kept = lines[:max_lines]
+        last = kept[-1].rstrip()
+        # Make room for the ellipsis so the line still fits max_w.
+        limit = max(1, chars_per_line - 1)
+        if len(last) > limit:
+            last = last[:limit].rstrip()
+        kept[-1] = last + "…"
+        return "\n".join(kept)
+
+    def _draw_img(self, path: "Path | None", x0: int, y0: int, x1: int, y1: int, pos: int):
+        """Display the recto thumbnail for one tile.
+
+        Draws a placeholder immediately and, if the thumbnail isn't cached
+        yet, decodes/resizes it in a background thread; `_poll_img_queue`
+        swaps in the real image as soon as it's ready, so tiles fill in
+        one by one instead of all appearing together after a delay.
+        """
+        w = x1 - x0
+        h = y1 - y0
+        if w <= 0 or h <= 0:
+            return
+        tag = f"imgph{pos}"
+        self._cv.create_rectangle(x0, y0, x1, y1, fill="#0a0a1a", outline="", tags=(tag,))
+        if path is None or not path.exists():
+            self._cv.create_text((x0 + x1) // 2, (y0 + y1) // 2,
+                                 text="—", fill=FG_LABEL, font=("Courier", 9), tags=(tag,))
+            return
+        key = (str(path), w, h)
+        if key in self._tkimg:
+            self._place_image(key, x0, y0, w, h)
+            return
+        self._cv.create_text((x0 + x1) // 2, (y0 + y1) // 2,
+                             text="…", fill=FG_LABEL, font=("Courier", 12), tags=(tag,))
+        self._img_coords[key] = (x0, y0, w, h, tag)
+        if key not in self._img_pending:
+            self._img_pending.add(key)
+            threading.Thread(target=self._load_img_worker,
+                             args=(self._draw_gen, key, path, w, h),
+                             daemon=True).start()
+
+    def _place_image(self, key: tuple, x0: int, y0: int, w: int, h: int):
+        tkimg = self._tkimg[key]
+        cx = x0 + (w - tkimg.width())  // 2
+        cy = y0 + (h - tkimg.height()) // 2
+        self._cv.create_image(cx, cy, image=tkimg, anchor=tk.NW)
+
+    def _load_img_worker(self, gen: int, key: tuple, path: "Path", w: int, h: int):
+        """Background thread: decode + resize (no Tk calls here — a
+        PhotoImage may only be created on the main thread)."""
+        pil = load_pil(path, w, h)
+        if pil is not None:
+            try:
+                pw, ph = pil.size
+                scale  = min(w / pw, h / ph)
+                nw, nh = max(1, int(pw * scale)), max(1, int(ph * scale))
+                pil = pil.resize((nw, nh), Image.LANCZOS)
+            except Exception:
+                pil = None
+        self._img_result_queue.put((gen, key, pil))
+
+    def _poll_img_queue(self):
+        if not self.winfo_exists():
+            return
+        try:
+            while True:
+                gen, key, pil = self._img_result_queue.get_nowait()
+                self._img_pending.discard(key)
+                if gen == self._draw_gen and pil is not None:
+                    self._tkimg[key] = ImageTk.PhotoImage(pil)
+                    coords = self._img_coords.get(key)
+                    if coords:
+                        x0, y0, w, h, tag = coords
+                        self._cv.delete(tag)
+                        self._place_image(key, x0, y0, w, h)
+        except queue.Empty:
+            pass
+        self.after(30, self._poll_img_queue)
+
+    def _wheel(self, e):
+        if e.num == 4 or e.delta > 0:
+            self._cv.yview_scroll(-3, "units")
+        else:
+            self._cv.yview_scroll(3, "units")
+
+    # ── Click handling ───────────────────────────────────────────────────────
+    def _on_click(self, event):
+        cy = self._cv.canvasy(event.y)
+        cx = self._cv.canvasx(event.x)
+        for (x0, y0, x1, y1, cid) in self._hits_img:
+            if x0 <= cx <= x1 and y0 <= cy <= y1:
+                self._open_image(cid)
+                return
+        for (x0, y0, x1, y1, cid) in self._hits_title:
+            if x0 <= cx <= x1 and y0 <= cy <= y1:
+                self._open_card(cid)
+                return
+
+    def _open_image(self, cid: int):
+        path = self._app._find_image(cid, "R")
+        if path is None or not path.exists():
+            return
+        ImageViewer(self, path, f"#{cid}", self._t)
+
+    def _open_card(self, cid: int):
         if cid not in self._app._ids:
             messagebox.showwarning(_("info_title"),
                                    _("goto_not_found").format(id=cid),
@@ -4560,10 +5111,11 @@ class TextSearchView(tk.Toplevel):
 @click.pass_obj
 def main(common):
     """Postcard collection viewer and editor."""
+    cfg = configparser.ConfigParser()
+    cfg.read(common.conffile, encoding="utf-8")
+
     datadir = common.datadir
     if datadir is None:
-        cfg = configparser.ConfigParser()
-        cfg.read(common.conffile, encoding="utf-8")
         datadir = cfg.get("DEFAULT", "datadir", fallback="data")
 
     dp = Path(datadir)
@@ -4583,5 +5135,5 @@ def main(common):
 
 def run():
     """Standalone entry point (tkmanager script): runs `cli main`."""
-    sys.argv.insert(1, "main")
+    sys.argv.append("main")   # was: sys.argv.insert(1, "main")
     cli()

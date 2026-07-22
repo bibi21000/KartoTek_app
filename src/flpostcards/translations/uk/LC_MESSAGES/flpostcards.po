@@ -1,18 +1,20 @@
-# English translations for PROJECT.
-# Copyright (C) 2026 ORGANIZATION
-# This file is distributed under the same license as the PROJECT project.
+# Ukrainian translations for flpostcards.
+# Copyright (C) 2026 bibi21000
+# This file is distributed under the same license as the flpostcards
+# project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: PROJECT VERSION\n"
-"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-22 22:36+0200\n"
-"PO-Revision-Date: 2026-06-14 12:15+0000\n"
+"Project-Id-Version: flpostcards 3.4.2\n"
+"Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
+"POT-Creation-Date: 2026-07-22 00:24+0200\n"
+"PO-Revision-Date: 2026-07-22 11:56+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: en\n"
-"Language-Team: en <LL@li.org>\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language: uk\n"
+"Language-Team: uk <LL@li.org>\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -20,183 +22,183 @@ msgstr ""
 
 #: src/flpostcards/blueprints/contact/__init__.py:49
 msgid "Nouveau message depuis le site"
-msgstr "New message from the website"
+msgstr "Нове повідомлення з сайту"
 
 #: src/flpostcards/blueprints/contact/__init__.py:85
 #: src/flpostcards/templates/base.html:79
 msgid "Contact"
-msgstr "Contact"
+msgstr "Контакти"
 
 #: src/flpostcards/blueprints/contact/__init__.py:94
 #: src/flpostcards/blueprints/contact/__init__.py:120
 msgid "Votre message a bien été envoyé, merci !"
-msgstr "Your message has been sent, thank you!"
+msgstr "Ваше повідомлення успішно надіслано, дякуємо!"
 
 #: src/flpostcards/blueprints/contact/__init__.py:101
 msgid "Le nom est obligatoire."
-msgstr "Name is required."
+msgstr "Ім'я є обов'язковим."
 
 #: src/flpostcards/blueprints/contact/__init__.py:103
 msgid "L'adresse email est obligatoire."
-msgstr "Email address is required."
+msgstr "Адреса електронної пошти є обов'язковою."
 
 #: src/flpostcards/blueprints/contact/__init__.py:105
 msgid "L'adresse email n'est pas valide."
-msgstr "Invalid email address."
+msgstr "Адреса електронної пошти недійсна."
 
 #: src/flpostcards/blueprints/contact/__init__.py:107
 msgid "Le message ne peut pas être vide."
-msgstr "Message cannot be empty."
+msgstr "Повідомлення не може бути порожнім."
 
 #: src/flpostcards/blueprints/contact/__init__.py:117
 msgid "L'envoi du message a échoué. Réessayez plus tard."
-msgstr "Failed to send message. Please try again later."
+msgstr "Не вдалося надіслати повідомлення. Спробуйте пізніше."
 
 #: src/flpostcards/blueprints/contact/__init__.py:129
 msgid "Contactez-moi à propos de ma collection de cartes postales."
-msgstr "Contact me about my postcard collection."
+msgstr "Зв'яжіться зі мною щодо моєї колекції листівок."
 
 #: src/flpostcards/blueprints/gallery/__init__.py:109
 #, python-format
 msgid "Toutes les cartes postales - %(collection)s"
-msgstr "All postcards - %(collection)s"
+msgstr "Усі листівки - %(collection)s"
 
 #: src/flpostcards/blueprints/gallery/__init__.py:112
 msgid "Toutes les cartes postales"
-msgstr "All postcards"
+msgstr "Усі листівки"
 
 #: src/flpostcards/blueprints/gallery/__init__.py:132
 msgid "Parcourez ma collection de cartes postales anciennes."
-msgstr "Browse my collection of old postcards."
+msgstr "Перегляньте мою колекцію старовинних листівок."
 
 #: src/flpostcards/blueprints/home/__init__.py:57
 #, python-format
 msgid "Ma collection de cartes postales - %(collection)s"
-msgstr "My postcard collection - %(collection)s"
+msgstr "Моя колекція листівок - %(collection)s"
 
 #: src/flpostcards/blueprints/home/__init__.py:61
 msgid "Ma collection de cartes postales"
-msgstr "My postcard collection"
+msgstr "Моя колекція листівок"
 
 #: src/flpostcards/blueprints/home/__init__.py:91
 #: src/flpostcards/templates/base.html:12
 msgid "Découvrez ma collection de cartes postales anciennes."
-msgstr "Discover my collection of old postcards."
+msgstr "Відкрийте для себе мою колекцію старовинних листівок."
 
 #: src/flpostcards/blueprints/home/__init__.py:306
 #: src/flpostcards/templates/card/detail.html:3
 #: src/flpostcards/templates/gallery/index.html:89
 #, python-format
 msgid "Carte #%(id)s"
-msgstr "Card #%(id)s"
+msgstr "Листівка №%(id)s"
 
 #: src/flpostcards/blueprints/home/__init__.py:318
 msgid "Retour à la galerie"
-msgstr "Back to gallery"
+msgstr "Повернутися до галереї"
 
 #: src/flpostcards/blueprints/home/__init__.py:320
 msgid "Retour à la balade"
-msgstr "Back to the walk"
+msgstr "Повернутися до подорожі"
 
 #: src/flpostcards/blueprints/home/__init__.py:322
 msgid "Retour à la carte"
-msgstr "Back to map"
+msgstr "Повернутися до карти"
 
 #: src/flpostcards/blueprints/home/__init__.py:324
 #: src/flpostcards/templates/card/detail.html:12
 msgid "Retour au diaporama"
-msgstr "Back to slideshow"
+msgstr "Повернутися до слайд-шоу"
 
 #: src/flpostcards/blueprints/map/__init__.py:30
 msgid "Carte - Points d'intérêt"
-msgstr "Map - Points of interest"
+msgstr "Карта - Цікаві місця"
 
 #: src/flpostcards/blueprints/map/__init__.py:32
 #, python-format
 msgid "Carte - %(collection)s"
-msgstr "Map - %(collection)s"
+msgstr "Карта - %(collection)s"
 
 #: src/flpostcards/blueprints/map/__init__.py:34
 #: src/flpostcards/templates/base.html:75
 msgid "Carte"
-msgstr "Map"
+msgstr "Карта"
 
 #: src/flpostcards/blueprints/map/__init__.py:59
 msgid "Localisez ma collection de cartes postales sur la carte."
-msgstr "Locate my postcard collection on the map."
+msgstr "Знайдіть мою колекцію листівок на карті."
 
 #: src/flpostcards/blueprints/slideshow/__init__.py:43
 #, python-format
 msgid "Diaporama - %(collection)s"
-msgstr "Slideshow - %(collection)s"
+msgstr "Слайд-шоу - %(collection)s"
 
 #: src/flpostcards/blueprints/slideshow/__init__.py:46
 #: src/flpostcards/templates/base.html:63
 msgid "Diaporama"
-msgstr "Slideshow"
+msgstr "Слайд-шоу"
 
 #: src/flpostcards/blueprints/slideshow/__init__.py:55
 msgid "Toutes mes cartes postales en diaporama."
-msgstr "All my postcards in a slideshow."
+msgstr "Усі мої листівки у форматі слайд-шоу."
 
 #: src/flpostcards/blueprints/travel/__init__.py:22
 msgid "Balades dans le temps au fil des cartes postales"
-msgstr "Strolls through time, one postcard at a time"
+msgstr "Подорожі в часі крізь листівки"
 
 #: src/flpostcards/blueprints/travel/__init__.py:30
 #: src/flpostcards/blueprints/travel/__init__.py:70
 msgid "Suivez mes parcours à travers ma collection de cartes postales."
-msgstr "Follow my journeys through my collection of old postcards."
+msgstr "Слідкуйте за моїми подорожами через мою колекцію листівок."
 
 #: src/flpostcards/blueprints/travel/__init__.py:49
 #, python-format
 msgid "Parcours #%(id)s"
-msgstr "Itinerary #%(id)s"
+msgstr "Подорож №%(id)s"
 
 #: src/flpostcards/templates/base.html:6 src/flpostcards/templates/base.html:11
 #: src/flpostcards/templates/card/detail.html:5
 msgid "Cartes postales"
-msgstr "Postcards"
+msgstr "Листівки"
 
 #: src/flpostcards/templates/base.html:59
 msgid "Accueil"
-msgstr "Home"
+msgstr "Головна"
 
 #: src/flpostcards/templates/base.html:67
 msgid "Galerie"
-msgstr "Gallery"
+msgstr "Галерея"
 
 #: src/flpostcards/templates/base.html:71
 msgid "Balades"
-msgstr "Strolls"
+msgstr "Подорожі"
 
 #: src/flpostcards/templates/card/detail.html:10
 msgid "Retour"
-msgstr "Back"
+msgstr "Назад"
 
 #: src/flpostcards/templates/card/detail.html:15
 msgid "Cliquer pour agrandir"
-msgstr "Click to enlarge"
+msgstr "Натисніть, щоб збільшити"
 
 #: src/flpostcards/templates/card/detail.html:19
 #: src/flpostcards/templates/gallery/index.html:94
 #, python-format
 msgid "Recto de la carte %(id)s"
-msgstr "Front of card %(id)s"
+msgstr "Лицьова сторона листівки %(id)s"
 
 #: src/flpostcards/templates/card/detail.html:23
 #: src/flpostcards/templates/gallery/index.html:100
 #, python-format
 msgid "Verso de la carte %(id)s"
-msgstr "Back of card %(id)s"
+msgstr "Зворотна сторона листівки %(id)s"
 
 #: src/flpostcards/templates/card/detail.html:25
 msgid "Afficher l'autre face"
-msgstr "Show the other side"
+msgstr "Показати іншу сторону"
 
 #: src/flpostcards/templates/card/detail.html:28
 msgid "Aperçu de l'autre face"
-msgstr "Preview of the other side"
+msgstr "Попередній перегляд іншої сторони"
 
 #: src/flpostcards/templates/card/detail.html:61
 msgid "OpenStreetMap"
@@ -212,179 +214,158 @@ msgstr "Street View"
 
 #: src/flpostcards/templates/card/detail.html:85
 msgid "Aperçu du recto"
-msgstr "Front preview"
+msgstr "Попередній перегляд лицьової сторони"
 
 #: src/flpostcards/templates/card/detail.html:86
 msgid "Aperçu du verso"
-msgstr "Back preview"
+msgstr "Попередній перегляд зворотної сторони"
 
 #: src/flpostcards/templates/contact/index.html:17
 msgid "Nom"
-msgstr "Name"
+msgstr "Ім'я"
 
 #: src/flpostcards/templates/contact/index.html:23
 msgid "Email"
-msgstr "Email"
+msgstr "Електронна пошта"
 
 #: src/flpostcards/templates/contact/index.html:29
 msgid "Sujet"
-msgstr "Subject"
+msgstr "Тема"
 
 #: src/flpostcards/templates/contact/index.html:34
 msgid "Message"
-msgstr "Message"
+msgstr "Повідомлення"
 
 #: src/flpostcards/templates/contact/index.html:42
 msgid "Site web"
-msgstr "Website"
+msgstr "Веб-сайт"
 
 #: src/flpostcards/templates/contact/index.html:46
 msgid "Envoyer"
-msgstr "Send"
+msgstr "Надіслати"
 
 #: src/flpostcards/templates/contact/index.html:50
 msgid "Site propulsé et hébergé par"
-msgstr "Site powered and hosted by"
+msgstr "Сайт створено та розміщено за допомогою"
 
 #: src/flpostcards/templates/gallery/index.html:12
 #, python-format
 msgid "%(count)d carte"
-msgstr "%(count)d card"
+msgstr "%(count)d листівка"
 
 #: src/flpostcards/templates/gallery/index.html:12
 #: src/flpostcards/templates/travel/index.html:31
 #, python-format
 msgid "%(count)d cartes"
-msgstr "%(count)d cards"
+msgstr "%(count)d листівок"
 
 #: src/flpostcards/templates/gallery/index.html:18
 msgid "Recherche"
-msgstr "Search"
+msgstr "Пошук"
 
 #: src/flpostcards/templates/gallery/index.html:24
 msgid "Rechercher..."
-msgstr "Search..."
+msgstr "Пошук..."
 
 #: src/flpostcards/templates/gallery/index.html:31
 #: src/flpostcards/templates/home/index.html:22
 #: src/flpostcards/templates/map/index.html:16
 #: src/flpostcards/templates/slideshow/index.html:18
 msgid "Collection"
-msgstr "Collection"
+msgstr "Колекція"
 
 #: src/flpostcards/templates/gallery/index.html:34
 #: src/flpostcards/templates/home/index.html:25
 #: src/flpostcards/templates/map/index.html:19
 #: src/flpostcards/templates/slideshow/index.html:21
 msgid "Toutes les collections"
-msgstr "All collections"
+msgstr "Усі колекції"
 
 #: src/flpostcards/templates/gallery/index.html:46
 msgid "Affichage"
-msgstr "Display"
+msgstr "Відображення"
 
 #: src/flpostcards/templates/gallery/index.html:49
 msgid "Recto / verso"
-msgstr "Front / back"
+msgstr "Лицьова / зворотна сторона"
 
 #: src/flpostcards/templates/gallery/index.html:52
 msgid "Recto"
-msgstr "Front"
+msgstr "Лицьова сторона"
 
 #: src/flpostcards/templates/gallery/index.html:55
 msgid "Verso"
-msgstr "Back"
+msgstr "Зворотна сторона"
 
 #: src/flpostcards/templates/gallery/index.html:61
 msgid "Doublons"
-msgstr "Duplicates"
+msgstr "Дублікати"
 
 #: src/flpostcards/templates/gallery/index.html:64
 msgid "Sans doublons"
-msgstr "Without duplicates"
+msgstr "Без дублікатів"
 
 #: src/flpostcards/templates/gallery/index.html:67
 msgid "Avec doublons"
-msgstr "With duplicates"
+msgstr "З дублікатами"
 
 #: src/flpostcards/templates/gallery/index.html:73
 msgid "Cartes par page"
-msgstr "Cards per page"
+msgstr "Листівок на сторінку"
 
 #: src/flpostcards/templates/gallery/index.html:77
 #, python-format
 msgid "%(n)d par page"
-msgstr "%(n)d per page"
+msgstr "%(n)d на сторінку"
 
 #: src/flpostcards/templates/gallery/index.html:116
 msgid "Première page"
-msgstr "First page"
+msgstr "Перша сторінка"
 
 #: src/flpostcards/templates/gallery/index.html:141
 msgid "Dernière page"
-msgstr "Last page"
+msgstr "Остання сторінка"
 
 #: src/flpostcards/templates/gallery/index.html:152
 msgid "Aucune carte ne correspond à ces critères."
-msgstr "No card matches these criteria."
+msgstr "Жодна листівка не відповідає цим критеріям."
 
 #: src/flpostcards/templates/home/index.html:12
 #: src/flpostcards/templates/slideshow/index.html:12
 msgid "Verso de la carte"
-msgstr "Back of the card"
+msgstr "Зворотна сторона листівки"
 
 #: src/flpostcards/templates/home/index.html:49
 msgid "Ajoutée le"
-msgstr "Added on"
+msgstr "Додано"
 
 #: src/flpostcards/templates/map/index.html:27
 msgid "Points d'intérêt"
-msgstr "Points of interest"
+msgstr "Цікаві місця"
 
 #: src/flpostcards/templates/travel/detail.html:23
 msgid "Toutes les balades"
-msgstr "All walks"
+msgstr "Усі подорожі"
 
 #: src/flpostcards/templates/travel/detail.html:26
 #: src/flpostcards/templates/travel/detail.html:50
 msgid "Mettre en pause"
-msgstr "Pause"
+msgstr "Призупинити"
 
 #: src/flpostcards/templates/travel/detail.html:49
 msgid "Suivant"
-msgstr "Next"
+msgstr "Наступний"
 
 #: src/flpostcards/templates/travel/detail.html:51
 msgid "Reprendre"
-msgstr "Resume"
+msgstr "Продовжити"
 
 #: src/flpostcards/templates/travel/index.html:29
 #, python-format
 msgid "%(distance)s km"
-msgstr "%(distance)s km"
+msgstr "%(distance)s км"
 
 #: src/flpostcards/templates/travel/index.html:38
 msgid "Aucun parcours disponible."
-msgstr "No itinerary available."
-
-#~ msgid "Filtrer"
-#~ msgstr "Filter"
-
-#~ msgid "Précédent"
-#~ msgstr "Previous"
-
-#~ msgid "Page %(page)d / %(pages)d"
-#~ msgstr "Page %(page)d / %(pages)d"
-
-#~ msgid "Galerie - %(collection)s"
-#~ msgstr "Gallery - %(collection)s"
-
-#~ msgid "Parcours"
-#~ msgstr "Itineraries"
-
-#~ msgid "Retour au parcours"
-#~ msgstr "Back to itinerary"
-
-#~ msgid "Tous les parcours"
-#~ msgstr "All itineraries"
+msgstr "Немає доступних подорожей."
 

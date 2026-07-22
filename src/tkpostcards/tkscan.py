@@ -99,9 +99,18 @@ def _list_scanners_scanimage() -> list[str]:
 
 def _list_scanners_windows() -> list[str]:
     try:
+        import pythoncom  # type: ignore
         import win32com.client  # type: ignore
-        wia = win32com.client.Dispatch("WIA.DeviceManager")
-        return [d.Properties("Name").Value for d in wia.DeviceInfos]
+        # list_scanners() runs inside a background threading.Thread (see
+        # _refresh_scanners_bg). COM requires CoInitialize on every thread
+        # that uses it - without this, Dispatch() raises silently and the
+        # bare except below used to swallow it, so no scanner was ever found.
+        pythoncom.CoInitialize()
+        try:
+            wia = win32com.client.Dispatch("WIA.DeviceManager")
+            return [d.Properties("Name").Value for d in wia.DeviceInfos]
+        finally:
+            pythoncom.CoUninitialize()
     except Exception:
         return []
 
@@ -201,24 +210,32 @@ def _scan_scanimage(scanner_name: str, resolution: int, fmt: str, dest_path: Pat
 
 def _scan_windows(scanner_name: str, resolution: int, fmt: str, dest_path: Path) -> Path:
     try:
+        import pythoncom  # type: ignore
         import win32com.client  # type: ignore
-        wia = win32com.client.Dispatch("WIA.DeviceManager")
-        device = None
-        for info in wia.DeviceInfos:
-            if info.Properties("Name").Value == scanner_name:
-                device = info.Connect()
-                break
-        if device is None:
-            raise RuntimeError("Scanner not found")
-        item = device.Items[1]
-        item.Properties("Horizontal Resolution").Value = resolution
-        item.Properties("Vertical Resolution").Value = resolution
-        image = item.Transfer()
-        tmp = str(dest_path.with_suffix(".bmp"))
-        image.SaveFile(tmp)
-        img = Image.open(tmp)
-        _save_image(img, fmt, dest_path)
-        os.remove(tmp)
+        # Same reasoning as _list_scanners_windows: do_scan() is always
+        # called from a background thread, so COM needs an explicit
+        # CoInitialize on that thread before Dispatch() will work.
+        pythoncom.CoInitialize()
+        try:
+            wia = win32com.client.Dispatch("WIA.DeviceManager")
+            device = None
+            for info in wia.DeviceInfos:
+                if info.Properties("Name").Value == scanner_name:
+                    device = info.Connect()
+                    break
+            if device is None:
+                raise RuntimeError("Scanner not found")
+            item = device.Items[1]
+            item.Properties("Horizontal Resolution").Value = resolution
+            item.Properties("Vertical Resolution").Value = resolution
+            image = item.Transfer()
+            tmp = str(dest_path.with_suffix(".bmp"))
+            image.SaveFile(tmp)
+            img = Image.open(tmp)
+            _save_image(img, fmt, dest_path)
+            os.remove(tmp)
+        finally:
+            pythoncom.CoUninitialize()
     except Exception as exc:
         raise RuntimeError(f"WIA scan error: {exc}") from exc
     return dest_path
@@ -653,11 +670,14 @@ class PostcardScannerApp(tk.Tk):
         self._batch_running = False
         self._batch_paused = False
         self._batch_thread: threading.Thread | None = None
+        self._active_scan_thread: threading.Thread | None = None
+        self._quit_pending = False
         self._stop_event  = threading.Event()
         self._pause_event = threading.Event()
         self._skip_event  = threading.Event()   # skip countdown -> scan now
         self._countdown_id: str | None = None
         self._remaining: int = 0
+        self._alive = True  # False once the window has started closing
 
         self._build_ui()
         self._load_settings_to_ui()
@@ -936,10 +956,29 @@ class PostcardScannerApp(tk.Tk):
 
     # ── Scanner refresh ─────────────────────────────────────────────────────
 
+    def _safe_after(self, delay: int, func: callable, *args) -> None:
+        """Schedule `func` on the Tk main loop, but only if the window is
+        still alive.
+
+        Background threads (scanner refresh, scan, preview, batch) call this
+        instead of self.after() directly. Without this guard, a thread that
+        is still running when the window is closed can call self.after()
+        after self.destroy() has already torn down the Tk interpreter,
+        raising "RuntimeError: main thread is not in main loop".
+        """
+        if not self._alive:
+            return
+        try:
+            self.after(delay, func, *args)
+        except RuntimeError:
+            # Window was destroyed concurrently between the check above and
+            # this call - safe to ignore.
+            pass
+
     def _refresh_scanners_bg(self) -> None:
         def worker():
             scanners = list_scanners()
-            self.after(0, self._update_scanner_list, scanners)
+            self._safe_after(0, self._update_scanner_list, scanners)
         threading.Thread(target=worker, daemon=True).start()
 
     def _update_scanner_list(self, scanners: list[str]) -> None:
@@ -1012,10 +1051,10 @@ class PostcardScannerApp(tk.Tk):
         except ValueError:
             crop_px = 0
 
-        self.after(0, self._set_status, self._("Scanning..."))
+        self._safe_after(0, self._set_status, self._("Scanning..."))
         try:
             if scanner:
-                self.after(0, self._log, f"-> {scanner} @ {resolution} dpi -> {dest_path.name}")
+                self._safe_after(0, self._log, f"-> {scanner} @ {resolution} dpi -> {dest_path.name}")
                 do_scan(scanner, resolution, fmt, dest_path,
                         scan_area=area, crop_border=crop_px,
                         jpeg_quality=int(self._jpeg_quality_var.get() or 85),
@@ -1023,10 +1062,10 @@ class PostcardScannerApp(tk.Tk):
                         tiff_compression=self._tiff_compress_var.get() or "deflate")
             else:
                 simulate_scan(dest_path, fmt)
-                self.after(0, self._log, f"! {self._('Simulated scan (no scanner)')}: {dest_path.name}")
-            self.after(0, self._on_scan_success, dest_path)
+                self._safe_after(0, self._log, f"! {self._('Simulated scan (no scanner)')}: {dest_path.name}")
+            self._safe_after(0, self._on_scan_success, dest_path)
         except Exception as exc:
-            self.after(0, self._on_scan_error, str(exc))
+            self._safe_after(0, self._on_scan_error, str(exc))
 
     def _on_scan_success(self, path: Path) -> None:
         self._set_status(self._("Scan complete"))
@@ -1042,7 +1081,8 @@ class PostcardScannerApp(tk.Tk):
 
     def _manual_scan(self) -> None:
         self._save_settings_from_ui()
-        threading.Thread(target=self._do_scan, daemon=True).start()
+        self._active_scan_thread = threading.Thread(target=self._do_scan, daemon=True)
+        self._active_scan_thread.start()
 
     # ── Preview (no save) ───────────────────────────────────────────────────
 
@@ -1052,7 +1092,8 @@ class PostcardScannerApp(tk.Tk):
         self._save_settings_from_ui()
         self._scan_btn.config(state=tk.DISABLED)
         self._preview_btn.config(state=tk.DISABLED)
-        threading.Thread(target=self._do_preview_scan, daemon=True).start()
+        self._active_scan_thread = threading.Thread(target=self._do_preview_scan, daemon=True)
+        self._active_scan_thread.start()
 
     def _do_preview_scan(self) -> None:
         """Run one scan cycle into a throwaway temp file, load it into
@@ -1079,14 +1120,14 @@ class PostcardScannerApp(tk.Tk):
         except ValueError:
             crop_px = 0
 
-        self.after(0, self._set_status, self._("Previewing..."))
+        self._safe_after(0, self._set_status, self._("Previewing..."))
 
         with tempfile.NamedTemporaryFile(suffix=f".{fmt}", delete=False) as tmp:
             tmp_path = Path(tmp.name)
 
         try:
             if scanner:
-                self.after(0, self._log, f"-> {self._('Preview')}: {scanner} @ {resolution} dpi")
+                self._safe_after(0, self._log, f"-> {self._('Preview')}: {scanner} @ {resolution} dpi")
                 do_scan(scanner, resolution, fmt, tmp_path,
                         scan_area=area, crop_border=crop_px,
                         jpeg_quality=int(self._jpeg_quality_var.get() or 85),
@@ -1094,21 +1135,21 @@ class PostcardScannerApp(tk.Tk):
                         tiff_compression=self._tiff_compress_var.get() or "deflate")
             else:
                 simulate_scan(tmp_path, fmt)
-                self.after(0, self._log, f"! {self._('Simulated preview (no scanner)')}")
+                self._safe_after(0, self._log, f"! {self._('Simulated preview (no scanner)')}")
 
             # Load fully into memory so the temp file can be removed right away.
             img = Image.open(tmp_path)
             img.load()
-            self.after(0, self._show_preview, img)
-            self.after(0, self._set_status, self._("Preview complete"))
+            self._safe_after(0, self._show_preview, img)
+            self._safe_after(0, self._set_status, self._("Preview complete"))
         except Exception as exc:
-            self.after(0, self._on_preview_error, str(exc))
+            self._safe_after(0, self._on_preview_error, str(exc))
         finally:
             try:
                 tmp_path.unlink(missing_ok=True)
             except Exception:
                 pass
-            self.after(0, self._preview_scan_done)
+            self._safe_after(0, self._preview_scan_done)
 
     def _preview_scan_done(self) -> None:
         self._scan_btn.config(state=tk.NORMAL)
@@ -1178,9 +1219,9 @@ class PostcardScannerApp(tk.Tk):
                 remaining = int(end_time - time.time())
                 if remaining <= 0:
                     break
-                self.after(0, self._update_countdown, remaining)
+                self._safe_after(0, self._update_countdown, remaining)
                 time.sleep(0.25)
-        self.after(0, self._batch_stopped)
+        self._safe_after(0, self._batch_stopped)
 
     def _update_countdown(self, remaining: int) -> None:
         if self._batch_paused:
@@ -1236,9 +1277,48 @@ class PostcardScannerApp(tk.Tk):
         self._log_text.config(state=tk.DISABLED)
 
     def _on_quit(self) -> None:
+        if self._quit_pending:
+            # Close was already requested once; a scan/batch is still
+            # finishing up in the background - ignore repeat clicks.
+            return
+
         self._save_settings_from_ui()
         if self._batch_running:
             self._stop_event.set()
+
+        if self._threads_still_running():
+            # A scan, preview, or batch cycle is in progress. Don't destroy
+            # the window out from under its worker thread (that's what
+            # caused the "main thread is not in main loop" crash) - instead
+            # wait for it to finish, then close. This uses Tk's own after()
+            # polling loop rather than Thread.join(), so the GUI stays
+            # responsive and this works identically on Windows, macOS and
+            # Linux.
+            self._quit_pending = True
+            for btn in (self._scan_btn, self._preview_btn, self._start_btn,
+                        self._pause_btn, self._stop_btn):
+                btn.config(state=tk.DISABLED)
+            self._set_status(self._("Finishing scan before closing..."))
+            self.after(150, self._check_quit_ready)
+        else:
+            self._finalize_quit()
+
+    def _threads_still_running(self) -> bool:
+        return any(t is not None and t.is_alive()
+                   for t in (self._batch_thread, self._active_scan_thread))
+
+    def _check_quit_ready(self) -> None:
+        if self._threads_still_running():
+            self.after(150, self._check_quit_ready)
+        else:
+            self._finalize_quit()
+
+    def _finalize_quit(self) -> None:
+        # Mark the window as no longer alive *before* destroying it, so any
+        # background thread (scanner refresh, scan, preview, batch) that
+        # calls self._safe_after() from here on is a no-op instead of
+        # raising "RuntimeError: main thread is not in main loop".
+        self._alive = False
         self.destroy()
 
 
@@ -1247,14 +1327,8 @@ class PostcardScannerApp(tk.Tk):
 # ──────────────────────────────────────────────────────────────────────────────
 
 @cli.command()
-@click.option("--prefix", default=None, help="Override file prefix.")
-@click.option("--resolution", default=None,
-              type=click.Choice(RESOLUTIONS), help="Override scan resolution (dpi).")
-@click.option("--format", "fmt", default=None,
-              type=click.Choice(FILE_FORMATS), help="Override output format.")
-@click.version_option("2.0.0", prog_name="tkscan")
 @click.pass_obj
-def main(common, prefix, resolution, fmt):
+def main(common):
     """tkscan - batch scan your postcard collection."""
     global CONFIG_FILE
     if common and getattr(common, "conffile", None):
@@ -1263,14 +1337,6 @@ def main(common, prefix, resolution, fmt):
     cfg = getattr(common, "cfg", None) or load_config()
     translation = getattr(common, "translation", None) or setup_i18n()
     gettext_func = translation.gettext
-
-    # CLI overrides
-    if prefix:
-        cfg["tkscan"]["prefix"] = prefix
-    if resolution:
-        cfg["tkscan"]["resolution"] = resolution
-    if fmt:
-        cfg["tkscan"]["file_format"] = fmt
 
     # Build the main window first (but keep it hidden) so that the startup
     # dialogs can be centered on it instead of on a throwaway 1x1 window.
@@ -1306,7 +1372,7 @@ def main(common, prefix, resolution, fmt):
 
 def run():
     """Standalone entry point (tkscaan script): runs `cli main`."""
-    sys.argv.insert(1, "main")
+    sys.argv.append("main")   # was: sys.argv.insert(1, "main")
     cli()
 
 

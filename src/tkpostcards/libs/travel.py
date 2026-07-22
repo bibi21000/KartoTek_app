@@ -1,8 +1,17 @@
 # -*- encoding: utf-8 -*-
 from math import radians, sin, cos, sqrt, atan2
 
-from ortools.constraint_solver import pywrapcp
-from ortools.constraint_solver import routing_enums_pb2
+# ortools est volontairement importé localement (dans calculer()) et non
+# ici en tête de module : cela permet d'importer tkpostcards.libs.travel
+# (ex : pour introspection ou tests) sans avoir ce paquet — assez lourd —
+# installé. Il n'est requis qu'au moment où un calcul de parcours est
+# réellement effectué.
+try:
+    from ortools.constraint_solver import pywrapcp
+    from ortools.constraint_solver import routing_enums_pb2
+    ORTOOLS_AVAILABLE = True
+except ImportError:
+    ORTOOLS_AVAILABLE = False
 
 
 class ParcoursCartes:
@@ -89,6 +98,12 @@ class ParcoursCartes:
         collection=None,
         time_limit=10,
     ):
+        if not ORTOOLS_AVAILABLE:
+            raise ImportError(
+                "ortools is required to compute travels. "
+                "Install it with: pip install pypostcards[travel]"
+            )
+
         cartes = self._filtrer_cartes(collection)
 
         if not cartes:

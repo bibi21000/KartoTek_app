@@ -63,8 +63,13 @@ def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
         the source files are missing from *importdir*.
     """
     from libpostcards.model import Model
-    from .ocr import PostcardOCR
     from .size import PostcardSize
+
+    try:
+        from .ocr import PostcardOCR, PYTESSERACT_AVAILABLE
+    except ImportError:
+        PostcardOCR = None
+        PYTESSERACT_AVAILABLE = False
 
     datadir = Path(datadir)
     importdir = Path(importdir)
@@ -92,7 +97,7 @@ def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
     shutil.copyfile(str(src_recto), str(dst_recto))
     shutil.copyfile(str(src_verso), str(dst_verso))
 
-    if ocr is None:
+    if ocr is None and PYTESSERACT_AVAILABLE:
         ocr = PostcardOCR()
     if pcs is None:
         pcs = PostcardSize(datadir)
@@ -100,12 +105,13 @@ def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
     mod = Model(datadir)
     card = mod.load_json(pcid)
     updated = False
-    if card.get("recto_ocr") is None or force is True:
-        updated = True
-        card["recto_ocr"] = ocr.to_string(str(dst_recto))
-    if card.get("verso_ocr") is None or force is True:
-        updated = True
-        card["verso_ocr"] = ocr.to_string(str(dst_verso))
+    if ocr is not None:
+        if card.get("recto_ocr") is None or force is True:
+            updated = True
+            card["recto_ocr"] = ocr.to_string(str(dst_recto))
+        if card.get("verso_ocr") is None or force is True:
+            updated = True
+            card["verso_ocr"] = ocr.to_string(str(dst_verso))
     if updated is True:
         mod.write_json(card)
 
@@ -121,7 +127,7 @@ def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
 
 
 def add_pairs(datadir, importdir, ids, ext=None, force=True,
-              use_searcher=True, on_progress=None):
+              use_searcher=True, on_progress=None, ocr_lang=None):
     """Add several postcards at once, mirroring ``tktools scan add``.
 
     :param ids: iterable of postcard ids to add.
@@ -130,6 +136,9 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
     :param on_progress: optional ``on_progress(index, total, added)``
         callback, where ``added`` is the :class:`AddedPostcard` just
         created (or ``None`` if it raised, see below).
+    :param ocr_lang: languages passed to ``PostcardOCR`` (tesseract
+        ``lang`` argument, e.g. ``"fra"`` or ``"fra+eng"``). Falls back
+        to ``PostcardOCR``'s own default (``"fra"``) when omitted.
     :return: the list of :class:`AddedPostcard` successfully added.
 
     Errors while adding a single id are *not* swallowed: the exception
@@ -137,8 +146,13 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
     so the caller (CLI or GUI) can decide how to report it. Postcards
     already added before the error stay added.
     """
-    from .ocr import PostcardOCR
     from .size import PostcardSize
+
+    try:
+        from .ocr import PostcardOCR, PYTESSERACT_AVAILABLE
+    except ImportError:
+        PostcardOCR = None
+        PYTESSERACT_AVAILABLE = False
 
     try:
         from libpostcards.similar import PostcardSearcher
@@ -147,7 +161,10 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
         searcher_available = False
 
     datadir = Path(datadir)
-    ocr = PostcardOCR()
+    if PYTESSERACT_AVAILABLE:
+        ocr = PostcardOCR(lang=ocr_lang) if ocr_lang else PostcardOCR()
+    else:
+        ocr = None
     pcs = PostcardSize(datadir)
 
     searcher = None

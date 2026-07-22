@@ -16,7 +16,7 @@ from libpostcards.model import Model
 from flpostcards.extensions import limiter
 
 # Langues disponibles pour l'application Flask
-LANGUAGES = ["fr", "en"]
+LANGUAGES = ["fr", "en", "uk"]
 
 
 def select_locale() -> str:

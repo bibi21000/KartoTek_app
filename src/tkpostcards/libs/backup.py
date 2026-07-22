@@ -53,7 +53,7 @@ def _set_progress_total(progress, total):
 class PostcardBackup:
 
     @staticmethod
-    def _iter_source_files(source_dir):
+    def _iter_source_files(source_dir, conffile):
         """
         Liste tous les fichiers qui seront inclus dans l'archive, sous
         forme de tuples (chemin_absolu, arcname).
@@ -80,7 +80,7 @@ class PostcardBackup:
                     )
                     files.append((full_path, arcname))
 
-        for f in ['travels.json', 'pois.json']:
+        for f in [conffile, 'travels.json', 'pois.json']:
             fname = os.path.join(source_dir, f)
             if os.path.isfile(fname):
                 files.append((fname, f))
@@ -88,7 +88,7 @@ class PostcardBackup:
         return files
 
     @staticmethod
-    def create_backup(source_dir, archive_path=None, compression_level=10, progress=None):
+    def create_backup(source_dir, conffile, archive_path=None, compression_level=10, progress=None):
         """
         Crée une archive tar compressée en zstd.
 
@@ -118,7 +118,7 @@ class PostcardBackup:
         elif os.path.isdir(archive_path):
             archive_path = os.path.join(archive_path, default_name)
 
-        files_to_add = PostcardBackup._iter_source_files(source_dir)
+        files_to_add = PostcardBackup._iter_source_files(source_dir, conffile)
         total_size = sum(os.path.getsize(path) for path, _ in files_to_add)
         _set_progress_total(progress, total_size)
 
