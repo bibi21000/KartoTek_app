@@ -9,6 +9,7 @@ import gettext
 import locale
 import logging
 import queue
+import re
 import sys
 import textwrap
 import threading
@@ -1898,7 +1899,7 @@ class App(tk.Tk):
             self._scan_ids()
 
         self._build_ui()
-        self._fit_window_to_screen()
+        self._restore_window_geometry()
         self._nav_filter_var.set(self._nav_collection if self._nav_collection else _("tsearch_all"))
         self._nav_missing_var.set(_("tsearch_all"))
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -1957,6 +1958,46 @@ class App(tk.Tk):
         x = max(0, (screen_w - target_w) // 2)
         y = max(0, (screen_h - target_h) // 2)
         self.geometry(f"{target_w}x{target_h}+{x}+{y}")
+
+    def _restore_window_geometry(self):
+        """Restaure la taille/position de la fenêtre principale sauvegardée
+        dans la section [tkmanager] de postcards.conf (clé
+        ``window_geometry``, format Tk ``WxH+X+Y``).
+
+        Si aucune géométrie n'a été sauvegardée, ou si elle est invalide /
+        ne rentre plus dans l'écran courant (résolution changée, écran
+        déconnecté...), on retombe sur le calcul automatique habituel.
+        """
+        self.update_idletasks()
+
+        raw = self.get_search_conf("tkmanager", "window_geometry", "")
+        if raw:
+            m = re.match(r"^(\d+)x(\d+)\+(-?\d+)\+(-?\d+)$", raw.strip())
+            if m:
+                w, h, x, y = (int(v) for v in m.groups())
+                screen_w = self.winfo_screenwidth()
+                screen_h = self.winfo_screenheight()
+                if 0 < w <= screen_w and 0 < h <= screen_h:
+                    # Recale la position pour rester visible même si
+                    # l'écran a changé de taille depuis la sauvegarde.
+                    x = max(0, min(x, screen_w - w))
+                    y = max(0, min(y, screen_h - h))
+                    min_w = min(1200, screen_w - 20)
+                    min_h = min(700, screen_h - 80)
+                    self.minsize(min(min_w, w), min(min_h, h))
+                    self.geometry(f"{w}x{h}+{x}+{y}")
+                    return
+
+        self._fit_window_to_screen()
+
+    def _save_window_geometry(self):
+        """Sauvegarde la taille/position actuelle de la fenêtre principale
+        dans la section [tkmanager] de postcards.conf."""
+        try:
+            geometry = self.winfo_geometry()
+        except tk.TclError:
+            return
+        self.save_search_conf("tkmanager", window_geometry=geometry)
 
     # ── Configuration ─────────────────────────────────────────────────────────
     def _load_config(self) -> configparser.ConfigParser:
@@ -2617,6 +2658,8 @@ class App(tk.Tk):
     def _on_close(self):
         if not self._ask_save_if_dirty():
             return
+
+        self._save_window_geometry()
 
         # The database must be closed before publication starts.
         self.model.close()

@@ -22,7 +22,7 @@ set -euo pipefail
 # MAJOR version is reserved for significant behavior changes or breaking
 # changes.
 # =============================================================================
-SCRIPT_VERSION="1.4.0"
+SCRIPT_VERSION="1.5.0"
 
 # =============================================================================
 # CONFIGURATION (modifiable facilement / easy to edit)
@@ -45,6 +45,11 @@ CONF_FILE="$CONF_DIR/postcards.conf"
 BIN_DIR="$HOME/.local/bin"
 DESKTOP_DIR="$HOME/.local/share/applications"
 ICON_DIR="$HOME/.local/share/icons/pypostcards"
+
+# Emplacement de la complétion bash pour kttools (répertoire XDG standard,
+# chargé automatiquement par bash-completion >= 2.x sans avoir besoin de
+# modifier .bashrc)
+BASH_COMPLETION_DIR="$HOME/.local/share/bash-completion/completions"
 
 # Scripts / entry points fournis par le paquet
 declare -A ENTRY_POINTS=(
@@ -113,6 +118,10 @@ declare -A MSG_FR=(
   [summary_conf]="Fichier de configuration : %s"
   [creating_launchers]="Création des lanceurs dans %s ..."
   [creating_desktop]="Création des fichiers .desktop dans %s ..."
+  [creating_bash_completion]="Création de la complétion bash pour kttools dans %s ..."
+  [bash_completion_skipped]="kttools n'est pas disponible, la complétion bash n'est pas installée."
+  [bash_completion_failed]="Impossible de générer la complétion bash pour kttools (ignoré)."
+  [bash_completion_note]="Complétion bash installée pour kttools. Elle sera chargée automatiquement dans les nouveaux terminaux si le paquet 'bash-completion' est installé. Sinon, ajoutez cette ligne à votre ~/.bashrc :"
   [icon_not_found]="Aucune icône trouvée dans le paquet, une icône générique sera utilisée."
   [path_reminder]="Remarque : ajoutez %s à votre PATH si ce n'est pas déjà fait :"
   [done]="Installation terminée !"
@@ -143,6 +152,7 @@ declare -A MSG_FR=(
   [uninstall_removing_venv]="Suppression de l'environnement virtuel : %s"
   [uninstall_removing_launchers]="Suppression des lanceurs dans %s"
   [uninstall_removing_desktop]="Suppression des fichiers .desktop dans %s"
+  [uninstall_removing_bash_completion]="Suppression de la complétion bash de %s"
   [uninstall_removing_icons]="Suppression des icônes dans %s"
   [uninstall_keep_pkg_note]="Note : les paquets système (tesseract, sane-utils, python3-venv, ...) installés via le gestionnaire de paquets ne sont PAS supprimés. Désinstallez-les manuellement si besoin."
   [ask_remove_conf]="Supprimer aussi le fichier de configuration (%s) ? [o/N] "
@@ -187,6 +197,10 @@ declare -A MSG_EN=(
   [summary_conf]="Configuration file: %s"
   [creating_launchers]="Creating launchers in %s ..."
   [creating_desktop]="Creating .desktop files in %s ..."
+  [creating_bash_completion]="Creating bash completion for kttools in %s ..."
+  [bash_completion_skipped]="kttools is not available, bash completion was not installed."
+  [bash_completion_failed]="Could not generate bash completion for kttools (skipped)."
+  [bash_completion_note]="Bash completion installed for kttools. It will be loaded automatically in new terminals if the 'bash-completion' package is installed. Otherwise, add this line to your ~/.bashrc:"
   [icon_not_found]="No icon found in the package, a generic icon will be used."
   [path_reminder]="Note: add %s to your PATH if it isn't already:"
   [done]="Installation complete!"
@@ -217,6 +231,7 @@ declare -A MSG_EN=(
   [uninstall_removing_venv]="Removing virtual environment: %s"
   [uninstall_removing_launchers]="Removing launchers from %s"
   [uninstall_removing_desktop]="Removing .desktop files from %s"
+  [uninstall_removing_bash_completion]="Removing bash completion from %s"
   [uninstall_removing_icons]="Removing icons from %s"
   [uninstall_keep_pkg_note]="Note: system packages (tesseract, sane-utils, python3-venv, ...) installed via the package manager are NOT removed. Uninstall them manually if needed."
   [ask_remove_conf]="Also remove the configuration file (%s)? [y/N] "
@@ -541,6 +556,37 @@ EOF
       chmod +x "$launcher"
     fi
   done
+}
+
+create_bash_completion() {
+  local venv_bin="$VENV_DIR/bin/kttools"
+
+  # kttools peut être absent en version "light" ou selon les extras
+  # réellement installés : on ne génère la complétion que s'il existe.
+  if [[ ! -x "$venv_bin" ]]; then
+    msgln bash_completion_skipped
+    return 0
+  fi
+
+  mkdir -p "$BASH_COMPLETION_DIR"
+  msgln creating_bash_completion "$BASH_COMPLETION_DIR"
+
+  # kttools est basé sur Click, qui sait générer lui-même son script de
+  # complétion bash via la variable d'environnement _KTTOOLS_COMPLETE.
+  # On préfère cette approche à une liste statique de sous-commandes :
+  # elle reste toujours synchronisée avec les commandes/options réelles
+  # exposées par le paquet, y compris après une mise à jour.
+  local completion_script
+  if completion_script="$(_KTTOOLS_COMPLETE=bash_source "$venv_bin" 2>/dev/null)" && [[ -n "$completion_script" ]]; then
+    printf '%s\n' "$completion_script" > "$BASH_COMPLETION_DIR/kttools"
+  else
+    msgln bash_completion_failed
+    rm -f "$BASH_COMPLETION_DIR/kttools"
+    return 0
+  fi
+
+  msgln bash_completion_note
+  echo "  source \"$BASH_COMPLETION_DIR/kttools\""
 }
 
 create_desktop_files() {
@@ -1020,6 +1066,12 @@ echo
 create_launchers
 
 # =============================================================================
+# ETAPE 5bis : COMPLETION BASH POUR kttools
+# =============================================================================
+
+create_bash_completion
+
+# =============================================================================
 # ETAPE 6 : ICONES ET FICHIERS .desktop
 # =============================================================================
 
@@ -1101,9 +1153,11 @@ do_update() {
 
   echo
 
-  # Régénère les lanceurs et les .desktop (au cas où la nouvelle version
-  # ajoute/retire des scripts), sans toucher au fichier de configuration.
+  # Régénère les lanceurs, la complétion bash et les .desktop (au cas où
+  # la nouvelle version ajoute/retire des scripts ou des sous-commandes),
+  # sans toucher au fichier de configuration.
   create_launchers
+  create_bash_completion
   create_desktop_files
 
   # Recrée datadir/importdir/tmpdir s'ils ont disparu depuis l'installation.
@@ -1163,6 +1217,11 @@ do_uninstall() {
     if command -v update-desktop-database >/dev/null 2>&1; then
       update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
     fi
+  fi
+
+  if [[ -f "$BASH_COMPLETION_DIR/kttools" ]]; then
+    msgln uninstall_removing_bash_completion "$BASH_COMPLETION_DIR/kttools"
+    rm -f "$BASH_COMPLETION_DIR/kttools"
   fi
 
   if [[ -d "$ICON_DIR" ]]; then

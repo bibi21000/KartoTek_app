@@ -37,11 +37,62 @@ CONFIG_FILE = APP_DIR / "postcards.conf"
 I18N_DOMAIN = "tkpostcards"
 
 
+def _detect_system_lang() -> str:
+    """Best-effort detection of the user's preferred language code (e.g. "fr").
+
+    ``locale.getdefaultlocale()`` is deprecated and, in practice, only
+    inspects the LANG/LC_*/LANGUAGE environment variables: if the app is
+    launched from a desktop icon, a .desktop launcher, a Windows shortcut,
+    or any context that doesn't export those variables, it silently
+    returns (None, None) and we'd wrongly fall back to English even though
+    the OS itself is configured in French. This checks several sources,
+    from most to least reliable.
+    """
+    # 1. Explicit override via environment variable.
+    lang = os.environ.get("TKPOSTCARDS_LANG")
+    if lang:
+        return lang[:2].lower()
+
+    # 2. Standard POSIX locale environment variables, in priority order.
+    #    LANGUAGE can hold a ':'-separated list of preferences.
+    for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
+        value = os.environ.get(var)
+        if value:
+            first = value.split(":")[0].split(".")[0]
+            if first and first.upper() not in ("C", "POSIX"):
+                return first.split("_")[0].lower()
+
+    # 3. Windows: ask the OS directly for the UI language, since Windows
+    #    apps usually don't have LANG/LC_* exported at all.
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+            win_lang = locale.windows_locale.get(lcid)
+            if win_lang:
+                return win_lang.split("_")[0].lower()
+        except Exception:
+            pass
+
+    # 4. Fall back to the C library's notion of the current locale (this
+    #    can pick up the OS locale even when env vars aren't set).
+    try:
+        locale.setlocale(locale.LC_ALL, "")
+        lc_category = getattr(locale, "LC_MESSAGES", locale.LC_CTYPE)
+        lc, _enc = locale.getlocale(lc_category)
+        if lc:
+            return lc.split("_")[0].lower()
+    except (locale.Error, ValueError):
+        pass
+
+    # 5. Last resort.
+    return "en"
+
+
 def setup_i18n(lang: str | None = None) -> gettext.NullTranslations:
     """Return a translation object for the requested language."""
     if lang is None:
-        lc, _ = locale.getdefaultlocale()
-        lang = (lc or "en")[:2]
+        lang = _detect_system_lang()
     try:
         translation = gettext.translation(
             I18N_DOMAIN,
@@ -329,6 +380,8 @@ DEFAULT_CONFIG = {
     "jpeg_quality": "85",
     "png_compress": "6",
     "tiff_compression": "deflate",
+    "window_geometry": "",
+    "thumb_geometry": "",
 }
 
 
@@ -587,21 +640,80 @@ class ThumbnailWindow(tk.Toplevel):
         self._relayout()
         self._count_var.set(f"{self._('Total scanned:')} {len(self._images)}")
 
+    # Safety cap on the number of grid columns we ever configure weight on;
+    # comfortably above anything a real window width would produce.
+    _MAX_THUMB_COLS = 60
+
     def _relayout(self) -> None:
-        cols = max(1, self._canvas.winfo_width() // (THUMB_SIZE[0] + 12))
+        cell_width = THUMB_SIZE[0] + 12  # thumbnail width + left/right padding
+        cols = max(2, self._canvas.winfo_width() // cell_width)
+        if cols % 2:  # always keep an even number of columns
+            cols -= 1
+        cols = max(2, cols)
+
         for widget in self._frame.winfo_children():
             widget.grid_forget()
+
+        # Make the used columns share the canvas width evenly (uniform sizes)
+        # and clear the weight on any columns left over from a previous,
+        # wider layout so no "phantom" empty columns linger.
+        for c in range(self._MAX_THUMB_COLS):
+            self._frame.grid_columnconfigure(
+                c, weight=1 if c < cols else 0,
+                uniform="thumb_col" if c < cols else "",
+            )
+
         for idx, (path, photo) in enumerate(self._images):
             row, col = divmod(idx, cols)
             cell = ttk.Frame(self._frame, padding=0)
-            cell.grid(row=row, column=col, padx=6, pady=6)
+            cell.grid(row=row, column=col, padx=6, pady=6, sticky="n")
             lbl = tk.Label(cell, image=photo, bg="#2b2b2b", relief="flat", borderwidth=0, highlightthickness=0, cursor="hand2")
             lbl.image = photo  # extra ref
             lbl.pack()
             name = ttk.Label(cell, text=path.name[:22], foreground="#cccccc",
                               background="#2b2b2b", font=("TkDefaultFont", 8))
             name.pack()
+            del_btn = ttk.Button(cell, text=self._("Delete"), width=8,
+                                  command=lambda p=path: self._confirm_delete(p))
+            del_btn.pack(pady=(2, 0))
             lbl.bind("<Double-Button-1>", lambda e, p=path: self._open_full(p))
+
+    def _confirm_delete(self, path: Path) -> None:
+        """Ask for confirmation, then delete the image file and its thumbnail."""
+        if self._delete_with_confirmation(path, parent=self):
+            self._remove_image(path)
+
+    def _delete_with_confirmation(self, path: Path, parent: tk.Misc) -> bool:
+        """Ask the user to confirm, then unlink *path*. Returns True on success."""
+        if not messagebox.askyesno(
+            self._("Delete image"),
+            self._("Delete {name}?\nThis cannot be undone.").format(name=path.name),
+            parent=parent,
+            icon=messagebox.WARNING,
+        ):
+            return False
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass  # already gone - still remove it from the view
+        except Exception as exc:
+            messagebox.showerror(self._("Error"), str(exc), parent=parent)
+            return False
+        return True
+
+    def _remove_image(self, path: Path) -> None:
+        """Remove *path* from the in-memory thumbnail list and refresh the view."""
+        for i, (p, _photo) in enumerate(self._images):
+            if p == path:
+                del self._images[i]
+                del self._photo_refs[i]
+                break
+        else:
+            return
+        self._relayout()
+        self._count_var.set(f"{self._('Total scanned:')} {len(self._images)}")
+        if not self._images:
+            self._empty_label.grid()
 
     def _open_full(self, path: Path) -> None:
         try:
@@ -619,7 +731,18 @@ class ThumbnailWindow(tk.Toplevel):
         lbl = tk.Label(win, image=photo, bg="black")
         lbl.image = photo
         lbl.pack(fill=tk.BOTH, expand=True)
-        ttk.Button(win, text=self._("Close"), command=win.destroy).pack(pady=4)
+        btn_bar = ttk.Frame(win)
+        btn_bar.pack(pady=4)
+        ttk.Button(btn_bar, text=self._("Delete"),
+                   command=lambda: self._delete_from_viewer(path, win)).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_bar, text=self._("Close"), command=win.destroy).pack(side=tk.LEFT, padx=4)
+
+    def _delete_from_viewer(self, path: Path, viewer: tk.Toplevel) -> None:
+        """Delete *path* from the enlarged-view window, closing it on success."""
+        if not self._delete_with_confirmation(path, parent=viewer):
+            return
+        viewer.destroy()
+        self._remove_image(path)
 
     def _on_close(self) -> None:
         # Hide instead of destroy so it can be re-shown
@@ -684,6 +807,10 @@ class PostcardScannerApp(tk.Tk):
 
         # Thumbnail window
         self._thumb_win = ThumbnailWindow(self, gettext_func)
+
+        # Restore saved size/position for both windows, if any was saved
+        # on a previous run (see _save_window_geometry / _on_quit).
+        self._restore_geometry()
 
         self.protocol("WM_DELETE_WINDOW", self._on_quit)
         self.after(200, self._refresh_scanners_bg)
@@ -921,6 +1048,40 @@ class PostcardScannerApp(tk.Tk):
         s["png_compress"]      = self._png_compress_var.get()
         s["tiff_compression"]  = self._tiff_compress_var.get()
         save_config(self.cfg)
+
+    def _restore_geometry(self) -> None:
+        """Restore the main window's and thumbnail window's size/position
+        from [tkscan] window_geometry / thumb_geometry, if previously saved.
+        """
+        s = self.cfg["tkscan"]
+        win_geo = s.get("window_geometry", "")
+        if win_geo:
+            try:
+                self.geometry(win_geo)
+            except tk.TclError:
+                logging.warning("Invalid saved window_geometry: %r", win_geo)
+
+        thumb_geo = s.get("thumb_geometry", "")
+        if thumb_geo:
+            try:
+                self._thumb_win.geometry(thumb_geo)
+            except tk.TclError:
+                logging.warning("Invalid saved thumb_geometry: %r", thumb_geo)
+
+    def _save_window_geometry(self) -> None:
+        """Store the current size/position of both windows into the config
+        (in memory only - save_config() must still be called to persist).
+        """
+        s = self.cfg["tkscan"]
+        try:
+            s["window_geometry"] = self.geometry()
+        except tk.TclError:
+            pass
+        if self._thumb_win is not None:
+            try:
+                s["thumb_geometry"] = self._thumb_win.geometry()
+            except tk.TclError:
+                pass
 
     def _browse_dest(self) -> None:
         folder = filedialog.askdirectory(
@@ -1282,6 +1443,7 @@ class PostcardScannerApp(tk.Tk):
             # finishing up in the background - ignore repeat clicks.
             return
 
+        self._save_window_geometry()
         self._save_settings_from_ui()
         if self._batch_running:
             self._stop_event.set()
@@ -1338,21 +1500,28 @@ def main(common):
     translation = getattr(common, "translation", None) or setup_i18n()
     gettext_func = translation.gettext
 
+    # Remember whether a geometry was already saved from a previous run
+    # (PostcardScannerApp.__init__ -> _restore_geometry() applies it as
+    # soon as the window is built) so we don't override it below.
+    had_saved_geometry = bool(cfg["tkscan"].get("window_geometry", "").strip())
+
     # Build the main window first (but keep it hidden) so that the startup
     # dialogs can be centered on it instead of on a throwaway 1x1 window.
     app = PostcardScannerApp(cfg, gettext_func)
     app.update_idletasks()
 
-    # Explicitly center the main window on the screen. Without this, the
-    # window manager decides its initial position, which would make
-    # "centered on the main window" meaningless for the startup dialogs.
-    w = app.winfo_reqwidth()
-    h = app.winfo_reqheight()
-    sw = app.winfo_screenwidth()
-    sh = app.winfo_screenheight()
-    x = max(0, (sw - w) // 2)
-    y = max(0, (sh - h) // 2)
-    app.geometry(f"{w}x{h}+{x}+{y}")
+    if not had_saved_geometry:
+        # No saved position/size: explicitly center the main window on the
+        # screen. Without this, the window manager decides its initial
+        # position, which would make "centered on the main window"
+        # meaningless for the startup dialogs.
+        w = app.winfo_reqwidth()
+        h = app.winfo_reqheight()
+        sw = app.winfo_screenwidth()
+        sh = app.winfo_screenheight()
+        x = max(0, (sw - w) // 2)
+        y = max(0, (sh - h) // 2)
+        app.geometry(f"{w}x{h}+{x}+{y}")
 
     # NE PAS withdraw() : une fenêtre "transient" d'un parent withdrawn
     # n'est pas mappée par la plupart des WM Linux -> boîte de dialogue invisible,

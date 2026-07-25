@@ -82,6 +82,7 @@ DEFAULT_CONFIG = {
     "editor_linux": "",
     "editor_macos": "",
     "editor_windows": "",
+    "window_geometry": "",
 }
 
 
@@ -470,7 +471,7 @@ class PostcardImportApp(tk.Tk):
 
         self.title(self._("Postcard Import"))
         self.minsize(760, 560)
-        self.geometry("980x720")
+        self._restore_geometry()
 
         self.tk.call("wm", "iconname", ".", "tkimport")
         try:
@@ -656,6 +657,25 @@ class PostcardImportApp(tk.Tk):
         return True
 
     # ── Settings ────────────────────────────────────────────────────────────
+
+    def _restore_geometry(self) -> None:
+        """Apply the window size/position saved in [tkimport] window_geometry,
+        falling back to a sane default if missing or invalid."""
+        geometry = self.cfg["tkimport"].get("window_geometry", "").strip()
+        if geometry:
+            try:
+                self.geometry(geometry)
+                return
+            except tk.TclError:
+                logging.warning("invalid saved window_geometry: %r", geometry)
+        self.geometry("980x720")
+
+    def _save_geometry(self) -> None:
+        """Store the current window size/position in [tkimport] window_geometry."""
+        try:
+            self.cfg["tkimport"]["window_geometry"] = self.geometry()
+        except tk.TclError:
+            pass
 
     def _load_settings_to_ui(self) -> None:
         s = self.cfg["tkimport"]
@@ -886,6 +906,7 @@ class PostcardImportApp(tk.Tk):
         self._log_text.config(state=tk.DISABLED)
 
     def _on_quit(self) -> None:
+        self._save_geometry()
         self._save_settings_from_ui()
         self.destroy()
 

@@ -29,7 +29,6 @@ Tous les outils graphiques partagent le même fichier de configuration
 2. [ktimport — Importer des cartes postales](#2-ktimport--importer-des-cartes-postales)
 3. [ktmanager — Gérer vos cartes postales](#3-ktmanager--gérer-vos-cartes-postales)
 4. [kttools — Boîte à outils](#4-kttools--boîte-à-outils)
-5. [Liste des captures d'écran à réaliser](#5-liste-des-captures-décran-à-réaliser)
 
 ---
 
@@ -444,26 +443,6 @@ toutes les données dérivées (parcours, etc.) avant la publication —
 `ktmanager`.
 
 ![Terminal montrant l'exécution de kttools publish avec sa progression](images/kttools-publish-terminal.png)
-
----
-
-## 5. Liste des captures d'écran à réaliser
-
-Voici la liste complète des captures d'écran référencées dans ce document,
-à réaliser puis à déposer dans un dossier `images/` à côté de ce fichier
-(les noms de fichiers correspondent exactement à ceux utilisés dans les
-balises `![...]()` ci-dessus) :
-
-### ktscan
-4. `ktscan-lot-en-cours.png` — Numérisation par lot en cours, avec le compte à rebours
-5. `ktscan-images-scannees.png` — Fenêtre « Images scannées » avec ses miniatures
-
-### ktimport
-6. `ktimport-fenetre-principale.png` — Fenêtre principale avec les 3 étapes visibles
-7. `ktimport-etape1-analyse.png` — Étape 1 : Analyser et corriger les scans
-8. `ktimport-etape2-validation.png` — Étape 2 : grille de vignettes recto/verso + visionneuse ouverte
-9. `ktimport-editeur-image-preferences.png` — Fenêtre de choix de l'éditeur d'image préféré
-10. `ktimport-etape3-ajout.png` — Étape 3 : ajout à la collection avec l'option « vider le dossier d'import »
 
 ---
 

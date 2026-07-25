@@ -5,12 +5,11 @@ The postcard scripts
 
 """
 import os
-from gettext import gettext as _
 
 import click
 from tqdm import tqdm
 
-from .. import cli
+from .. import cli, _
 from . import split_ids
 
 def _travels(common):
@@ -40,10 +39,9 @@ def _travels(common):
         model.write_travel(travel_data)
 
 
-@cli.command()
+@cli.command(help=_("Export postcards"))
 @click.pass_obj
 def export(common):
-    _("""Export postcards""")
     from ..libs.size import PostcardSize
     pcs = PostcardSize(common.datadir)
     pcs.export(tqdm=tqdm, tqdm_desc=_("Export to PNG"))
@@ -52,29 +50,26 @@ def export(common):
 def db():
     pass
 
-@db.command()
+@db.command(help=_("Generate database"))
 @click.pass_obj
 def generate(common):
-    _("""Generate database""")
     from libpostcards.model import Model
 
     with Model(common.datadir) as data:
         data.generate()
 
-@db.command()
+@db.command(help=_("Sync database"))
 @click.pass_obj
 def sync(common):
-    _("""Sync database""")
     from libpostcards.model import Model
 
     with Model(common.datadir) as data:
         data.sync()
 
-@db.command()
+@db.command(help=_("Delete card in database and its linked json and images"))
 @click.argument('pcid', default=None)
 @click.pass_obj
 def delete(common, pcid):
-    _("""Delete card in database and its linked json and images""")
     from libpostcards.model import Model
 
     if pcid is None:
@@ -89,12 +84,11 @@ def delete(common, pcid):
 def scan():
     pass
 
-@scan.command()
+@scan.command(help=_("Prepare scanned postcards for import"))
 @click.option('--prefix', default='', help=_("Prefix of scanned files"))
 @click.option('--white-threshold', default=240, help=_("white threshold for background transpare"))
 @click.pass_obj
 def prepare(common, prefix, white_threshold):
-    _("""Prepare scanned postcards for import""")
     from libpostcards.model import Model
     from ..libs.scan_prepare import prepare_pairs
 
@@ -110,7 +104,7 @@ def prepare(common, prefix, white_threshold):
         on_pair=_on_pair,
     )
 
-@scan.command()
+@scan.command(help=_("Add postcards"))
 @click.argument('pcid', default=None, nargs=-1)
 @click.option('--ocr-langs', default=None,
               help=_("OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"). "
@@ -118,7 +112,6 @@ def prepare(common, prefix, white_threshold):
                      "configuration file."))
 @click.pass_obj
 def add(common, pcid, ocr_langs):
-    _("""Add postcards""")
     from ..libs.scan_add import add_pairs
 
     if pcid is None:
@@ -145,12 +138,11 @@ def add(common, pcid, ocr_langs):
 def backup():
     pass
 
-@backup.command()
-@click.option('--level', default=15, help="Compression level")
-@click.option('--archive', help="Name of archive to create (backup_(date).tar.zst if None)")
+@backup.command(help=_("Backup cards directory"))
+@click.option('--level', default=15, help=_("Compression level"))
+@click.option('--archive', help=_("Name of archive to create (backup_(date).tar.zst if None)"))
 @click.pass_obj
 def create(common, level, archive):
-    _("""Backup cards directory""")
     from tqdm import tqdm
     from ..libs.backup import (
         PostcardBackup
@@ -163,19 +155,18 @@ def create(common, level, archive):
             compression_level=level,
             progress=pbar)
 
-@backup.command()
-@click.option('--dest', default=None, help="Destination dir")
-@click.option('--archive', help="Name of archive to create (backup_(date).tar.zst if None)")
+@backup.command(help=_("Extract cards in directory"))
+@click.option('--dest', default=None, help=_("Destination dir"))
+@click.option('--archive', help=_("Name of archive to create (backup_(date).tar.zst if None)"))
 @click.pass_obj
 def extract(common, dest, archive):
-    _("""Extract cards in directory""")
     from tqdm import tqdm
     from ..libs.backup import (
         PostcardBackup
     )
 
     if dest is None:
-        raise RuntimeError("Need a dest directory")
+        raise RuntimeError(_("Need a dest directory"))
 
     with tqdm(unit='B', unit_scale=True, desc='Restauration') as pbar:
         PostcardBackup.extract_backup(archive, dest, progress=pbar)
@@ -185,10 +176,9 @@ def extract(common, dest, archive):
 def similar():
     pass
 
-@similar.command()
+@similar.command(help=_("Index similar postcards"))
 @click.pass_obj
 def index(common):
-    """Index similar postcards"""
     from pathlib import Path
     from libpostcards.similar import (
         PostcardSearcher
@@ -216,13 +206,12 @@ def index(common):
         f"{count} indexed cards"
     )
 
-@similar.command()
+@similar.command(help=_("Find similar postcards from directory"))
 @click.option("--query-dir", default='new')
 @click.option("--threshold", default=60, type=float)
 @click.option("--max-results", default=20, type=int)
 @click.pass_obj
 def files(common, query_dir, threshold, max_results):
-    """Find similar postcards from directory"""
     from pathlib import Path
     from libpostcards.similar import (
         PostcardSearcher
@@ -258,13 +247,12 @@ def files(common, query_dir, threshold, max_results):
                 f"{m['path']}"
             )
 
-@similar.command()
+@similar.command(help=_("Find similar postcard from url"))
 @click.option("--url", default=None)
 @click.option("--threshold", default=60, type=float)
 @click.option("--max-results", default=20, type=int)
 @click.pass_obj
 def url(common, url, threshold, max_results):
-    """Find similar postcard from url"""
     from pathlib import Path
     from libpostcards.similar import (
         PostcardSearcher
@@ -297,12 +285,11 @@ def url(common, url, threshold, max_results):
         )
 
 
-@similar.command()
+@similar.command(help=_("Find similar postcard from clipboard"))
 @click.option("--threshold", default=60, type=float)
 @click.option("--max-results", default=20, type=int)
 @click.pass_obj
 def clipboard(common, threshold, max_results):
-    """Find similar postcard from url"""
     from pathlib import Path
     from libpostcards.similar import (
         PostcardSearcher
@@ -333,12 +320,11 @@ def clipboard(common, threshold, max_results):
             f"{item['path']}"
         )
 
-@cli.command()
+@cli.command(help=_("Check for missing ids and replace cards wih last ones"))
 @click.option("--threshold", default=90, type=float)
 @click.option("--max-results", default=100, type=int)
 @click.pass_obj
 def duplicates(common, threshold, max_results):
-    """Check for missing ids and replace cards wih last ones"""
     from pathlib import Path
     from libpostcards.model import Model
     from libpostcards.similar import (
@@ -390,7 +376,7 @@ def duplicates(common, threshold, max_results):
 
     print(matches2)
 
-@cli.command()
+@cli.command(help=_("Redo OCR for postcards"))
 @click.argument('pcid', default=None, nargs=-1)
 @click.option('--ocr-langs', default=None,
               help=_("OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"). "
@@ -398,11 +384,10 @@ def duplicates(common, threshold, max_results):
                      "configuration file."))
 @click.pass_obj
 def ocr(common, pcid, ocr_langs):
-    """Redo OCR for postcards"""
     from libpostcards.model import Model
     from ..libs.ocr import PostcardOCR
     if pcid is None:
-        raise RuntimeError("Give me a name")
+        raise RuntimeError(_("Give me a name"))
 
     if not ocr_langs:
         ocr_langs = common.conf.get("tkimport", "ocr_langs", fallback="fra")
@@ -410,7 +395,7 @@ def ocr(common, pcid, ocr_langs):
     ocr = PostcardOCR(lang=ocr_langs)
     ids = split_ids(pcid)
 
-    pbar = tqdm(total=len(ids), desc="Postcards")
+    pbar = tqdm(total=len(ids), desc=_("Postcards"))
     with Model(common.datadir) as model:
         for pci in ids:
             card = model.load_json(pci)
@@ -420,18 +405,17 @@ def ocr(common, pcid, ocr_langs):
             pbar.update(1)
     pbar.close()
 
-@cli.command()
+@cli.command(help=_("Redo transparent on postcards"))
 @click.argument('pcid', default=None, nargs=-1)
 @click.option('--white-threshold', default=240, help=_("white threshold for background transpare"))
 @click.pass_obj
 def transparency(common, pcid, white_threshold):
-    """Redo transparent on postcards"""
     from ..libs.transparency import TiffBackgroundRemover
     bgtrans = TiffBackgroundRemover(white_threshold=white_threshold)
 
     ids = split_ids(pcid)
 
-    pbar = tqdm(total=len(ids), desc="Postcards")
+    pbar = tqdm(total=len(ids), desc=_("Postcards"))
     for pci in ids:
         for tiff_file in [
             os.path.join(common.datadir, "cards", '%s_R.%s'%(pci, common.file_format)),
@@ -444,35 +428,32 @@ def transparency(common, pcid, white_threshold):
         pbar.update(1)
     pbar.close()
 
-@cli.command()
+@cli.command(help=_("Calculate travels and add them to database"))
 @click.pass_obj
 def travels(common):
-    """Calculate travels and add them to database"""
     from ..libs.travel import (
         ParcoursCartes
     )
     ParcoursCartes.travels(common.datadir)
 
-@cli.command()
+@cli.command(help=_("Publish data to a remote web server"))
 @click.argument('config', default='sync_default')
 @click.option('--full', is_flag=True, help=_("Update all data (travel, ...) before publishing"))
 @click.pass_obj
 def publish(common, config, full):
-    """Publish data to a remote web server"""
     from ..libs.publish import (
         PostcardPublish
     )
     if config is None:
-        raise RuntimeError("Give me a config")
+        raise RuntimeError(_("Give me a config"))
 
     publish = PostcardPublish()
     publish.publish(common.datadir, common.conffile, config, full=full)
 
-@cli.command()
+@cli.command(help=_("Fix non-reciprocal double relations between cards"))
 @click.option('--dryrun', is_flag=True, default=True, help=_("Do not update files"))
 @click.pass_obj
 def fix_doubles(common, dryrun):
-    """Publish data to a remote web server"""
     import sys
     import time
     from pathlib import Path

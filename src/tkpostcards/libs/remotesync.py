@@ -46,6 +46,7 @@ class SyncConfig:
     ssh_key_path: str = ""
     remote_base_dir: str = "/"
     passive_mode: bool = True
+    compression: bool = True       # active la compression du transport (SFTP/SSH)
     timeout: int = 30
     delete_orphans: bool = False   # supprimer les fichiers distants absents en local
     dry_run: bool = False          # simuler sans transférer
@@ -81,6 +82,7 @@ class SyncConfig:
             ssh_key_path=s.get("ssh_key_path", ""),
             remote_base_dir=s.get("remote_base_dir", "/"),
             passive_mode=s.getboolean("passive_mode", True),
+            compression=s.getboolean("compression", True),
             timeout=int(s.get("timeout", 30)),
             delete_orphans=s.getboolean("delete_orphans", False),
             dry_run=s.getboolean("dry_run", False),
@@ -538,6 +540,7 @@ class _SFTPBackend(_BaseBackend):
             port=self.cfg.port,
             username=self.cfg.username,
             timeout=self.cfg.timeout,
+            compress=self.cfg.compression,
         )
         if self.cfg.ssh_key_path:
             connect_kwargs["key_filename"] = self.cfg.ssh_key_path
@@ -545,6 +548,16 @@ class _SFTPBackend(_BaseBackend):
             connect_kwargs["password"] = self.cfg.password
 
         self._ssh.connect(**connect_kwargs)
+        if self.cfg.compression:
+            # Sécurité supplémentaire : force explicitement la compression sur le
+            # transport déjà négocié (utile si connect() ne l'a pas activée en
+            # amont, p.ex. anciennes versions de paramiko).
+            transport = self._ssh.get_transport()
+            if transport is not None:
+                transport.use_compression(True)
+        logger.debug(
+            "Compression SFTP : %s", "activée" if self.cfg.compression else "désactivée"
+        )
         self._sftp = self._ssh.open_sftp()
         logger.info("SFTP connecté à %s:%s", self.cfg.host, self.cfg.port)
 
