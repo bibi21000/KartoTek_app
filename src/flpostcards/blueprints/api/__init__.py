@@ -13,6 +13,10 @@ Routes :
   GET  /api/v1/next-update   → délai recommandé avant le prochain poll
   POST /api/v1/update        → enregistre un repérage de carte sur le terrain (auth JWT requise)
   POST /api/v1/similar       → recherche de cartes similaires à une photo (auth JWT requise)
+  POST /api/v1/report        → signale un problème sur une carte (mauvaise géoloc, contenu
+                                inapproprié, doublon, ...) — public, aucune auth requise
+  GET  /api/v1/reports       → liste les signalements (managers uniquement, auth JWT requise)
+  POST /api/v1/reports/<id>/resolve → marque un signalement comme traité (managers uniquement)
   # NB : /api/v1/push/register et /unregister vivent désormais sur le
   # master (kartotek.eu) — l'app mobile s'y inscrit une seule fois pour
   # tous les serveurs. Ce serveur appelle seulement le master en interne
@@ -20,8 +24,8 @@ Routes :
   # flpostcards.push_watch. Voir docs/07-PUSH_NOTIFICATIONS.md.
   GET  /api/v1/collections   → liste des collections (avec nombre de cartes)
   GET  /api/v1/card/<id>     → fiche détaillée d'une carte (titre, description, coord, collections, images pleine taille)
-  GET  /api/v1/news          → dernières cartes ajoutées (comme la page d'accueil), filtrable par collection
-  GET  /api/v1/slideshow     → toutes les cartes pour un diaporama, filtrable par collection
+  GET  /api/v1/news          → dernières cartes ajoutées (comme la page d'accueil), filtrable par collection, paginable (page/per_page, voir docstring)
+  GET  /api/v1/slideshow     → cartes pour un diaporama, filtrable par collection, paginable (page/per_page, voir docstring)
   GET  /api/v1/gallery       → galerie paginée (collection, recherche texte, doublons)
   POST /api/v1/check_auth    → vérifie un couple email/password (table auths), sans émettre de token
   POST /api/v1/auth/login       → {email, password} -> {access_token, refresh_token}
@@ -50,6 +54,7 @@ import importlib.resources as importlib_resources
 import json
 import math
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -59,10 +64,25 @@ from flask import Blueprint, current_app, jsonify, request, url_for
 from flpostcards.auth import current_auth_email, issue_token_pair, require_auth
 from flpostcards.extensions import limiter
 from flpostcards.images import SIZE_MAIN, SIZE_SMALL, SIZE_THUMB, card_images
+from flpostcards.jsonlock import LockedJsonFile, read_json
 from flpostcards.blueprints.gallery import DEFAULT_PER_PAGE, PER_PAGE_CHOICES
 from flask_limiter.util import get_remote_address
 
 bp = Blueprint("api_v1", __name__)
+
+# Motifs de signalement acceptés par POST /api/v1/report — liste fermée
+# (plutôt qu'un texte libre) pour que l'appli mobile propose un menu et
+# que les managers puissent trier/filtrer sans avoir à interpréter du
+# texte libre. Exposée aussi via GET /api/v1/capabilities (clé
+# "reporting") pour que le client construise son menu dynamiquement.
+_VALID_REPORT_REASONS = {
+    "wrong_location",
+    "inappropriate_content",
+    "duplicate",
+    "copyright",
+    "other",
+}
+_REPORT_COMMENT_MAX_LEN = 500
 
 
 @bp.errorhandler(429)
@@ -194,6 +214,39 @@ def _validated_collection(raw: str | None) -> str:
     collections = current_app.config.get("COLLECTIONS", [])
     collection = (raw or "").strip()
     return collection if collection in collections else ""
+
+
+def _pagination_params() -> tuple[int, int, bool]:
+    """
+    Lit les paramètres optionnels ``page``/``per_page`` pour
+    /api/v1/news et /api/v1/slideshow — mêmes choix que /api/v1/gallery
+    (voir PER_PAGE_CHOICES/DEFAULT_PER_PAGE, importés depuis
+    blueprints.gallery pour ne pas dupliquer ces constantes).
+
+    Retourne (page, per_page, explicit) où ``explicit`` indique si le
+    client a lui-même demandé une pagination (``page`` ou ``per_page``
+    présent dans la requête), pour distinguer ce cas du repli
+    automatique de sécurité appliqué sur une grosse collection même
+    quand le client n'a rien demandé de particulier (voir
+    MOBILE_LIST_MAX_UNPAGINATED, utilisé par news()/slideshow()).
+    """
+    explicit = "page" in request.args or "per_page" in request.args
+
+    try:
+        per_page = int(request.args.get("per_page", DEFAULT_PER_PAGE))
+    except ValueError:
+        per_page = DEFAULT_PER_PAGE
+    if per_page not in PER_PAGE_CHOICES:
+        per_page = DEFAULT_PER_PAGE
+
+    try:
+        page = int(request.args.get("page", 1))
+    except ValueError:
+        page = 1
+    if page < 1:
+        page = 1
+
+    return page, per_page, explicit
 
 
 def _image_uri(card_id: str, size_dir: str, side: str) -> str:
@@ -410,6 +463,10 @@ def capabilities():
         "push": {
           "enabled": true                   -- ce serveur notifie le master (kartotek_master) des nouvelles cartes
         },
+        "reporting": {
+          "enabled": true,                  -- toujours vrai (POST /api/v1/report est public, sans configuration)
+          "reasons": ["wrong_location", "inappropriate_content", "duplicate", "copyright", "other"]
+        },
         "gallery": {
           "per_page_choices": [12, 24, 48],
           "default_per_page": 24
@@ -472,7 +529,13 @@ def capabilities():
             "replacement": "GET /api/v2/gallery",
             "message": "Le paramètre 'page' est remplacé par un curseur 'after_id'."
           }
-        ]
+        ],
+        "privacy_policy_url": "https://server1.kartotek.eu/privacy/"
+                                             -- URL absolue de la politique de confidentialité de CE serveur
+                                             -- (voir flpostcards.blueprints.privacy), toujours renseignée : à
+                                             -- lier depuis l'écran paramètres/à propos de l'app mobile. Apple et
+                                             -- Google exigent que ce lien soit accessible depuis l'app elle-même,
+                                             -- pas seulement depuis la fiche store.
        }
     Compatibilité ascendante : ce bloc a été ajouté après la première
     version de /api/v1/capabilities. Un client qui ne le connaît pas
@@ -505,6 +568,10 @@ def capabilities():
         "push": {
             "enabled": bool(config.get("PUSH_ENABLED")),
         },
+        "reporting": {
+            "enabled": True,
+            "reasons": sorted(_VALID_REPORT_REASONS),
+        },
         "gallery": {
             "per_page_choices": list(PER_PAGE_CHOICES),
             "default_per_page": DEFAULT_PER_PAGE,
@@ -526,10 +593,17 @@ def capabilities():
             },
         },
         "deprecations": _load_deprecations(),
+        "privacy_policy_url": url_for("privacy.index", _external=True),
     })
 
 
 @bp.route("/api/v1/gps")
+# Endpoint public, sans authentification, permettant de paginer
+# l'intégralité des cartes géolocalisées : plafonné pour empêcher un
+# scraping complet répété de la base par un tiers, tout en restant
+# largement au-dessus du besoin réel (le master ne le rappelle qu'une
+# fois par cycle de poller, voir kartotek_master.poller).
+@limiter.limit("30 per minute;600 per hour")
 def gps():
     """
     Liste paginée des coordonnées GPS des cartes uniques (sans doublons)
@@ -619,6 +693,11 @@ def gps():
 
 
 @bp.route("/api/v1/bounds")
+# Route de découverte peu coûteuse mais publique : même limite que
+# /api/v1/capabilities (appelée avec la même fréquence, typiquement une
+# fois par sélection de serveur côté app mobile, ou une fois par cycle
+# de poller côté master).
+@limiter.limit("30 per minute;600 per hour")
 def bounds():
     """
     Zone GPS couverte par l'ensemble des cartes postales géolocalisées.
@@ -665,6 +744,15 @@ def bounds():
 
 
 @bp.route("/api/v1/nearby")
+# Endpoint le plus sollicité par l'écran "ici" de l'app mobile (boucle
+# nearby/next-update en tâche de fond) : limite plus généreuse que les
+# routes de découverte, mais toujours bornée — sans authentification, et
+# chaque appel recalcule une distance haversine sur toutes les cartes
+# géolocalisées (_cards_with_coord), donc pas gratuit à répéter sans
+# limite pour un tiers qui n'aurait pas de contrainte de mouvement réel
+# (contrairement au client légitime, dont next_update() plafonne déjà le
+# rythme via next_update_s).
+@limiter.limit("60 per minute;1200 per hour")
 def nearby():
     """
     Cartes postales dans un rayon autour d'une position GPS.
@@ -705,6 +793,9 @@ def nearby():
 
 
 @bp.route("/api/v1/next-update")
+# Même palier que /api/v1/nearby : appelée dans la même boucle par
+# l'écran "ici", pour les mêmes raisons (voir commentaire ci-dessus).
+@limiter.limit("60 per minute;1200 per hour")
 def next_update():
     """
     Délai recommandé (en secondes) avant le prochain appel à /api/v1/nearby.
@@ -754,6 +845,10 @@ def next_update():
 # ---------------------------------------------------------------------------
 
 @bp.route("/api/v1/collections")
+# Route de découverte peu coûteuse mais publique, appelée typiquement
+# une fois par sélection de serveur — même palier que
+# /api/v1/capabilities et /api/v1/bounds.
+@limiter.limit("30 per minute;600 per hour")
 def collections():
     """
     Liste des collections connues (paramètre ``collections`` de
@@ -787,6 +882,9 @@ def collections():
 
 
 @bp.route("/api/v1/news")
+# Écran consulté régulièrement mais pas en boucle serrée (contrairement
+# à nearby/next-update) : palier intermédiaire.
+@limiter.limit("30 per minute;600 per hour")
 def news():
     """
     Dernières cartes postales ajoutées (même contenu que le diaporama
@@ -797,8 +895,12 @@ def news():
     Paramètres de requête (optionnels) :
       collection : filtre sur une collection connue (ignoré si inconnue,
                    auquel cas toutes les collections sont renvoyées)
+      page       : numéro de page (défaut 1) — voir "Pagination" ci-dessous
+      per_page   : 12, 24 ou 48 (défaut 24) — toute autre valeur retombe sur 24
 
-    Réponse JSON :
+    Réponse JSON (liste complète, comportement historique — toujours le
+    cas si le nombre de cartes de la fenêtre RECENT_DAYS/collection ne
+    dépasse pas MOBILE_LIST_MAX_UNPAGINATED, 200 par défaut) :
       {
         "collection": "Louhans" | null,
         "count": 12,
@@ -810,12 +912,32 @@ def news():
             "verso_small": "https://.../images/size_div10/423_V.png"
           },
           ...
-        ]
+        ],
+        "truncated": false
       }
 
+    Pagination : déclenchée soit explicitement (client envoyant `page`
+    et/ou `per_page`), soit automatiquement si le nombre de cartes de la
+    fenêtre dépasse MOBILE_LIST_MAX_UNPAGINATED (repli de sécurité pour
+    un gros site, sur un lien mobile : évite d'envoyer d'un bloc un
+    payload qui grossirait sans limite avec la collection). Dans les
+    deux cas, la réponse gagne les champs suivants (mêmes noms que
+    /api/v1/gallery) :
+      "page", "per_page", "pages", "total"
+    et "truncated" vaut true UNIQUEMENT dans le cas du repli automatique
+    (page=1 implicite, alors que le client n'avait rien demandé) — false
+    si le client a lui-même demandé une page, y compris au-delà de la
+    dernière (auquel cas `page` est ramené à `pages`).
+
+    Un client qui ignore ces champs (ancien client déployé avant cette
+    évolution) continue de fonctionner sans changement tant que la
+    collection reste sous le seuil ; au-delà, il ne verra plus que la
+    première page mais avec `truncated: true` explicite plutôt qu'une
+    troncature silencieuse.
+
     Comme /api/recent-cards côté web, le mélange et le parcours sans
-    répétition sont à faire côté client à partir de cette liste
-    complète.
+    répétition sont à faire côté client à partir des cartes reçues (sur
+    l'ensemble des pages, si la pagination est utilisée).
     """
     model = current_app.model
     collection = _validated_collection(request.args.get("collection"))
@@ -823,47 +945,125 @@ def news():
     days = current_app.config.get("RECENT_DAYS", 30)
     fallback_count = current_app.config.get("RECENT_FALLBACK_COUNT", 20)
 
+    # list_recent_unique_cards() ne supporte pas de limit/offset côté
+    # modèle (fenêtre RECENT_DAYS + repli RECENT_FALLBACK_COUNT, pas une
+    # simple liste ordonnée) : la pagination ci-dessous découpe donc la
+    # liste déjà matérialisée en Python. Ça réduit le payload HTTP
+    # renvoyé au client (le problème signalé), mais pas le travail fait
+    # côté base — un site avec une fenêtre RECENT_DAYS réellement énorme
+    # gagnerait à un vrai limit/offset dans libpostcards.model, hors
+    # scope de ce correctif.
     cards = model.list_recent_unique_cards(
         days=days, fallback_count=fallback_count, collection=collection or None
     )
-    items = [_card_summary(c) for c in cards]
+    total = len(cards)
+    page, per_page, explicit = _pagination_params()
+    max_unpaginated = current_app.config["MOBILE_LIST_MAX_UNPAGINATED"]
+
+    if not explicit and total <= max_unpaginated:
+        items = [_card_summary(c) for c in cards]
+        return _no_cache(jsonify({
+            "collection": collection or None,
+            "count": len(items),
+            "cards": items,
+            "truncated": False,
+        }))
+
+    pages = max(1, (total + per_page - 1) // per_page)
+    if page > pages:
+        page = pages
+    offset = (page - 1) * per_page
+    items = [_card_summary(c) for c in cards[offset:offset + per_page]]
 
     return _no_cache(jsonify({
         "collection": collection or None,
         "count": len(items),
         "cards": items,
+        "truncated": not explicit,
+        "page": page,
+        "per_page": per_page,
+        "pages": pages,
+        "total": total,
     }))
 
 
 @bp.route("/api/v1/slideshow")
+# Renvoie la collection entière (pas de pagination) : plus coûteux par
+# appel que les autres endpoints de liste, mais normalement rappelé au
+# mieux une fois par lancement du diaporama côté client — limite plus
+# stricte que /api/v1/news pour refléter ce coût.
+@limiter.limit("20 per minute;300 per hour")
 def slideshow():
     """
-    Liste complète des cartes uniques (sans doublons), pour alimenter
-    un diaporama côté mobile — mêmes cartes que /slideshow/ côté web.
-    Le mélange et le parcours sans répétition sont à faire côté client
-    à partir de cette liste complète (un tirage aléatoire à chaque
-    appel ne garantit pas de voir toutes les cartes avant répétition).
+    Liste des cartes uniques (sans doublons), pour alimenter un
+    diaporama côté mobile — mêmes cartes que /slideshow/ côté web.
 
     Paramètres de requête (optionnels) :
       collection : filtre sur une collection connue (ignoré si inconnue)
+      page       : numéro de page (défaut 1) — voir "Pagination" ci-dessous
+      per_page   : 12, 24 ou 48 (défaut 24) — toute autre valeur retombe sur 24
 
-    Réponse JSON : { "collection": ..., "count": ..., "cards": [...] }
+    Réponse JSON (liste complète, comportement historique — toujours le
+    cas si la collection/filtre ne dépasse pas MOBILE_LIST_MAX_UNPAGINATED
+    cartes, 200 par défaut) :
+      { "collection": ..., "count": ..., "cards": [...], "truncated": false }
     (mêmes champs par carte que /api/v1/news)
+
+    Pagination : mêmes règles que /api/v1/news (voir sa docstring pour le
+    détail) — déclenchée explicitement par le client (`page`/`per_page`)
+    ou automatiquement au-delà du seuil, avec alors "page", "per_page",
+    "pages", "total" en plus, et "truncated": true uniquement dans le cas
+    du repli automatique.
+
+    Le mélange et le parcours sans répétition restent à faire côté
+    client, à partir de l'ensemble des cartes reçues : si la pagination
+    est utilisée, cela veut dire à partir de l'ensemble des pages
+    parcourues (le classement par id étant stable d'un appel à l'autre,
+    parcourir toutes les pages reconstitue la même collection complète
+    qu'un appel non paginé).
     """
     model = current_app.model
     collection = _validated_collection(request.args.get("collection"))
 
-    cards = model.list_unique_cards(collection=collection or None)
+    total = model.count_unique_cards(collection=collection or None)
+    page, per_page, explicit = _pagination_params()
+    max_unpaginated = current_app.config["MOBILE_LIST_MAX_UNPAGINATED"]
+
+    if not explicit and total <= max_unpaginated:
+        cards = model.list_unique_cards(collection=collection or None)
+        items = [_card_summary(c) for c in cards]
+        return _no_cache(jsonify({
+            "collection": collection or None,
+            "count": len(items),
+            "cards": items,
+            "truncated": False,
+        }))
+
+    pages = max(1, (total + per_page - 1) // per_page)
+    if page > pages:
+        page = pages
+    offset = (page - 1) * per_page
+
+    cards = model.list_unique_cards(collection=collection or None, limit=per_page, offset=offset)
     items = [_card_summary(c) for c in cards]
 
     return _no_cache(jsonify({
         "collection": collection or None,
         "count": len(items),
         "cards": items,
+        "truncated": not explicit,
+        "page": page,
+        "per_page": per_page,
+        "pages": pages,
+        "total": total,
     }))
 
 
 @bp.route("/api/v1/gallery")
+# Parcourue de façon interactive (pagination, filtres, recherche texte)
+# côté galerie mobile : palier plus généreux qu'un endpoint de
+# découverte, mais toujours borné.
+@limiter.limit("60 per minute;1000 per hour")
 def gallery():
     """
     Galerie paginée — mêmes filtres que /gallery/ côté web.
@@ -945,6 +1145,9 @@ def gallery():
 
 
 @bp.route("/api/v1/card/<card_id>")
+# Consultée à chaque ouverture de fiche détaillée (galerie, "ici",
+# résultats de /api/v1/similar) : même palier que /api/v1/gallery.
+@limiter.limit("60 per minute;1000 per hour")
 def card_detail(card_id: str):
     """
     Fiche détaillée d'une carte postale — équivalent JSON de la page web
@@ -1542,3 +1745,183 @@ def update(auth_email: str):
         _release_lock(lock_path)
 
     return jsonify({"status": "ok", "card_id": card_id, "ts": ts})
+
+
+# ---------------------------------------------------------------------------
+# Signalement / modération de contenu
+# ---------------------------------------------------------------------------
+
+def _report_rate_limit_key() -> str:
+    """
+    Limite par IP : POST /api/v1/report est public (aucun compte requis,
+    pour ne pas décourager un signalement légitime), donc le seul frein
+    aux abus est le débit par adresse — comme pour les routes push du
+    master (voir kartotek_master.push_api._push_token_key).
+    """
+    return get_remote_address()
+
+
+@bp.route("/api/v1/report", methods=["POST"])
+@limiter.limit("10 per minute;60 per hour", key_func=_report_rate_limit_key)
+def report_card():
+    """
+    Signale un problème sur une carte postale (mauvaise géolocalisation,
+    contenu inapproprié, doublon, atteinte à des droits, ...) — bouton
+    "signaler" côté appli mobile, sur la fiche carte ou la vue "ici".
+
+    Public, sans authentification : n'importe quel utilisateur peut
+    signaler une carte, y compris un utilisateur non-manager. Seule la
+    consultation/le traitement des signalements (voir GET /api/v1/reports
+    et POST /api/v1/reports/<id>/resolve) est réservée aux managers.
+
+    Corps JSON :
+      {
+        "card_id": "123",
+        "reason": "wrong_location" | "inappropriate_content" | "duplicate" | "copyright" | "other",
+        "comment": "..."     (optionnel, 500 caractères max)
+      }
+    (voir GET /api/v1/capabilities -> "reporting.reasons" pour la liste
+    à jour, à ne jamais coder en dur côté client mobile)
+
+    Le signalement est ajouté à datadir/reports.json (protégé par un
+    verrou reports.json.lck, voir flpostcards.jsonlock.LockedJsonFile —
+    même mécanisme que push_tokens.json), pour être traité par
+    l'administrateur du site (via GET /api/v1/reports, ou plus tard
+    KartoTek App). Aucune adresse IP ni identifiant de l'auteur n'est
+    conservé dans ce fichier : seule une limite de débit en mémoire
+    s'appuie sur l'IP, un signalement n'engage pas son auteur.
+
+    Réponse (201) : { "status": "ok", "report_id": "<uuid4 hex>" }
+    Erreurs :
+      400 { "error": "..." }  — card_id/reason manquant ou invalide, commentaire trop long
+      404 { "error": "..." }  — card_id inconnu sur ce serveur
+      503 { "error": "..." }  — verrou reports.json toujours pris après le délai (voir LOCK_TIMEOUT)
+    """
+    data: dict[str, Any] = request.get_json(silent=True) or {}
+
+    card_id = str(data.get("card_id", "")).strip()
+    if not card_id:
+        return jsonify({"error": "card_id est obligatoire"}), 400
+
+    reason = str(data.get("reason", "")).strip().lower()
+    if reason not in _VALID_REPORT_REASONS:
+        return jsonify({
+            "error": f"reason doit être l'un de {sorted(_VALID_REPORT_REASONS)}"
+        }), 400
+
+    comment = str(data.get("comment") or "").strip()
+    if len(comment) > _REPORT_COMMENT_MAX_LEN:
+        return jsonify({
+            "error": f"comment dépasse {_REPORT_COMMENT_MAX_LEN} caractères"
+        }), 400
+
+    if current_app.model.get_card(card_id) is None:
+        return jsonify({"error": f"carte {card_id!r} inconnue sur ce serveur"}), 404
+
+    entry = {
+        "id": uuid.uuid4().hex,
+        "card_id": card_id,
+        "reason": reason,
+        "comment": comment or None,
+        "ts": int(time.time()),
+        "status": "pending",
+        "resolved_by": None,
+        "resolved_ts": None,
+    }
+
+    datadir = Path(current_app.config["DATADIR"])
+    lock_suffix = current_app.config.get("LOCK_SUFFIX", ".lck")
+    timeout = current_app.config.get("LOCK_TIMEOUT", 60.0)
+    poll = current_app.config.get("LOCK_POLL_INTERVAL", 2.0)
+
+    try:
+        with LockedJsonFile(
+            datadir / "reports.json", default={"reports": []},
+            lock_suffix=lock_suffix, timeout=timeout, poll_interval=poll,
+        ) as f:
+            f.data.setdefault("reports", []).append(entry)
+    except TimeoutError as exc:
+        current_app.logger.error("report : %s", exc)
+        return jsonify({"error": str(exc)}), 503
+
+    current_app.logger.info(
+        "report : carte %s signalée (%s), report_id=%s (from=%s)",
+        card_id, reason, entry["id"], request.remote_addr,
+    )
+
+    return jsonify({"status": "ok", "report_id": entry["id"]}), 201
+
+
+@bp.route("/api/v1/reports")
+@require_auth
+def list_reports(auth_email: str):
+    """
+    Liste les signalements enregistrés sur ce serveur (managers
+    uniquement — protégé par @require_auth, comme /api/v1/similar et
+    /api/v1/update ; il n'existe pas de rôle "manager" séparé du rôle
+    "compte authentifié", voir model.list_auths()).
+
+    Query string :
+      status : "pending" (défaut) | "resolved" | "all"
+
+    Réponse (200) : liste des signalements (du plus récent au plus
+    ancien), chacun sous la forme produite par POST /api/v1/report,
+    avec en plus "status"/"resolved_by"/"resolved_ts" tenus à jour par
+    POST /api/v1/reports/<id>/resolve.
+
+    Erreurs :
+      401 { "error": "unauthorized" }  — access token absent, invalide ou expiré
+      400 { "error": "..." }           — status invalide
+    """
+    status_filter = request.args.get("status", "pending").strip().lower()
+    if status_filter not in {"pending", "resolved", "all"}:
+        return jsonify({"error": "status doit être 'pending', 'resolved' ou 'all'"}), 400
+
+    datadir = Path(current_app.config["DATADIR"])
+    reports = read_json(datadir / "reports.json", {"reports": []}).get("reports", [])
+
+    if status_filter != "all":
+        reports = [r for r in reports if r.get("status") == status_filter]
+
+    return jsonify(sorted(reports, key=lambda r: r.get("ts", 0), reverse=True))
+
+
+@bp.route("/api/v1/reports/<report_id>/resolve", methods=["POST"])
+@require_auth
+def resolve_report(report_id: str, auth_email: str):
+    """
+    Marque un signalement comme traité (managers uniquement). Aucun
+    effet de bord sur la carte elle-même : c'est à l'administrateur de
+    corriger la géolocalisation/le contenu via KartoTek App, puis de
+    "clore" le signalement ici une fois l'action faite en local.
+
+    Réponse (200) : { "status": "ok" }
+    Erreurs :
+      401 { "error": "unauthorized" }  — access token absent, invalide ou expiré
+      404 { "error": "..." }           — report_id inconnu
+      503 { "error": "..." }           — verrou reports.json toujours pris après le délai
+    """
+    datadir = Path(current_app.config["DATADIR"])
+    lock_suffix = current_app.config.get("LOCK_SUFFIX", ".lck")
+    timeout = current_app.config.get("LOCK_TIMEOUT", 60.0)
+    poll = current_app.config.get("LOCK_POLL_INTERVAL", 2.0)
+
+    try:
+        with LockedJsonFile(
+            datadir / "reports.json", default={"reports": []},
+            lock_suffix=lock_suffix, timeout=timeout, poll_interval=poll,
+        ) as f:
+            reports = f.data.setdefault("reports", [])
+            match = next((r for r in reports if r.get("id") == report_id), None)
+            if match is None:
+                return jsonify({"error": f"report {report_id!r} inconnu"}), 404
+            match["status"] = "resolved"
+            match["resolved_by"] = auth_email
+            match["resolved_ts"] = int(time.time())
+    except TimeoutError as exc:
+        return jsonify({"error": str(exc)}), 503
+
+    current_app.logger.info(
+        "report : %s résolu par %s", report_id, auth_email,
+    )
+    return jsonify({"status": "ok"})

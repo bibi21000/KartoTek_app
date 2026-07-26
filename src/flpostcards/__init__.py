@@ -70,6 +70,10 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["RECENT_FALLBACK_COUNT"] = parser.getint(
                     "flask", "recent_fallback_count"
                 )
+            elif key == "mobile_list_max_unpaginated":
+                app.config["MOBILE_LIST_MAX_UNPAGINATED"] = parser.getint(
+                    "flask", "mobile_list_max_unpaginated"
+                )
             elif key == "smtp_port":
                 app.config["SMTP_PORT"] = parser.getint("flask", "smtp_port")
             elif key == "similar_default_threshold":
@@ -110,6 +114,12 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
 
     app.config.setdefault("RECENT_DAYS", 30)
     app.config.setdefault("RECENT_FALLBACK_COUNT", 20)
+    # Au-delà de ce nombre de cartes, /api/v1/news et /api/v1/slideshow
+    # basculent automatiquement en pagination (même sans page/per_page
+    # explicite dans la requête) plutôt que d'envoyer toute la collection
+    # d'un bloc — voir leurs docstrings dans blueprints/api/__init__.py.
+    # En-dessous, comportement historique inchangé (liste complète).
+    app.config.setdefault("MOBILE_LIST_MAX_UNPAGINATED", 200)
     app.config.setdefault("SMTP_PORT", 587)
     # URL du service simpostcards (POST /api/compute_hashes), utilisé
     # par /api/v1/similar pour obtenir les hashs d'une photo envoyée
@@ -332,5 +342,8 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
 
     from flpostcards.blueprints.contact import bp as contact_bp
     app.register_blueprint(contact_bp)
+
+    from flpostcards.blueprints.privacy import bp as privacy_bp
+    app.register_blueprint(privacy_bp)
 
     return app

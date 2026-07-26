@@ -92,6 +92,13 @@
     {% endwith %}
 
     {% block content %}{% endblock %}
+
+    <footer class="site-footer">
+        <a class="site-footer-link" href="{{ url_for('privacy.index') }}">
+            {{ _("Politique de confidentialité") }}
+        </a>
+    </footer>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>

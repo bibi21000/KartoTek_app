@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="privacy-page">
+  <header class="privacy-header">
+    <h1 class="page-title">{{ page_title }}</h1>
+  </header>
+
+  {% if last_updated %}
+  <p class="privacy-updated">
+    {{ _("Dernière mise à jour : %(date)s", date=last_updated) }}
+  </p>
+  {% endif %}
+
+  <p>
+    {{ _("Ce site fait partie du réseau KartoTek : un ensemble de sites "
+         "indépendants, chacun géré par la personne qui a numérisé sa "
+         "propre collection de cartes postales, et consultables aussi "
+         "depuis l'application mobile KartoTek. Cette page décrit les "
+         "données traitées par CE site en particulier (%(url)s).",
+         url=request.url_root) }}
+  </p>
+
+  <h2>{{ _("Responsable de ce site") }}</h2>
+  <p>
+    {{ _("Ce site est géré par : %(name)s.", name=operator_name) }}
+    {% if contact_email %}
+      {{ _("Contact : %(email)s.", email=contact_email) }}
+    {% else %}
+      {{ _("Aucune adresse de contact n'est publiée sur ce site pour le "
+           "moment ; utilisez le site de référence du réseau, "
+           "kartotek.eu, pour signaler une question relative aux "
+           "données.") }}
+    {% endif %}
+  </p>
+
+  <h2>{{ _("Quelles données sont traitées, et pourquoi") }}</h2>
+
+  <h3>{{ _("Position GPS de votre téléphone") }}</h3>
+  <p>
+    {{ _("Quand l'application mobile utilise l'écran « ici », elle "
+         "envoie votre position (ou une zone géographique) à ce serveur "
+         "pour obtenir les cartes postales situées à proximité "
+         "(endpoints /api/v1/nearby, /api/v1/next-update, "
+         "/api/v1/bounds). Cette position est utilisée le temps de "
+         "répondre à la requête et n'est pas enregistrée de façon "
+         "durable ni associée à une identité, sauf si vous êtes "
+         "connecté·e en tant que gestionnaire (voir ci-dessous).") }}
+  </p>
+
+  <h3>{{ _("Compte gestionnaire (email et mot de passe)") }}</h3>
+  <p>
+    {{ _("Un compte de gestionnaire permet de signaler l'emplacement "
+         "réel d'une carte postale depuis le terrain. Ces comptes ne "
+         "sont ni créés ni modifiables depuis l'application mobile ou "
+         "le site web : ils sont créés et supprimés uniquement par "
+         "l'administrateur du site, via le logiciel de bureau KartoTek "
+         "App. Le mot de passe n'est jamais stocké en clair.") }}
+  </p>
+  <p>
+    {{ _("Une fois connecté·e, l'application mobile reçoit un jeton "
+         "d'accès de courte durée et un jeton de renouvellement de "
+         "longue durée ; ce dernier peut être révoqué à tout moment "
+         "(déconnexion, changement de téléphone, perte de l'appareil) "
+         "via l'application elle-même.") }}
+  </p>
+
+  <h3>{{ _("Repérages de terrain") }}</h3>
+  <p>
+    {{ _("Lorsqu'un·e gestionnaire connecté·e utilise le bouton de "
+         "repérage (« ici », version pro), la position GPS envoyée est "
+         "enregistrée avec l'email du compte et un horodatage, afin que "
+         "l'administrateur du site puisse mettre à jour les coordonnées "
+         "officielles des cartes postales. Ces repérages sont conservés "
+         "%(retention)s.",
+         retention=(
+           _("pendant %(days)s jours environ", days=retention_days)
+           if retention_days else
+           _("le temps nécessaire à la mise à jour des données du site")
+         )) }}
+  </p>
+
+  {% if similar_enabled %}
+  <h3>{{ _("Photo envoyée pour « cartes similaires »") }}</h3>
+  <p>
+    {{ _("La fonction « cartes similaires » (version pro) permet "
+         "d'envoyer la photo d'une carte postale trouvée pour "
+         "retrouver l'original numérisé dans la collection. Cette photo "
+         "sert uniquement au calcul d'empreintes visuelles au moment de "
+         "la requête ; elle n'est pas conservée sur ce serveur ni sur "
+         "le service qui calcule ces empreintes.") }}
+  </p>
+  {% endif %}
+
+  {% if push_enabled %}
+  <h3>{{ _("Notifications push") }}</h3>
+  <p>
+    {{ _("Ce site ne gère pas lui-même les notifications : il se "
+         "contente de signaler « une nouvelle carte a été ajoutée près "
+         "de tel endroit » au registre centralisé du réseau KartoTek "
+         "(kartotek.eu), qui se charge de l'envoi via Apple/Google et "
+         "conserve le jeton de votre appareil. Voir la politique de "
+         "confidentialité de kartotek.eu pour le détail de ce "
+         "traitement%(link)s.",
+         link=(
+           _(" (%(url)s)", url=(push_master_url ~ "/privacy/")) if push_master_url else ""
+         )) }}
+  </p>
+  {% endif %}
+
+  <h3>{{ _("Journaux techniques") }}</h3>
+  <p>
+    {{ _("Comme tout serveur web, ce site conserve brièvement des "
+         "journaux techniques (adresse IP, requêtes effectuées) à des "
+         "fins de sécurité et de limitation des abus (voir la limite de "
+         "requêtes appliquée à chaque endpoint de l'API). Ces journaux "
+         "ne sont pas utilisés à des fins commerciales et ne sont "
+         "transmis à personne d'autre.") }}
+  </p>
+
+  {% if matomo_enabled %}
+  <h3>{{ _("Mesure d'audience") }}</h3>
+  <p>
+    {{ _("Ce site utilise Matomo pour mesurer la fréquentation des "
+         "pages web (pas de l'application mobile). Matomo est "
+         "hébergé par l'administrateur du site, sans transmission des "
+         "données à un tiers publicitaire.") }}
+  </p>
+  {% endif %}
+
+  <h2>{{ _("Vos droits") }}</h2>
+  <p>
+    {{ _("Vous pouvez demander l'accès, la rectification ou la "
+         "suppression des données vous concernant (notamment un compte "
+         "gestionnaire ou un repérage de terrain) en contactant "
+         "l'administrateur de ce site%(via_email)s.",
+         via_email=(_(" à %(email)s", email=contact_email) if contact_email else "")) }}
+  </p>
+
+  <h2>{{ _("Autres sites du réseau KartoTek") }}</h2>
+  <p>
+    {{ _("L'application mobile KartoTek peut se connecter à plusieurs "
+         "sites indépendants les uns des autres. Chaque site applique sa "
+         "propre politique de confidentialité pour les données qu'il "
+         "gère (comptes gestionnaires, repérages) ; seul le registre des "
+         "notifications push est mutualisé, via kartotek.eu.") }}
+  </p>
+
+  <h2>{{ _("Absence de sous-traitance publicitaire") }}</h2>
+  <p>
+    {{ _("Ce site ne vend ni ne partage vos données avec des "
+         "annonceurs ou courtiers en données. Il n'affiche aucune "
+         "publicité.") }}
+  </p>
+</div>
+{% endblock %}

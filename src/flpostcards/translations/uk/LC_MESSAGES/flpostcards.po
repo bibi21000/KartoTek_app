@@ -8,364 +8,491 @@ msgid ""
 msgstr ""
 "Project-Id-Version: flpostcards 3.4.2\n"
 "Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
-"POT-Creation-Date: 2026-07-22 00:24+0200\n"
+"POT-Creation-Date: 2026-07-26 12:01+0000\n"
 "PO-Revision-Date: 2026-07-22 11:56+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: uk\n"
 "Language-Team: uk <LL@li.org>\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
-"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/flpostcards/blueprints/contact/__init__.py:49
+#: blueprints/contact/__init__.py:49
 msgid "Nouveau message depuis le site"
 msgstr "Нове повідомлення з сайту"
 
-#: src/flpostcards/blueprints/contact/__init__.py:85
-#: src/flpostcards/templates/base.html:79
+#: blueprints/contact/__init__.py:85 templates/base.html:79
 msgid "Contact"
 msgstr "Контакти"
 
-#: src/flpostcards/blueprints/contact/__init__.py:94
-#: src/flpostcards/blueprints/contact/__init__.py:120
+#: blueprints/contact/__init__.py:94 blueprints/contact/__init__.py:120
 msgid "Votre message a bien été envoyé, merci !"
 msgstr "Ваше повідомлення успішно надіслано, дякуємо!"
 
-#: src/flpostcards/blueprints/contact/__init__.py:101
+#: blueprints/contact/__init__.py:101
 msgid "Le nom est obligatoire."
 msgstr "Ім'я є обов'язковим."
 
-#: src/flpostcards/blueprints/contact/__init__.py:103
+#: blueprints/contact/__init__.py:103
 msgid "L'adresse email est obligatoire."
 msgstr "Адреса електронної пошти є обов'язковою."
 
-#: src/flpostcards/blueprints/contact/__init__.py:105
+#: blueprints/contact/__init__.py:105
 msgid "L'adresse email n'est pas valide."
 msgstr "Адреса електронної пошти недійсна."
 
-#: src/flpostcards/blueprints/contact/__init__.py:107
+#: blueprints/contact/__init__.py:107
 msgid "Le message ne peut pas être vide."
 msgstr "Повідомлення не може бути порожнім."
 
-#: src/flpostcards/blueprints/contact/__init__.py:117
+#: blueprints/contact/__init__.py:117
 msgid "L'envoi du message a échoué. Réessayez plus tard."
 msgstr "Не вдалося надіслати повідомлення. Спробуйте пізніше."
 
-#: src/flpostcards/blueprints/contact/__init__.py:129
+#: blueprints/contact/__init__.py:129
 msgid "Contactez-moi à propos de ma collection de cartes postales."
 msgstr "Зв'яжіться зі мною щодо моєї колекції листівок."
 
-#: src/flpostcards/blueprints/gallery/__init__.py:109
+#: blueprints/gallery/__init__.py:109
 #, python-format
 msgid "Toutes les cartes postales - %(collection)s"
 msgstr "Усі листівки - %(collection)s"
 
-#: src/flpostcards/blueprints/gallery/__init__.py:112
+#: blueprints/gallery/__init__.py:112
 msgid "Toutes les cartes postales"
 msgstr "Усі листівки"
 
-#: src/flpostcards/blueprints/gallery/__init__.py:132
+#: blueprints/gallery/__init__.py:132
 msgid "Parcourez ma collection de cartes postales anciennes."
 msgstr "Перегляньте мою колекцію старовинних листівок."
 
-#: src/flpostcards/blueprints/home/__init__.py:57
+#: blueprints/home/__init__.py:57
 #, python-format
 msgid "Ma collection de cartes postales - %(collection)s"
 msgstr "Моя колекція листівок - %(collection)s"
 
-#: src/flpostcards/blueprints/home/__init__.py:61
+#: blueprints/home/__init__.py:61
 msgid "Ma collection de cartes postales"
 msgstr "Моя колекція листівок"
 
-#: src/flpostcards/blueprints/home/__init__.py:91
-#: src/flpostcards/templates/base.html:12
+#: blueprints/home/__init__.py:91 templates/base.html:12
 msgid "Découvrez ma collection de cartes postales anciennes."
 msgstr "Відкрийте для себе мою колекцію старовинних листівок."
 
-#: src/flpostcards/blueprints/home/__init__.py:306
-#: src/flpostcards/templates/card/detail.html:3
-#: src/flpostcards/templates/gallery/index.html:89
+#: blueprints/home/__init__.py:306 templates/card/detail.html:3
+#: templates/gallery/index.html:89
 #, python-format
 msgid "Carte #%(id)s"
 msgstr "Листівка №%(id)s"
 
-#: src/flpostcards/blueprints/home/__init__.py:318
+#: blueprints/home/__init__.py:318
 msgid "Retour à la galerie"
 msgstr "Повернутися до галереї"
 
-#: src/flpostcards/blueprints/home/__init__.py:320
+#: blueprints/home/__init__.py:320
 msgid "Retour à la balade"
 msgstr "Повернутися до подорожі"
 
-#: src/flpostcards/blueprints/home/__init__.py:322
+#: blueprints/home/__init__.py:322
 msgid "Retour à la carte"
 msgstr "Повернутися до карти"
 
-#: src/flpostcards/blueprints/home/__init__.py:324
-#: src/flpostcards/templates/card/detail.html:12
+#: blueprints/home/__init__.py:324 templates/card/detail.html:12
 msgid "Retour au diaporama"
 msgstr "Повернутися до слайд-шоу"
 
-#: src/flpostcards/blueprints/map/__init__.py:30
-msgid "Carte - Points d'intérêt"
-msgstr "Карта - Цікаві місця"
-
-#: src/flpostcards/blueprints/map/__init__.py:32
+#: blueprints/map/__init__.py:34
 #, python-format
 msgid "Carte - %(collection)s"
 msgstr "Карта - %(collection)s"
 
-#: src/flpostcards/blueprints/map/__init__.py:34
-#: src/flpostcards/templates/base.html:75
+#: blueprints/map/__init__.py:36 templates/base.html:75
 msgid "Carte"
 msgstr "Карта"
 
-#: src/flpostcards/blueprints/map/__init__.py:59
+#: blueprints/map/__init__.py:62
 msgid "Localisez ma collection de cartes postales sur la carte."
 msgstr "Знайдіть мою колекцію листівок на карті."
 
-#: src/flpostcards/blueprints/slideshow/__init__.py:43
+#: blueprints/privacy/__init__.py:62
+msgid "L'administrateur de ce site KartoTek"
+msgstr "Адміністратор цього сайту KartoTek"
+
+#: blueprints/privacy/__init__.py:72 templates/base.html:98
+msgid "Politique de confidentialité"
+msgstr "Політика конфіденційності"
+
+#: blueprints/privacy/__init__.py:87
+msgid "Quelles données ce site KartoTek collecte et pourquoi."
+msgstr "Які дані збирає цей сайт KartoTek і навіщо."
+
+#: blueprints/slideshow/__init__.py:43
 #, python-format
 msgid "Diaporama - %(collection)s"
 msgstr "Слайд-шоу - %(collection)s"
 
-#: src/flpostcards/blueprints/slideshow/__init__.py:46
-#: src/flpostcards/templates/base.html:63
+#: blueprints/slideshow/__init__.py:46 templates/base.html:63
 msgid "Diaporama"
 msgstr "Слайд-шоу"
 
-#: src/flpostcards/blueprints/slideshow/__init__.py:55
+#: blueprints/slideshow/__init__.py:55
 msgid "Toutes mes cartes postales en diaporama."
 msgstr "Усі мої листівки у форматі слайд-шоу."
 
-#: src/flpostcards/blueprints/travel/__init__.py:22
+#: blueprints/travel/__init__.py:22
 msgid "Balades dans le temps au fil des cartes postales"
 msgstr "Подорожі в часі крізь листівки"
 
-#: src/flpostcards/blueprints/travel/__init__.py:30
-#: src/flpostcards/blueprints/travel/__init__.py:70
+#: blueprints/travel/__init__.py:30 blueprints/travel/__init__.py:70
 msgid "Suivez mes parcours à travers ma collection de cartes postales."
 msgstr "Слідкуйте за моїми подорожами через мою колекцію листівок."
 
-#: src/flpostcards/blueprints/travel/__init__.py:49
+#: blueprints/travel/__init__.py:49
 #, python-format
 msgid "Parcours #%(id)s"
 msgstr "Подорож №%(id)s"
 
-#: src/flpostcards/templates/base.html:6 src/flpostcards/templates/base.html:11
-#: src/flpostcards/templates/card/detail.html:5
+#: templates/base.html:6 templates/base.html:11 templates/card/detail.html:5
 msgid "Cartes postales"
 msgstr "Листівки"
 
-#: src/flpostcards/templates/base.html:59
+#: templates/base.html:59
 msgid "Accueil"
 msgstr "Головна"
 
-#: src/flpostcards/templates/base.html:67
+#: templates/base.html:67
 msgid "Galerie"
 msgstr "Галерея"
 
-#: src/flpostcards/templates/base.html:71
+#: templates/base.html:71
 msgid "Balades"
 msgstr "Подорожі"
 
-#: src/flpostcards/templates/card/detail.html:10
+#: templates/card/detail.html:10
 msgid "Retour"
 msgstr "Назад"
 
-#: src/flpostcards/templates/card/detail.html:15
+#: templates/card/detail.html:15
 msgid "Cliquer pour agrandir"
 msgstr "Натисніть, щоб збільшити"
 
-#: src/flpostcards/templates/card/detail.html:19
-#: src/flpostcards/templates/gallery/index.html:94
+#: templates/card/detail.html:19 templates/gallery/index.html:94
 #, python-format
 msgid "Recto de la carte %(id)s"
 msgstr "Лицьова сторона листівки %(id)s"
 
-#: src/flpostcards/templates/card/detail.html:23
-#: src/flpostcards/templates/gallery/index.html:100
+#: templates/card/detail.html:23 templates/gallery/index.html:100
 #, python-format
 msgid "Verso de la carte %(id)s"
 msgstr "Зворотна сторона листівки %(id)s"
 
-#: src/flpostcards/templates/card/detail.html:25
+#: templates/card/detail.html:25
 msgid "Afficher l'autre face"
 msgstr "Показати іншу сторону"
 
-#: src/flpostcards/templates/card/detail.html:28
+#: templates/card/detail.html:28
 msgid "Aperçu de l'autre face"
 msgstr "Попередній перегляд іншої сторони"
 
-#: src/flpostcards/templates/card/detail.html:61
+#: templates/card/detail.html:61
 msgid "OpenStreetMap"
 msgstr "OpenStreetMap"
 
-#: src/flpostcards/templates/card/detail.html:66
+#: templates/card/detail.html:66
 msgid "Google Maps"
 msgstr "Google Maps"
 
-#: src/flpostcards/templates/card/detail.html:71
+#: templates/card/detail.html:71
 msgid "Street View"
 msgstr "Street View"
 
-#: src/flpostcards/templates/card/detail.html:85
+#: templates/card/detail.html:85
 msgid "Aperçu du recto"
 msgstr "Попередній перегляд лицьової сторони"
 
-#: src/flpostcards/templates/card/detail.html:86
+#: templates/card/detail.html:86
 msgid "Aperçu du verso"
 msgstr "Попередній перегляд зворотної сторони"
 
-#: src/flpostcards/templates/contact/index.html:17
+#: templates/contact/index.html:17
 msgid "Nom"
 msgstr "Ім'я"
 
-#: src/flpostcards/templates/contact/index.html:23
+#: templates/contact/index.html:23
 msgid "Email"
 msgstr "Електронна пошта"
 
-#: src/flpostcards/templates/contact/index.html:29
+#: templates/contact/index.html:29
 msgid "Sujet"
 msgstr "Тема"
 
-#: src/flpostcards/templates/contact/index.html:34
+#: templates/contact/index.html:34
 msgid "Message"
 msgstr "Повідомлення"
 
-#: src/flpostcards/templates/contact/index.html:42
+#: templates/contact/index.html:42
 msgid "Site web"
 msgstr "Веб-сайт"
 
-#: src/flpostcards/templates/contact/index.html:46
+#: templates/contact/index.html:46
 msgid "Envoyer"
 msgstr "Надіслати"
 
-#: src/flpostcards/templates/contact/index.html:50
+#: templates/contact/index.html:50
 msgid "Site propulsé et hébergé par"
 msgstr "Сайт створено та розміщено за допомогою"
 
-#: src/flpostcards/templates/gallery/index.html:12
+#: templates/gallery/index.html:12
 #, python-format
 msgid "%(count)d carte"
 msgstr "%(count)d листівка"
 
-#: src/flpostcards/templates/gallery/index.html:12
-#: src/flpostcards/templates/travel/index.html:31
+#: templates/gallery/index.html:12 templates/travel/index.html:31
 #, python-format
 msgid "%(count)d cartes"
 msgstr "%(count)d листівок"
 
-#: src/flpostcards/templates/gallery/index.html:18
+#: templates/gallery/index.html:18
 msgid "Recherche"
 msgstr "Пошук"
 
-#: src/flpostcards/templates/gallery/index.html:24
+#: templates/gallery/index.html:24
 msgid "Rechercher..."
 msgstr "Пошук..."
 
-#: src/flpostcards/templates/gallery/index.html:31
-#: src/flpostcards/templates/home/index.html:22
-#: src/flpostcards/templates/map/index.html:16
-#: src/flpostcards/templates/slideshow/index.html:18
+#: templates/gallery/index.html:31 templates/home/index.html:22
+#: templates/map/index.html:16 templates/slideshow/index.html:18
 msgid "Collection"
 msgstr "Колекція"
 
-#: src/flpostcards/templates/gallery/index.html:34
-#: src/flpostcards/templates/home/index.html:25
-#: src/flpostcards/templates/map/index.html:19
-#: src/flpostcards/templates/slideshow/index.html:21
+#: templates/gallery/index.html:34 templates/home/index.html:25
+#: templates/map/index.html:19 templates/slideshow/index.html:21
 msgid "Toutes les collections"
 msgstr "Усі колекції"
 
-#: src/flpostcards/templates/gallery/index.html:46
+#: templates/gallery/index.html:46
 msgid "Affichage"
 msgstr "Відображення"
 
-#: src/flpostcards/templates/gallery/index.html:49
+#: templates/gallery/index.html:49
 msgid "Recto / verso"
 msgstr "Лицьова / зворотна сторона"
 
-#: src/flpostcards/templates/gallery/index.html:52
+#: templates/gallery/index.html:52
 msgid "Recto"
 msgstr "Лицьова сторона"
 
-#: src/flpostcards/templates/gallery/index.html:55
+#: templates/gallery/index.html:55
 msgid "Verso"
 msgstr "Зворотна сторона"
 
-#: src/flpostcards/templates/gallery/index.html:61
+#: templates/gallery/index.html:61
 msgid "Doublons"
 msgstr "Дублікати"
 
-#: src/flpostcards/templates/gallery/index.html:64
+#: templates/gallery/index.html:64
 msgid "Sans doublons"
 msgstr "Без дублікатів"
 
-#: src/flpostcards/templates/gallery/index.html:67
+#: templates/gallery/index.html:67
 msgid "Avec doublons"
 msgstr "З дублікатами"
 
-#: src/flpostcards/templates/gallery/index.html:73
+#: templates/gallery/index.html:73
 msgid "Cartes par page"
 msgstr "Листівок на сторінку"
 
-#: src/flpostcards/templates/gallery/index.html:77
+#: templates/gallery/index.html:77
 #, python-format
 msgid "%(n)d par page"
 msgstr "%(n)d на сторінку"
 
-#: src/flpostcards/templates/gallery/index.html:116
+#: templates/gallery/index.html:116
 msgid "Première page"
 msgstr "Перша сторінка"
 
-#: src/flpostcards/templates/gallery/index.html:141
+#: templates/gallery/index.html:141
 msgid "Dernière page"
 msgstr "Остання сторінка"
 
-#: src/flpostcards/templates/gallery/index.html:152
+#: templates/gallery/index.html:152
 msgid "Aucune carte ne correspond à ces critères."
 msgstr "Жодна листівка не відповідає цим критеріям."
 
-#: src/flpostcards/templates/home/index.html:12
-#: src/flpostcards/templates/slideshow/index.html:12
+#: templates/home/index.html:12 templates/slideshow/index.html:12
 msgid "Verso de la carte"
 msgstr "Зворотна сторона листівки"
 
-#: src/flpostcards/templates/home/index.html:49
+#: templates/home/index.html:49
 msgid "Ajoutée le"
 msgstr "Додано"
 
-#: src/flpostcards/templates/map/index.html:27
+#: templates/map/index.html:30
 msgid "Points d'intérêt"
 msgstr "Цікаві місця"
 
-#: src/flpostcards/templates/travel/detail.html:23
+#: templates/privacy/index.html:13
+#, python-format
+msgid "Dernière mise à jour : %(date)s"
+msgstr "Востаннє оновлено: %(date)s"
+
+#: templates/privacy/index.html:18
+#, python-format
+msgid "Ce site fait partie du réseau KartoTek : un ensemble de sites indépendants, chacun géré par la personne qui a numérisé sa propre collection de cartes postales, et consultables aussi depuis l'application mobile KartoTek. Cette page décrit les données traitées par CE site en particulier (%(url)s)."
+msgstr "Цей сайт входить до мережі KartoTek — сукупності незалежних сайтів, кожен з яких веде людина, що оцифрувала власну колекцію листівок; їх також можна переглядати в мобільному додатку KartoTek. На цій сторінці описано дані, які обробляє САМЕ цей сайт (%(url)s)."
+
+#: templates/privacy/index.html:26
+msgid "Responsable de ce site"
+msgstr "Відповідальний за цей сайт"
+
+#: templates/privacy/index.html:28
+#, python-format
+msgid "Ce site est géré par : %(name)s."
+msgstr "Цей сайт веде: %(name)s."
+
+#: templates/privacy/index.html:30
+#, python-format
+msgid "Contact : %(email)s."
+msgstr "Контакт: %(email)s."
+
+#: templates/privacy/index.html:32
+msgid "Aucune adresse de contact n'est publiée sur ce site pour le moment ; utilisez le site de référence du réseau, kartotek.eu, pour signaler une question relative aux données."
+msgstr "Наразі на цьому сайті не опубліковано контактної адреси; для будь-якого питання щодо даних скористайтеся основним сайтом мережі kartotek.eu."
+
+#: templates/privacy/index.html:39
+msgid "Quelles données sont traitées, et pourquoi"
+msgstr "Які дані обробляються і навіщо"
+
+#: templates/privacy/index.html:41
+msgid "Position GPS de votre téléphone"
+msgstr "GPS-положення вашого телефону"
+
+#: templates/privacy/index.html:43
+msgid "Quand l'application mobile utilise l'écran « ici », elle envoie votre position (ou une zone géographique) à ce serveur pour obtenir les cartes postales situées à proximité (endpoints /api/v1/nearby, /api/v1/next-update, /api/v1/bounds). Cette position est utilisée le temps de répondre à la requête et n'est pas enregistrée de façon durable ni associée à une identité, sauf si vous êtes connecté·e en tant que gestionnaire (voir ci-dessous)."
+msgstr "Коли мобільний додаток використовує екран «поруч», він надсилає ваше місцезнаходження (або географічну зону) на цей сервер, щоб отримати листівки поблизу (кінцеві точки /api/v1/nearby, /api/v1/next-update, /api/v1/bounds). Це місцезнаходження використовується лише для відповіді на запит і не зберігається тривало та не пов'язується з особою, крім випадку, якщо ви увійшли як керівник сайту (див. нижче)."
+
+#: templates/privacy/index.html:53
+msgid "Compte gestionnaire (email et mot de passe)"
+msgstr "Обліковий запис керівника (email і пароль)"
+
+#: templates/privacy/index.html:55
+msgid "Un compte de gestionnaire permet de signaler l'emplacement réel d'une carte postale depuis le terrain. Ces comptes ne sont ni créés ni modifiables depuis l'application mobile ou le site web : ils sont créés et supprimés uniquement par l'administrateur du site, via le logiciel de bureau KartoTek App. Le mot de passe n'est jamais stocké en clair."
+msgstr "Обліковий запис керівника дає змогу повідомляти фактичне розташування листівки з місцевості. Такі облікові записи не можна створити чи змінити з мобільного додатка або сайту: їх створює і видаляє лише адміністратор сайту через настільну програму KartoTek App. Пароль ніколи не зберігається у відкритому вигляді."
+
+#: templates/privacy/index.html:63
+msgid "Une fois connecté·e, l'application mobile reçoit un jeton d'accès de courte durée et un jeton de renouvellement de longue durée ; ce dernier peut être révoqué à tout moment (déconnexion, changement de téléphone, perte de l'appareil) via l'application elle-même."
+msgstr "Після входу мобільний додаток отримує короткостроковий токен доступу та довгостроковий токен оновлення; останній можна будь-коли відкликати (вихід із системи, зміна телефону, втрата пристрою) прямо з додатка."
+
+#: templates/privacy/index.html:70
+msgid "Repérages de terrain"
+msgstr "Польові позначення"
+
+#: templates/privacy/index.html:72
+#, python-format
+msgid "Lorsqu'un·e gestionnaire connecté·e utilise le bouton de repérage (« ici », version pro), la position GPS envoyée est enregistrée avec l'email du compte et un horodatage, afin que l'administrateur du site puisse mettre à jour les coordonnées officielles des cartes postales. Ces repérages sont conservés %(retention)s."
+msgstr "Коли увійшовший керівник використовує кнопку позначення (екран «поруч», pro-версія), надіслане GPS-положення зберігається разом із email облікового запису та часовою міткою, щоб адміністратор сайту міг оновити офіційні координати листівок. Ці записи зберігаються %(retention)s."
+
+#: templates/privacy/index.html:79
+#, python-format
+msgid "pendant %(days)s jours environ"
+msgstr "приблизно %(days)s днів"
+
+#: templates/privacy/index.html:81
+msgid "le temps nécessaire à la mise à jour des données du site"
+msgstr "стільки часу, скільки потрібно для оновлення даних сайту"
+
+#: templates/privacy/index.html:86
+msgid "Photo envoyée pour « cartes similaires »"
+msgstr "Фото, надіслане для «схожих листівок»"
+
+#: templates/privacy/index.html:88
+msgid "La fonction « cartes similaires » (version pro) permet d'envoyer la photo d'une carte postale trouvée pour retrouver l'original numérisé dans la collection. Cette photo sert uniquement au calcul d'empreintes visuelles au moment de la requête ; elle n'est pas conservée sur ce serveur ni sur le service qui calcule ces empreintes."
+msgstr "Функція «схожі листівки» (pro-версія) дає змогу надіслати фото знайденої листівки, щоб знайти оцифрований оригінал у колекції. Це фото використовується лише для обчислення візуального відбитка під час запиту; воно не зберігається ані на цьому сервері, ані на службі, що обчислює ці відбитки."
+
+#: templates/privacy/index.html:98
+msgid "Notifications push"
+msgstr "Push-сповіщення"
+
+#: templates/privacy/index.html:100
+#, python-format
+msgid "Ce site ne gère pas lui-même les notifications : il se contente de signaler « une nouvelle carte a été ajoutée près de tel endroit » au registre centralisé du réseau KartoTek (kartotek.eu), qui se charge de l'envoi via Apple/Google et conserve le jeton de votre appareil. Voir la politique de confidentialité de kartotek.eu pour le détail de ce traitement%(link)s."
+msgstr "Цей сайт не керує сповіщеннями самостійно: він лише повідомляє централізованому реєстру мережі KartoTek (kartotek.eu) про «нову листівку поблизу такого місця», а той надсилає сповіщення через Apple/Google і зберігає токен вашого пристрою. Подробиці цієї обробки — у політиці конфіденційності kartotek.eu%(link)s."
+
+#: templates/privacy/index.html:108
+#, python-format
+msgid " (%(url)s)"
+msgstr " (%(url)s)"
+
+#: templates/privacy/index.html:113
+msgid "Journaux techniques"
+msgstr "Технічні журнали"
+
+#: templates/privacy/index.html:115
+msgid "Comme tout serveur web, ce site conserve brièvement des journaux techniques (adresse IP, requêtes effectuées) à des fins de sécurité et de limitation des abus (voir la limite de requêtes appliquée à chaque endpoint de l'API). Ces journaux ne sont pas utilisés à des fins commerciales et ne sont transmis à personne d'autre."
+msgstr "Як і будь-який вебсервер, цей сайт короткочасно зберігає технічні журнали (IP-адреса, виконані запити) для безпеки та обмеження зловживань (див. обмеження частоти запитів для кожної кінцевої точки API). Ці журнали не використовуються в комерційних цілях і нікому не передаються."
+
+#: templates/privacy/index.html:124
+msgid "Mesure d'audience"
+msgstr "Аналітика відвідуваності"
+
+#: templates/privacy/index.html:126
+msgid "Ce site utilise Matomo pour mesurer la fréquentation des pages web (pas de l'application mobile). Matomo est hébergé par l'administrateur du site, sans transmission des données à un tiers publicitaire."
+msgstr "Цей сайт використовує Matomo для вимірювання відвідуваності вебсторінок (не мобільного додатка). Matomo розміщено на власному сервері адміністратора сайту, без передачі даних рекламним третім сторонам."
+
+#: templates/privacy/index.html:133
+msgid "Vos droits"
+msgstr "Ваші права"
+
+#: templates/privacy/index.html:135
+#, python-format
+msgid "Vous pouvez demander l'accès, la rectification ou la suppression des données vous concernant (notamment un compte gestionnaire ou un repérage de terrain) en contactant l'administrateur de ce site%(via_email)s."
+msgstr "Ви можете вимагати доступ, виправлення або видалення даних, що стосуються вас (зокрема облікового запису керівника чи польового позначення), звернувшись до адміністратора цього сайту%(via_email)s."
+
+#: templates/privacy/index.html:139
+#, python-format
+msgid " à %(email)s"
+msgstr " за адресою %(email)s"
+
+#: templates/privacy/index.html:142
+msgid "Autres sites du réseau KartoTek"
+msgstr "Інші сайти мережі KartoTek"
+
+#: templates/privacy/index.html:144
+msgid "L'application mobile KartoTek peut se connecter à plusieurs sites indépendants les uns des autres. Chaque site applique sa propre politique de confidentialité pour les données qu'il gère (comptes gestionnaires, repérages) ; seul le registre des notifications push est mutualisé, via kartotek.eu."
+msgstr "Мобільний додаток KartoTek може підключатися до кількох незалежних одне від одного сайтів. Кожен сайт застосовує власну політику конфіденційності щодо даних, якими він керує (облікові записи керівників, позначення); спільним є лише реєстр push-сповіщень через kartotek.eu."
+
+#: templates/privacy/index.html:151
+msgid "Absence de sous-traitance publicitaire"
+msgstr "Відсутність передачі даних рекламодавцям"
+
+#: templates/privacy/index.html:153
+msgid "Ce site ne vend ni ne partage vos données avec des annonceurs ou courtiers en données. Il n'affiche aucune publicité."
+msgstr "Цей сайт не продає й не передає ваші дані рекламодавцям чи брокерам даних. Він не показує жодної реклами."
+
+#: templates/travel/detail.html:23
 msgid "Toutes les balades"
 msgstr "Усі подорожі"
 
-#: src/flpostcards/templates/travel/detail.html:26
-#: src/flpostcards/templates/travel/detail.html:50
+#: templates/travel/detail.html:26 templates/travel/detail.html:50
 msgid "Mettre en pause"
 msgstr "Призупинити"
 
-#: src/flpostcards/templates/travel/detail.html:49
+#: templates/travel/detail.html:49
 msgid "Suivant"
 msgstr "Наступний"
 
-#: src/flpostcards/templates/travel/detail.html:51
+#: templates/travel/detail.html:51
 msgid "Reprendre"
 msgstr "Продовжити"
 
-#: src/flpostcards/templates/travel/index.html:29
+#: templates/travel/index.html:29
 #, python-format
 msgid "%(distance)s km"
 msgstr "%(distance)s км"
 
-#: src/flpostcards/templates/travel/index.html:38
+#: templates/travel/index.html:38
 msgid "Aucun parcours disponible."
 msgstr "Немає доступних подорожей."
 
