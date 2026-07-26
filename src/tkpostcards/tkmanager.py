@@ -2010,10 +2010,10 @@ class App(tk.Tk):
         return cfg
 
     def _load_collections(self) -> list[str]:
-        """Read the list of collections from the tkmanager section."""
+        """Read the list of collections from ``<datadir>/collections.json``."""
         try:
-            raw = self.config_parser.get("tkmanager", "collections", fallback="")
-            return [c.strip() for c in raw.split(",") if c.strip()]
+            collections, _map = self.model.get_collections()
+            return collections
         except Exception:
             return []
 
@@ -4571,19 +4571,23 @@ class AuthManagerView(tk.Toplevel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Application settings ([DEFAULT] section of postcards.conf)
+#  Application settings (collections.json + [DEFAULT] section of postcards.conf)
 # ─────────────────────────────────────────────────────────────────────────────
 class SettingsView(tk.Toplevel):
-    """Edit the application-wide settings stored in the ``[DEFAULT]``
-    section of ``postcards.conf`` (shared with ``tkscan``, ``tktools`` and
-    the web app, thanks to configparser's ``[DEFAULT]`` inheritance):
+    """Edit the application-wide settings:
 
     - ``collections``: comma-separated list of collection names, used
       throughout tkmanager (filters, checkboxes on each card, ...).
+      Stored in ``<datadir>/collections.json`` (shared with ``tkscan``,
+      ``tktools`` and the web app via ``libpostcards.model.Model``).
     - ``collections_map``: comma-separated subset of ``collections``
-      shown on the public map (web app).
+      shown on the public map (web app). Stored alongside
+      ``collections`` in ``<datadir>/collections.json``.
     - ``file_format``: extension of the scanned images stored in
-      ``datadir/cards`` (e.g. ``tiff``).
+      ``datadir/cards`` (e.g. ``tiff``). Stored in the ``[DEFAULT]``
+      section of ``postcards.conf`` (shared with ``tkscan``, ``tktools``
+      and the web app, thanks to configparser's ``[DEFAULT]``
+      inheritance).
     """
 
     FIELDS = (
@@ -4673,8 +4677,10 @@ class SettingsView(tk.Toplevel):
     # ── Data ──────────────────────────────────────────────────────────────────
     def _reload(self):
         cfg = self._app.config_parser
-        for key, var in self._vars.items():
-            var.set(cfg.get("DEFAULT", key, fallback=""))
+        collections, collections_map = self._app.model.get_collections()
+        self._vars["collections"].set(", ".join(collections))
+        self._vars["collections_map"].set(", ".join(collections_map))
+        self._vars["file_format"].set(cfg.get("DEFAULT", "file_format", fallback=""))
 
     def _save(self):
         collections_raw = self._vars["collections"].get()
@@ -4697,11 +4703,16 @@ class SettingsView(tk.Toplevel):
                                     parent=self)
             return
 
-        cfg = self._app.config_parser
         try:
-            cfg.set("DEFAULT", "collections", ", ".join(collections))
-            cfg.set("DEFAULT", "collections_map", ", ".join(collections_map))
+            self._app.model.set_collections(collections, collections_map)
+
+            cfg = self._app.config_parser
             cfg.set("DEFAULT", "file_format", file_format)
+            # collections/collections_map ont migré vers collections.json ;
+            # on nettoie d'éventuelles anciennes valeurs laissées dans
+            # postcards.conf par une version antérieure de tkmanager.
+            cfg.remove_option("DEFAULT", "collections")
+            cfg.remove_option("DEFAULT", "collections_map")
             with open(self._app.conf_file, "w", encoding="utf-8") as f:
                 cfg.write(f)
         except Exception as e:
@@ -4709,9 +4720,9 @@ class SettingsView(tk.Toplevel):
             return
 
         # Keep the in-memory collection list in sync for the rest of this
-        # session (checkboxes, filters); other settings (collections_map,
-        # file_format) are only read by other tools/processes and take
-        # effect on their next run.
+        # session (checkboxes, filters); other settings (file_format) are
+        # only read by other tools/processes and take effect on their
+        # next run.
         self._app.collections = collections
 
         self._status.set(_("settings_saved"))

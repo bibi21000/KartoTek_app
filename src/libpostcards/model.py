@@ -144,6 +144,14 @@ CREATE TABLE IF NOT EXISTS pois (
 );
 """
 
+_DDL_COLLECTIONS = """
+CREATE TABLE IF NOT EXISTS collections (
+    name         TEXT PRIMARY KEY,
+    position     INTEGER NOT NULL,   -- ordre d'affichage dans "collections"
+    map_position INTEGER             -- ordre dans "collections_map", NULL si absente du sous-ensemble
+);
+"""
+
 _DDL_AUTHS = """
 CREATE TABLE IF NOT EXISTS auths (
     email   TEXT PRIMARY KEY,
@@ -296,6 +304,7 @@ class Model:
         self.cards_dir = self.datadir / "cards"
         self.db_path = self.datadir / "postcards.sqlite"
         self.pois_json     = self.datadir / "pois.json"
+        self.collections_json = self.datadir / "collections.json"
         self.updates_json  = self.datadir / "updates.json"
         self.travels_json  = self.datadir / "travels.json"
         self._conn: sqlite3.Connection | None = None
@@ -363,15 +372,15 @@ class Model:
             self._conn.execute("PRAGMA foreign_keys=ON;")
             self._db_signature = self._current_db_signature()
 
-            # Garantit la présence de auths/refresh_tokens même sur une
-            # base existante générée avant l'ajout de refresh_tokens
-            # (IF NOT EXISTS : sans effet si déjà présentes). Utile car
+            # Garantit la présence de auths/refresh_tokens/collections même
+            # sur une base existante générée avant leur ajout (IF NOT
+            # EXISTS : sans effet si déjà présentes). Utile car
             # generate() supprime et recrée tout le fichier sqlite à
-            # partir des JSON de cards/ — ces deux tables n'en font pas
+            # partir des JSON de cards/ — ces tables n'en font pas
             # partie et seraient sinon perdues à la prochaine
             # régénération sans cette création défensive.
             self._conn.executescript(
-                _DDL_AUTHS + _DDL_REFRESH_TOKENS +
+                _DDL_AUTHS + _DDL_REFRESH_TOKENS + _DDL_COLLECTIONS +
                 "CREATE INDEX IF NOT EXISTS idx_refresh_tokens_email ON refresh_tokens(email);"
             )
             self._conn.commit()
@@ -605,12 +614,14 @@ class Model:
         self.datadir.mkdir(parents=True, exist_ok=True)
 
         conn = self._get_conn()
-        conn.executescript(_DDL_CARDS + _DDL_TRAVELS + _DDL_POIS + _DDL_AUTHS + _DDL_REFRESH_TOKENS + _DDL_INDEXES)
+        conn.executescript(_DDL_CARDS + _DDL_TRAVELS + _DDL_POIS + _DDL_COLLECTIONS + _DDL_AUTHS + _DDL_REFRESH_TOKENS + _DDL_INDEXES)
         conn.commit()
         logger.info("Base créée : %s", self.db_path)
 
-        # Import POIs from pois.json first (before cards, so _ensure_poi
-        # can skip ids that are already fully described in pois.json)
+        # Import des collections depuis collections.json et des POIs
+        # depuis pois.json (avant les cartes, pour que _ensure_poi
+        # puisse ignorer les ids déjà pleinement décrits dans pois.json)
+        self.sync_collections()
         self.sync_pois()
 
         if not self.cards_dir.exists():
@@ -1191,6 +1202,114 @@ class Model:
         with tmp.open("w", encoding="utf-8") as fh:
             json.dump(pois, fh, ensure_ascii=False, indent=2, sort_keys=True)
         tmp.replace(self.pois_json)
+
+    # ------------------------------------------------------------------
+    # Collections
+    # ------------------------------------------------------------------
+
+    def _read_collections_json(self) -> dict:
+        """Read collections.json and return the raw dict
+        ``{"collections": [...], "collections_map": [...]}``.
+
+        Returns an empty dict if the file is absent or unreadable.
+        """
+        try:
+            with self.collections_json.open(encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                return data
+        except (OSError, json.JSONDecodeError):
+            pass
+        return {}
+
+    def _write_collections_json(
+        self, collections: list[str], collections_map: list[str]
+    ) -> None:
+        """Atomically write collections.json."""
+        self.datadir.mkdir(parents=True, exist_ok=True)
+        data = {
+            "collections": list(collections),
+            "collections_map": list(collections_map),
+        }
+        tmp = self.collections_json.with_suffix(".json.tmp")
+        with tmp.open("w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+        tmp.replace(self.collections_json)
+
+    def _write_collections_db(
+        self, collections: list[str], collections_map: list[str]
+    ) -> None:
+        """Replace the content of the SQLite ``collections`` table with
+        ``collections``/``collections_map`` (full rewrite, order preserved
+        via the ``position``/``map_position`` columns).
+        """
+        conn = self._get_conn()
+        map_positions = {name: i for i, name in enumerate(collections_map)}
+        rows = [
+            (name, position, map_positions.get(name))
+            for position, name in enumerate(collections)
+        ]
+        conn.execute("DELETE FROM collections")
+        if rows:
+            conn.executemany(
+                "INSERT INTO collections (name, position, map_position) "
+                "VALUES (?, ?, ?)",
+                rows,
+            )
+        conn.commit()
+
+    def get_collections(self) -> tuple[list[str], list[str]]:
+        """Return ``(collections, collections_map)`` from SQLite.
+
+        ``collections.json`` reste la source de vérité (modifiable via
+        tkmanager, synchronisée vers le serveur distant par
+        ``tkpostcards.libs.publish``) ; la table SQLite ``collections``
+        en est une copie tenue à jour par ``set_collections()`` /
+        ``sync_collections()``, utilisée ici en lecture pour éviter de
+        réouvrir et reparser le JSON à chaque requête (même principe que
+        les POIs : ``pois.json`` / table ``pois``).
+
+        Si ``collections_map`` est vide, retombe sur la liste complète
+        des collections.
+        """
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT name, map_position FROM collections ORDER BY position"
+        )
+        rows = cur.fetchall()
+        collections = [row["name"] for row in rows]
+        collections_map = [
+            row["name"]
+            for row in sorted(
+                (r for r in rows if r["map_position"] is not None),
+                key=lambda r: r["map_position"],
+            )
+        ]
+        if not collections_map:
+            collections_map = list(collections)
+        return collections, collections_map
+
+    def set_collections(
+        self, collections: list[str], collections_map: list[str]
+    ) -> None:
+        """Write collections.json (source de vérité) puis recopie le
+        résultat dans la table SQLite ``collections``.
+        """
+        self._write_collections_json(collections, collections_map)
+        self._write_collections_db(collections, collections_map)
+
+    def sync_collections(self) -> int:
+        """Synchronise collections.json → SQLite (recopie complète).
+
+        Appelée par ``generate()`` (comme ``sync_pois()``) pour peupler
+        la table ``collections`` depuis le JSON lors d'une régénération
+        complète de la base. Retourne le nombre de collections importées.
+        """
+        data = self._read_collections_json()
+        collections = [str(c) for c in (data.get("collections") or [])]
+        collections_map = [str(c) for c in (data.get("collections_map") or [])]
+        self._write_collections_db(collections, collections_map)
+        return len(collections)
 
     def _ensure_poi(self, poi_id: str) -> None:
         """Create a skeleton POI entry if it doesn't exist yet."""

@@ -13,22 +13,24 @@ from flpostcards.osm_static_map import get_or_generate_map_image
 
 bp = Blueprint("map", __name__, template_folder="../../templates")
 
-# Valeur spéciale du filtre "collection" représentant les points
-# d'intérêt plutôt qu'une vraie collection de cartes postales.
-POI_PSEUDO_COLLECTION = "__pois__"
-
 
 @bp.route("/map/")
 def index():
-    """Page carte : affiche toutes les cartes géolocalisées d'une collection."""
+    """Page carte : affiche toutes les cartes géolocalisées d'une collection.
+
+    Les points d'intérêt ne sont plus une "collection" exclusive du
+    filtre : ils peuvent être affichés en plus des cartes (avec une
+    couleur différente), via la case à cocher ``show_pois``, décochée
+    par défaut.
+    """
     collections = current_app.config.get("COLLECTIONS_MAP", [])
     collection = request.args.get("collection") or ""
-    if collection != POI_PSEUDO_COLLECTION and collection not in collections:
+    if collection not in collections:
         collection = ""
 
-    if collection == POI_PSEUDO_COLLECTION:
-        page_title = gettext("Carte - Points d'intérêt")
-    elif collection:
+    show_pois = request.args.get("show_pois") in ("1", "true", "on")
+
+    if collection:
         page_title = gettext("Carte - %(collection)s", collection=collection)
     else:
         page_title = gettext("Carte")
@@ -54,6 +56,7 @@ def index():
         page_title=page_title,
         collections=collections,
         current_collection=collection,
+        show_pois=show_pois,
         og_title=page_title,
         og_description=gettext(
             "Localisez ma collection de cartes postales sur la carte."
@@ -89,8 +92,9 @@ def cards_json():
     Retourne id, titre, coordonnées et chemin de la vignette recto
     (utilisée pour l'aperçu au survol du marqueur).
 
-    N'est pas appelée quand la pseudo-collection "Points d'intérêt" est
-    sélectionnée : le client appelle alors /map/pois.json à la place.
+    Toujours appelée par le client (indépendamment de la case à cocher
+    "Points d'intérêt", qui elle déclenche un appel additionnel à
+    /map/pois.json).
     """
     model = current_app.model
 

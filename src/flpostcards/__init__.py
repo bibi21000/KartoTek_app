@@ -43,25 +43,14 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
         "DEFAULT", "lock_timeout", fallback=60.0
     )
 
-    # Liste des collections connues (définie dans [DEFAULT], accessible
-    # depuis [flask] via l'héritage configparser)
-    collections_raw = parser.get("DEFAULT", "collections", fallback="")
-    app.config["COLLECTIONS"] = [
-        c.strip() for c in collections_raw.split(",") if c.strip()
-    ]
-
-    # Sous-ensemble des collections proposées comme filtre sur la carte
-    # (/map/) ; à défaut, retombe sur la liste complète des collections.
-    # Accepte aussi "collections_maps" (variante avec 's') par tolérance.
-    collections_map_raw = parser.get(
-        "DEFAULT", "collections_map", fallback=""
-    ) or parser.get("DEFAULT", "collections_maps", fallback="")
-    if collections_map_raw.strip():
-        app.config["COLLECTIONS_MAP"] = [
-            c.strip() for c in collections_map_raw.split(",") if c.strip()
-        ]
-    else:
-        app.config["COLLECTIONS_MAP"] = app.config["COLLECTIONS"]
+    # Liste des collections connues, et sous-ensemble proposé comme
+    # filtre sur la carte publique (/map/) : ne vivent plus dans
+    # postcards.conf, mais dans <datadir>/collections.json (voir
+    # libpostcards.model.Model.get_collections), pour pouvoir être
+    # modifiées depuis tkmanager sans redémarrer l'appli Flask.
+    collections, collections_map = Model(app.config["DATADIR"]).get_collections()
+    app.config["COLLECTIONS"] = collections
+    app.config["COLLECTIONS_MAP"] = collections_map
 
     if parser.has_section("flask"):
         defaults = set(parser.defaults().keys())
@@ -157,6 +146,77 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     # du serveur B). Définir [flask] rate_limit_key_prefix = <nom du
     # site> pour chaque serveur.
     app.config.setdefault("RATELIMIT_KEY_PREFIX", "")
+
+    # Notifications push — ce serveur ne fait plus qu'un relais vers le
+    # master centralisé (voir flpostcards.push.notify_master et
+    # kartotek_master.push_api : le registre des tokens et l'envoi
+    # FCM/APNs vivent désormais sur kartotek.eu, pas ici). Section
+    # [push] optionnelle : sans elle, ou avec enabled=false, le job
+    # push_watch tourne quand même (détection) mais n'appelle jamais le
+    # master (voir push.notify_master, no-op silencieux si non configuré).
+    if parser.has_section("push"):
+        push_cfg = parser["push"]
+        app.config["PUSH_ENABLED"] = push_cfg.getboolean("enabled", fallback=True)
+        app.config["PUSH_MASTER_URL"] = push_cfg.get("master_url") or None
+        app.config["PUSH_NOTIFY_SECRET"] = push_cfg.get("notify_secret") or None
+        app.config["PUSH_WATCH_INTERVAL_S"] = push_cfg.getint("watch_interval_s", fallback=120)
+        app.config["PUSH_HTTP_TIMEOUT_S"] = push_cfg.getfloat("http_timeout_s", fallback=10.0)
+        if app.config["PUSH_ENABLED"] and not (
+            app.config["PUSH_MASTER_URL"] and app.config["PUSH_NOTIFY_SECRET"]
+        ):
+            app.logger.warning(
+                "[push] enabled=true mais master_url/notify_secret incomplets : "
+                "flpostcards.push.notify_master() restera no-op tant que les "
+                "deux ne sont pas renseignés."
+            )
+    else:
+        app.config.setdefault("PUSH_ENABLED", False)
+        app.config.setdefault("PUSH_WATCH_INTERVAL_S", 120)
+
+    # Gouvernance de version pour le client mobile (voir
+    # /api/v1/capabilities → clé "api_version" / "force_update") :
+    # permet au client de détecter qu'il est trop ancien pour continuer
+    # à parler à ce serveur sans risquer un crash silencieux (schéma de
+    # réponse changé, endpoint retiré), plutôt que de le découvrir via
+    # une erreur 400/404/parsing en prod. Section [app_version]
+    # optionnelle : sans elle, la clé "min_supported_client" reste
+    # nulle (aucune version minimale imposée) et "force_update.required"
+    # vaut false.
+    #
+    # Exemple de section dans postcards.conf :
+    #   [app_version]
+    #   api_version = 1.3
+    #   min_supported_client = 1.0.0
+    #   recommended_client = 1.4.0
+    #   force_update_required = false
+    #   force_update_reason =
+    #   store_url_ios = https://apps.apple.com/app/idXXXXXXXXX
+    #   store_url_android = https://play.google.com/store/apps/details?id=eu.kartotek.mobile
+    if parser.has_section("app_version"):
+        av_cfg = parser["app_version"]
+        app.config["API_VERSION_CURRENT"] = av_cfg.get("api_version") or None
+        app.config["MIN_SUPPORTED_CLIENT"] = av_cfg.get("min_supported_client") or None
+        app.config["RECOMMENDED_CLIENT"] = av_cfg.get("recommended_client") or None
+        app.config["FORCE_UPDATE_REQUIRED"] = av_cfg.getboolean(
+            "force_update_required", fallback=False
+        )
+        app.config["FORCE_UPDATE_REASON"] = av_cfg.get("force_update_reason") or None
+        app.config["STORE_URL_IOS"] = av_cfg.get("store_url_ios") or None
+        app.config["STORE_URL_ANDROID"] = av_cfg.get("store_url_android") or None
+    else:
+        app.config.setdefault("API_VERSION_CURRENT", None)
+        app.config.setdefault("MIN_SUPPORTED_CLIENT", None)
+        app.config.setdefault("RECOMMENDED_CLIENT", None)
+        app.config.setdefault("FORCE_UPDATE_REQUIRED", False)
+        app.config.setdefault("FORCE_UPDATE_REASON", None)
+        app.config.setdefault("STORE_URL_IOS", None)
+        app.config.setdefault("STORE_URL_ANDROID", None)
+
+    # URL publique de CE serveur, envoyée au master dans le payload de
+    # /api/v1/push/notify (uniquement à titre informatif/log côté
+    # master — pas utilisée pour l'authentification, qui repose sur
+    # notify_secret). Ex : [flask] public_url = https://server1.kartotek.eu
+    app.config.setdefault("SERVER_PUBLIC_URL", parser.get("flask", "public_url", fallback=""))
 
     secret_key = app.config.get("SECRET_KEY")
     if secret_key in (None, "", "secret"):

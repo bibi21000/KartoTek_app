@@ -187,3 +187,10 @@ lock_poll_interval = 2.0
 
 # Delay (in seconds) before giving up if the remote lock stays in place too long
 lock_timeout = 60.0
+
+[push]
+enabled = true
+master_url = https://kartotek.eu
+notify_secret = <même valeur que [push] notify_secret côté master>
+watch_interval_s = 120
+http_timeout_s = 10

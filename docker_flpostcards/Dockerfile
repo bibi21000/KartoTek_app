@@ -18,4 +18,4 @@ EXPOSE 8010
 VOLUME ["/data"]
 
 # run the flask server
-CMD [ "gunicorn", "--workers=4", "--bind=0.0.0.0:8010", "flpostcards.run:app"]
+CMD [ "gunicorn", "--preload", "--workers=4", "--bind=0.0.0.0:8010", "flpostcards.run:app"]

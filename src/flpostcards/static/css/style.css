@@ -106,6 +106,36 @@ html, body {
     border-color: rgba(255, 255, 255, 0.6);
 }
 
+.collection-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.poi-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #f5f5f5;
+    font-size: 0.85rem;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    padding: 0.35rem 0.6rem;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.poi-toggle:hover {
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.poi-toggle input[type="checkbox"] {
+    accent-color: #2ecc71;
+    cursor: pointer;
+}
+
 .sr-only {
     position: absolute;
     width: 1px;

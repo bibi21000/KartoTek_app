@@ -1,9 +1,11 @@
 /**
  * Page carte (blueprint map) :
- *  - charge les cartes géolocalisées d'une collection (cardsUrl), ou
- *    les points d'intérêt (poisUrl) si la pseudo-collection "Points
- *    d'intérêt" est sélectionnée dans le filtre
- *  - affiche un marqueur par carte ou POI, la vue est ajustée pour voir
+ *  - charge toujours les cartes géolocalisées de la collection courante
+ *    (cardsUrl) ; charge en plus les points d'intérêt (poisUrl) si la
+ *    case à cocher "Points d'intérêt" (showPois) est cochée
+ *  - affiche un marqueur par carte (bleu) ou POI (vert, couleur
+ *    différente pour les distinguer sur la carte) ; la vue est ajustée
+ *    une seule fois, une fois les deux chargements terminés, pour voir
  *    tous les marqueurs affichés (fitBounds)
  *  - le survol d'un marqueur de carte affiche un aperçu du recto ; le
  *    survol d'un marqueur de POI affiche sa description
@@ -12,8 +14,6 @@
  */
 (function () {
     "use strict";
-
-    var POI_PSEUDO_COLLECTION = "__pois__";
 
     var config = window.MAP_CONFIG || {};
 
@@ -44,13 +44,27 @@
         return config.cardDetailUrlBase.replace("__ID__", cardId);
     }
 
-    function showCards() {
+    // Bounds accumulées par les cartes ET les POI, pour n'ajuster la vue
+    // (fitBounds) qu'une seule fois, une fois tous les chargements
+    // terminés — sinon le second fitBounds (POI) écraserait la vue
+    // calculée par le premier (cartes), ou inversement.
+    var allBounds = [];
+
+    function fitAll() {
+        if (!allBounds.length) {
+            map.setView([0, 0], 2);
+            return;
+        }
+        map.fitBounds(allBounds, { padding: [40, 40], maxZoom: 16 });
+    }
+
+    function loadCards() {
         var url = config.cardsUrl;
         if (config.currentCollection) {
             url += "?collection=" + encodeURIComponent(config.currentCollection);
         }
 
-        fetch(url)
+        return fetch(url)
             .then(function (resp) {
                 if (!resp.ok) {
                     throw new Error("no map data");
@@ -59,17 +73,11 @@
             })
             .then(function (data) {
                 var cards = data.cards || [];
-                if (!cards.length) {
-                    map.setView([0, 0], 2);
-                    return;
-                }
-
-                var bounds = [];
 
                 cards.forEach(function (card) {
                     var lat = card.coord[0];
                     var lon = card.coord[1];
-                    bounds.push([lat, lon]);
+                    allBounds.push([lat, lon]);
 
                     var marker = L.circleMarker([lat, lon], {
                         radius: 7,
@@ -105,16 +113,15 @@
                         window.location.href = cardDetailUrl(card.id);
                     });
                 });
-
-                map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
             })
             .catch(function () {
-                map.setView([0, 0], 2);
+                // Silencieux : fitAll() retombera sur les bounds déjà
+                // accumulées (ou la vue par défaut si aucune donnée).
             });
     }
 
-    function showPois() {
-        fetch(config.poisUrl)
+    function loadPois() {
+        return fetch(config.poisUrl)
             .then(function (resp) {
                 if (!resp.ok) {
                     throw new Error("no poi data");
@@ -123,18 +130,14 @@
             })
             .then(function (data) {
                 var pois = data.pois || [];
-                if (!pois.length) {
-                    map.setView([0, 0], 2);
-                    return;
-                }
-
-                var bounds = [];
 
                 pois.forEach(function (poi) {
                     var lat = poi.coord[0];
                     var lon = poi.coord[1];
-                    bounds.push([lat, lon]);
+                    allBounds.push([lat, lon]);
 
+                    // Couleur différente (vert) de celle des cartes (bleu),
+                    // pour distinguer les POI affichés en plus des cartes.
                     var marker = L.circleMarker([lat, lon], {
                         radius: 6,
                         color: "#fff",
@@ -165,17 +168,15 @@
                         marker.setStyle({ fillColor: "#2ecc71", radius: 6 });
                     });
                 });
-
-                map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
             })
             .catch(function () {
-                map.setView([0, 0], 2);
+                // Silencieux, cf. loadCards().
             });
     }
 
-    if (config.currentCollection === POI_PSEUDO_COLLECTION) {
-        showPois();
-    } else {
-        showCards();
+    var tasks = [loadCards()];
+    if (config.showPois) {
+        tasks.push(loadPois());
     }
+    Promise.all(tasks).then(fitAll);
 })();

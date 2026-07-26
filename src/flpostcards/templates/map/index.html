@@ -23,10 +23,12 @@
                     {{ c }}
                 </option>
                 {% endfor %}
-                <option value="__pois__" {% if current_collection == "__pois__" %}selected{% endif %}>
-                    {{ _("Points d'intérêt") }}
-                </option>
             </select>
+            <label class="poi-toggle">
+                <input type="checkbox" id="show-pois-checkbox" name="show_pois" value="1"
+                       {% if show_pois %}checked{% endif %} onchange="this.form.submit()">
+                {{ _("Points d'intérêt") }}
+            </label>
         </form>
     </header>
 
@@ -39,6 +41,7 @@
         cardsUrl: "{{ url_for('map.cards_json') }}",
         poisUrl: "{{ url_for('map.pois_json') }}",
         currentCollection: {{ current_collection | tojson }},
+        showPois: {{ show_pois | tojson }},
         cardDetailUrlBase: "{{ url_for('home.card_detail', card_id='__ID__', back=current_path) }}",
         imageBaseUrl: "{{ url_for('home.images', filename='') }}"
     };

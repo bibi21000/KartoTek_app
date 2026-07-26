@@ -40,6 +40,8 @@ class PostcardPublish:
         # ~ print(result)
         result = sync.sync_file(datadir / 'postcards.sqlite')
         # ~ print(result)
+        result = sync.sync_file(datadir / 'collections.json')
+        # ~ print(result)
         result = sync.sync_file(datadir / 'postcards.pkl')
         # ~ print(result)
 

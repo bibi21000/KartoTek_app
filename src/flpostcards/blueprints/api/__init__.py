@@ -3,14 +3,23 @@ Blueprint API v1 : endpoints JSON pour une application mobile de
 localisation de cartes postales.
 
 Routes :
+  GET  /api/v1/ping          → sonde de disponibilité minimale (aucun accès disque/DB)
   GET  /api/v1/dbid          → hash du fichier postcards.sqlite (détection de changement)
+  GET  /api/v1/capabilities  → fonctionnalités activées sur ce serveur (similar, manager, collections, ...)
+                                + gouvernance de version client (api_version, force_update, deprecations)
   GET  /api/v1/gps           → coordonnées GPS paginées (sans doublons, curseur after_id)
   GET  /api/v1/bounds        → zone GPS couverte par les cartes (rectangle)
   GET  /api/v1/nearby        → cartes dans un rayon autour d'une position
   GET  /api/v1/next-update   → délai recommandé avant le prochain poll
   POST /api/v1/update        → enregistre un repérage de carte sur le terrain (auth JWT requise)
   POST /api/v1/similar       → recherche de cartes similaires à une photo (auth JWT requise)
+  # NB : /api/v1/push/register et /unregister vivent désormais sur le
+  # master (kartotek.eu) — l'app mobile s'y inscrit une seule fois pour
+  # tous les serveurs. Ce serveur appelle seulement le master en interne
+  # (flpostcards.push.notify_master) quand une carte est ajoutée, voir
+  # flpostcards.push_watch. Voir docs/07-PUSH_NOTIFICATIONS.md.
   GET  /api/v1/collections   → liste des collections (avec nombre de cartes)
+  GET  /api/v1/card/<id>     → fiche détaillée d'une carte (titre, description, coord, collections, images pleine taille)
   GET  /api/v1/news          → dernières cartes ajoutées (comme la page d'accueil), filtrable par collection
   GET  /api/v1/slideshow     → toutes les cartes pour un diaporama, filtrable par collection
   GET  /api/v1/gallery       → galerie paginée (collection, recherche texte, doublons)
@@ -37,6 +46,7 @@ from __future__ import annotations
 
 import os
 import hashlib
+import importlib.resources as importlib_resources
 import json
 import math
 import time
@@ -232,6 +242,38 @@ def _card_thumb(card: dict) -> dict:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+@bp.route("/api/v1/ping")
+# Limite large, par IP (clé par défaut du limiter) : ce endpoint ne fait
+# ni accès disque ni requête base, le coût par appel est négligeable,
+# mais on garde un plafond pour éviter qu'il ne devienne un vecteur de
+# DoS trivial (aucune authentification, aucun paramètre à valider avant
+# de répondre). Volontairement plus permissif que check_auth/login (qui
+# protègent un bruteforce de mot de passe, pas un simple ping).
+@limiter.limit("30 per minute;600 per hour")
+def ping():
+    """
+    Sonde de disponibilité minimale : ne touche ni au disque ni à la
+    base (contrairement à /api/v1/dbid, qui hashe postcards.sqlite), et
+    ne dépend d'aucun paramètre. Destinée à un client qui a juste besoin
+    de savoir "ce serveur répond-il encore ?" (ex : détection "serveur
+    plus disponible" côté application mobile avant de basculer sur
+    l'écran de sélection d'un autre serveur), sans payer le coût d'un
+    endpoint plus riche.
+
+    Toujours 200 si le processus Flask répond (une absence de réponse,
+    un timeout ou une erreur réseau sont la façon dont le client détecte
+    une réelle indisponibilité — ce endpoint ne peut pas, par nature,
+    signaler sa propre absence).
+
+    429 { "error": "too many requests, please retry later" } au-delà de
+    30 appels/minute ou 600/heure pour une même IP (voir
+    _rate_limit_exceeded, même format d'erreur que les autres endpoints).
+
+    Réponse JSON : { "status": "ok" }
+    """
+    return jsonify({"status": "ok"})
+
+
 @bp.route("/api/v1/dbid")
 def dbid():
     """
@@ -264,6 +306,227 @@ def dbid():
                 h.update(chunk)
 
     return jsonify({"hash": h.hexdigest()[:12], "mtime": latest_mtime})
+
+
+# Rayon maximum accepté par /api/v1/nearby et /api/v1/next-update (voir ces
+# routes) — dupliqué ici en constante nommée pour que /api/v1/capabilities
+# puisse l'exposer sans que les deux valeurs ne divergent silencieusement.
+_MAX_NEARBY_RADIUS_M = 50_000
+
+
+def _load_deprecations() -> list[dict[str, Any]]:
+    """
+    Lit ``deprecations.json``, distribué à l'intérieur du paquet Python
+    ``flpostcards`` lui-même (voir ``pyproject.toml`` →
+    ``[tool.setuptools.package-data]``), pour signaler aux clients
+    mobiles qu'un endpoint est en cours de retrait.
+
+    Contrairement à ``collections.json`` (donnée d'exploitation, propre
+    à chaque site, modifiable par l'admin sans toucher au code), une
+    dépréciation d'endpoint est une information liée au CODE de
+    l'API : elle apparaît et disparaît au fil des releases de
+    flpostcards, donc versionnée dans git avec le reste du paquet et
+    livrée avec chaque déploiement — pas dans ``datadir``.
+
+    Absent ou invalide -> liste vide, jamais d'erreur 500 pour un
+    simple fichier manquant (utile en particulier en développement,
+    où le paquet peut ne pas être installé via le mécanisme
+    package-data mais lancé directement depuis les sources).
+    """
+    try:
+        raw = importlib_resources.files("flpostcards").joinpath(
+            "deprecations.json"
+        ).read_text(encoding="utf-8")
+        data = json.loads(raw)
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return []
+    return data if isinstance(data, list) else []
+
+
+def _load_deprecations() -> list[dict[str, Any]]:
+    """
+    Lit ``deprecations.json``, distribué à l'intérieur du paquet Python
+    ``flpostcards`` lui-même (voir ``pyproject.toml`` →
+    ``[tool.setuptools.package-data]``), pour signaler aux clients
+    mobiles qu'un endpoint est en cours de retrait.
+
+    Contrairement à ``collections.json`` (donnée d'exploitation, propre
+    à chaque site, modifiable par l'admin sans toucher au code), une
+    dépréciation d'endpoint est une information liée au CODE de
+    l'API : elle apparaît et disparaît au fil des releases de
+    flpostcards, donc versionnée dans git avec le reste du paquet et
+    livrée avec chaque déploiement — pas dans ``datadir``.
+
+    Absent ou invalide -> liste vide, jamais d'erreur 500 pour un
+    simple fichier manquant (utile en particulier en développement,
+    où le paquet peut ne pas être installé via le mécanisme
+    package-data mais lancé directement depuis les sources).
+    """
+    try:
+        raw = importlib_resources.files("flpostcards").joinpath(
+            "deprecations.json"
+        ).read_text(encoding="utf-8")
+        data = json.loads(raw)
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return []
+    return data if isinstance(data, list) else []
+
+
+@bp.route("/api/v1/capabilities")
+# Route de découverte, appelée typiquement une fois par sélection de
+# serveur (voir appli mobile KartoTek : écran paramètres / "ici") plutôt
+# qu'à chaque action — pas besoin d'une limite serrée, mais on en garde
+# une par précaution comme pour /ping.
+@limiter.limit("30 per minute;600 per hour")
+def capabilities():
+    """
+    Fonctionnalités effectivement activées/configurées sur CE serveur,
+    à interroger une fois après sélection du serveur (ou mise en cache
+    par l'appli) pour savoir quels boutons/écrans proposer côté client
+    plutôt que de le découvrir par un 400/502/503 en essayant.
+
+    Ne nécessite aucune authentification et ne révèle aucune donnée
+    sensible : uniquement des booléens/nombres de configuration
+    (ex. "y a-t-il au moins un compte manager créé sur ce serveur ?",
+    jamais la liste des comptes eux-mêmes).
+
+    Réponse JSON (200) :
+      {
+        "similar_search": {
+          "enabled": true,                 -- SIMILAR_SERVER configuré (sinon /api/v1/similar échoue en 503)
+          "default_threshold": 70.0,        -- seuil par défaut, voir /api/v1/similar
+          "max_results": 20
+        },
+        "manager_accounts": {
+          "enabled": true                   -- au moins un compte manager existe (model.list_auths()) ;
+                                             -- si false, /api/v1/check_auth et /api/v1/auth/login
+                                             -- échoueront systématiquement (aucun compte à authentifier)
+        },
+        "collections": {
+          "enabled": true,
+          "count": 2,
+          "names": ["Louhans", "Seille"]
+        },
+        "push": {
+          "enabled": true                   -- ce serveur notifie le master (kartotek_master) des nouvelles cartes
+        },
+        "gallery": {
+          "per_page_choices": [12, 24, 48],
+          "default_per_page": 24
+        },
+        "nearby": {
+          "max_radius_m": 50000             -- plafond appliqué par /api/v1/nearby et /api/v1/next-update
+        },
+        "api_version": {
+          "current": "1.3",                 -- version courante de l'API de CE serveur (config [app_version] api_version,
+                                             -- null si non renseignée : ne pas en déduire une incompatibilité)
+          "min_supported_client": "1.0.0",  -- version minimale de l'appli mobile acceptée par ce serveur ; si la
+                                             -- version embarquée du client est strictement inférieure, le client DOIT
+                                             -- afficher un écran de mise à jour bloquant avant tout autre appel réseau
+                                             -- (null = aucun minimum imposé)
+          "recommended_client": "1.4.0"     -- version conseillée, à titre informatif (ex : bandeau non bloquant),
+                                             -- null si non renseignée
+        },
+        "force_update": {
+          "required": false,                -- true = mise à jour immédiate exigée, indépendamment de
+                                             -- min_supported_client (ex : faille de sécurité découverte sur une
+                                             -- version déjà supérieure à min_supported_client) ; les deux
+                                             -- mécanismes ont des déclencheurs différents et ne doivent pas être
+                                             -- fusionnés côté client
+          "reason": null,                   -- message à afficher à l'utilisateur si required=true
+          "store_url": {
+            "ios": null,
+            "android": null
+          }
+        },
+        "api_version": {
+          "current": "1.3",                 -- version courante de l'API de CE serveur (config [app_version] api_version,
+                                             -- null si non renseignée : ne pas en déduire une incompatibilité)
+          "min_supported_client": "1.0.0",  -- version minimale de l'appli mobile acceptée par ce serveur ; si la
+                                             -- version embarquée du client est strictement inférieure, le client DOIT
+                                             -- afficher un écran de mise à jour bloquant avant tout autre appel réseau
+                                             -- (null = aucun minimum imposé)
+          "recommended_client": "1.4.0"     -- version conseillée, à titre informatif (ex : bandeau non bloquant),
+                                             -- null si non renseignée
+        },
+        "force_update": {
+          "required": false,                -- true = mise à jour immédiate exigée, indépendamment de
+                                             -- min_supported_client (ex : faille de sécurité découverte sur une
+                                             -- version déjà supérieure à min_supported_client) ; les deux
+                                             -- mécanismes ont des déclencheurs différents et ne doivent pas être
+                                             -- fusionnés côté client
+          "reason": null,                   -- message à afficher à l'utilisateur si required=true
+          "store_url": {
+            "ios": null,
+            "android": null
+          }
+        },
+        "deprecations": [                   -- informatif, jamais bloquant : à logger/remonter en analytics côté
+                                             -- client plutôt qu'à afficher à l'utilisateur. Distribué avec le
+                                             -- paquet flpostcards lui-même (voir _load_deprecations, liste vide
+                                             -- si le fichier est absent du paquet installé).
+          {
+            "endpoint": "GET /api/v1/gallery",
+            "since": "2027-01-15",
+            "removed_after": "2027-06-01",
+            "replacement": "GET /api/v2/gallery",
+            "message": "Le paramètre 'page' est remplacé par un curseur 'after_id'."
+          }
+        ]
+       }
+    Compatibilité ascendante : ce bloc a été ajouté après la première
+    version de /api/v1/capabilities. Un client qui ne le connaît pas
+    encore doit ignorer silencieusement toute clé JSON qu'il ne
+    reconnaît pas (ne jamais faire d'analyse stricte du schéma) — c'est
+    ce qui permettra d'ajouter d'autres champs plus tard sans passer,
+    eux, par un cycle de dépréciation.
+    """
+    config = current_app.config
+    model = current_app.model
+
+    similar_enabled = bool(config.get("SIMILAR_SERVER"))
+    manager_enabled = bool(model.list_auths())
+    collection_names = config.get("COLLECTIONS", [])
+
+    return jsonify({
+        "similar_search": {
+            "enabled": similar_enabled,
+            "default_threshold": config.get("SIMILAR_DEFAULT_THRESHOLD") if similar_enabled else None,
+            "max_results": config.get("SIMILAR_MAX_RESULTS") if similar_enabled else None,
+        },
+        "manager_accounts": {
+            "enabled": manager_enabled,
+        },
+        "collections": {
+            "enabled": bool(collection_names),
+            "count": len(collection_names),
+            "names": collection_names,
+        },
+        "push": {
+            "enabled": bool(config.get("PUSH_ENABLED")),
+        },
+        "gallery": {
+            "per_page_choices": list(PER_PAGE_CHOICES),
+            "default_per_page": DEFAULT_PER_PAGE,
+        },
+        "nearby": {
+            "max_radius_m": _MAX_NEARBY_RADIUS_M,
+        },
+        "api_version": {
+            "current": config.get("API_VERSION_CURRENT"),
+            "min_supported_client": config.get("MIN_SUPPORTED_CLIENT"),
+            "recommended_client": config.get("RECOMMENDED_CLIENT"),
+        },
+        "force_update": {
+            "required": bool(config.get("FORCE_UPDATE_REQUIRED", False)),
+            "reason": config.get("FORCE_UPDATE_REASON"),
+            "store_url": {
+                "ios": config.get("STORE_URL_IOS"),
+                "android": config.get("STORE_URL_ANDROID"),
+            },
+        },
+        "deprecations": _load_deprecations(),
+    })
 
 
 @bp.route("/api/v1/gps")
@@ -384,6 +647,20 @@ def bounds():
             "min_lon": row[3],
             "max_lon": row[4],
         },
+        "api_version": {
+            "current": config.get("API_VERSION_CURRENT"),
+            "min_supported_client": config.get("MIN_SUPPORTED_CLIENT"),
+            "recommended_client": config.get("RECOMMENDED_CLIENT"),
+        },
+        "force_update": {
+            "required": bool(config.get("FORCE_UPDATE_REQUIRED", False)),
+            "reason": config.get("FORCE_UPDATE_REASON"),
+            "store_url": {
+                "ios": config.get("STORE_URL_IOS"),
+                "android": config.get("STORE_URL_ANDROID"),
+            },
+        },
+        "deprecations": _load_deprecations(),
     })
 
 
@@ -403,7 +680,7 @@ def nearby():
     try:
         lat = float(request.args["lat"])
         lon = float(request.args["lon"])
-        radius = min(float(request.args["radius"]), 50_000)
+        radius = min(float(request.args["radius"]), _MAX_NEARBY_RADIUS_M)
     except (KeyError, ValueError):
         return jsonify({"error": "lat, lon et radius sont obligatoires (float)"}), 400
 
@@ -441,7 +718,7 @@ def next_update():
     try:
         lat = float(request.args["lat"])
         lon = float(request.args["lon"])
-        radius = min(float(request.args["radius"]), 50_000)
+        radius = min(float(request.args["radius"]), _MAX_NEARBY_RADIUS_M)
         speed = max(float(request.args.get("speed", 0)), 0.0)
     except (KeyError, ValueError):
         return jsonify({"error": "lat, lon, radius (et optionnellement speed) sont obligatoires"}), 400
@@ -479,9 +756,9 @@ def next_update():
 @bp.route("/api/v1/collections")
 def collections():
     """
-    Liste des collections connues (paramètre [DEFAULT] collections de
-    postcards.conf), avec le nombre de cartes uniques (sans doublons)
-    dans chacune.
+    Liste des collections connues (paramètre ``collections`` de
+    ``<datadir>/collections.json``), avec le nombre de cartes uniques
+    (sans doublons) dans chacune.
 
     Réponse JSON :
       {
@@ -492,7 +769,7 @@ def collections():
         ],
         "collections_map": ["Louhans", "Seille"]
           -- sous-ensemble proposé comme filtre sur /map/ (= collections
-             si [DEFAULT] collections_map n'est pas défini)
+             si "collections_map" n'est pas défini dans collections.json)
       }
     """
     model = current_app.model
@@ -665,6 +942,126 @@ def gallery():
         "total": total,
         "cards": items,
     })
+
+
+@bp.route("/api/v1/card/<card_id>")
+def card_detail(card_id: str):
+    """
+    Fiche détaillée d'une carte postale — équivalent JSON de la page web
+    ``/card/<id>`` (voir flpostcards.blueprints.home.card_detail), à
+    l'usage des vues de détail de l'appli mobile (galerie, « ici »,
+    résultats de /api/v1/similar, ...).
+
+    Contrairement à /api/v1/news, /api/v1/slideshow et /api/v1/gallery
+    qui ne renvoient que des résumés, cette route inclut la description
+    complète, les collections d'appartenance et les trois tailles
+    d'image (utile pour passer d'une vignette à un affichage plein
+    écran sans requête supplémentaire).
+
+    Champs renvoyés (voir libpostcards/model.py, table ``cards``) :
+      id, title, title2, description : identiques à /api/v1/news
+      date          : époque/date manuscrite de la carte (texte libre,
+                       ex. "1910" ou "circa 1905"), à ne pas confondre
+                       avec cdate/mdate qui sont les timestamps
+                       d'ajout/modification en base.
+      cdate, mdate  : timestamps UNIX (ajout / dernière modification).
+      address       : liste de chaînes (adresse/lieu, tel que renseigné
+                       lors de l'import) — peut être vide.
+      collections   : liste des collections auxquelles la carte appartient.
+      coord         : {"lat", "lon"} ou null si non géolocalisée.
+      recto_text / verso_text : texte reconnu (OCR nettoyé) sur chaque
+                       face, s'il y en a un — absent du JSON si vide,
+                       plutôt que "" ou null, pour ne pas laisser croire
+                       à une valeur exploitable.
+      recto / verso : {"main", "small", "thumb"} — URLs absolues des
+                       trois tailles d'image (voir flpostcards.images).
+      poi           : liste des points d'intérêt liés, chacun résolu en
+                       {"id", "description", "coord"} (voir model.get_poi)
+                       plutôt que de simples identifiants bruts.
+      doubles       : autres exemplaires connus de la même carte
+                       (même photo/tirage scanné plusieurs fois), résolus
+                       en résumé léger {"id", "title", "thumb_recto"} —
+                       utile pour proposer "voir l'autre exemplaire"
+                       plutôt que de dupliquer l'affichage dans galerie/ici.
+      web_url       : page web équivalente (repli / bouton "voir sur le site").
+
+    NB : ``date``, ``address``, ``poi`` et ``doubles`` existent dans le
+    modèle mais ne sont actuellement affichés nulle part côté web (voir
+    templates/card/detail.html) — ils sont exposés ici car potentiellement
+    utiles à l'appli mobile, mais leur contenu peut être incomplet ou
+    vide selon la façon dont chaque serveur a été importé/renseigné.
+
+    404 { "error": "carte introuvable" } si card_id est inconnu.
+    """
+    model = current_app.model
+    card = model.get_card(card_id)
+    if card is None:
+        return jsonify({"error": "carte introuvable"}), 404
+
+    cid = card["id"]
+    coord = card.get("coord")
+    has_coord = coord and coord[0] is not None and coord[1] is not None
+
+    def _sizes(side: str) -> dict:
+        return {
+            "main": _image_uri(cid, SIZE_MAIN, side),
+            "small": _image_uri(cid, SIZE_SMALL, side),
+            "thumb": _image_uri(cid, SIZE_THUMB, side),
+        }
+
+    pois = []
+    for poi_id in card.get("poi") or []:
+        poi = model.get_poi(poi_id)
+        if poi is None:
+            continue
+        poi_coord = poi.get("coord")
+        pois.append({
+            "id": poi["id"],
+            "description": poi.get("description"),
+            "coord": (
+                {"lat": poi_coord[0], "lon": poi_coord[1]}
+                if poi_coord and poi_coord[0] is not None and poi_coord[1] is not None
+                else None
+            ),
+        })
+
+    doubles = []
+    for double_id in card.get("doubles") or []:
+        double = model.get_card(double_id)
+        if double is None:
+            continue
+        doubles.append({
+            "id": double["id"],
+            "title": double.get("title"),
+            "thumb_recto": _image_uri(double["id"], SIZE_THUMB, "recto"),
+        })
+
+    result = {
+        "id": cid,
+        "title": card.get("title"),
+        "title2": card.get("title2"),
+        "description": card.get("description"),
+        "date": card.get("date"),
+        "cdate": card.get("cdate"),
+        "mdate": card.get("mdate"),
+        "address": card.get("address") or [],
+        "collections": card.get("collections") or [],
+        "coord": {"lat": coord[0], "lon": coord[1]} if has_coord else None,
+        "recto": _sizes("recto"),
+        "verso": _sizes("verso"),
+        "poi": pois,
+        "doubles": doubles,
+        "web_url": url_for("home.card_detail", card_id=cid, _external=True),
+    }
+
+    recto_text = (card.get("recto_text") or "").strip()
+    verso_text = (card.get("verso_text") or "").strip()
+    if recto_text:
+        result["recto_text"] = recto_text
+    if verso_text:
+        result["verso_text"] = verso_text
+
+    return jsonify(result)
 
 
 @bp.route("/api/v1/check_auth", methods=["POST"])

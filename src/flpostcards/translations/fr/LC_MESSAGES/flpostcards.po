@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 23:23+0200\n"
+"POT-Creation-Date: 2026-07-25 23:48+0200\n"
 "PO-Revision-Date: 2026-06-14 12:15+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -107,21 +107,17 @@ msgstr "Retour à la carte"
 msgid "Retour au diaporama"
 msgstr "Retour au diaporama"
 
-#: src/flpostcards/blueprints/map/__init__.py:30
-msgid "Carte - Points d'intérêt"
-msgstr "Carte - Points d'intérêt"
-
-#: src/flpostcards/blueprints/map/__init__.py:32
+#: src/flpostcards/blueprints/map/__init__.py:34
 #, python-format
 msgid "Carte - %(collection)s"
 msgstr "Carte - %(collection)s"
 
-#: src/flpostcards/blueprints/map/__init__.py:34
+#: src/flpostcards/blueprints/map/__init__.py:36
 #: src/flpostcards/templates/base.html:75
 msgid "Carte"
 msgstr "Carte"
 
-#: src/flpostcards/blueprints/map/__init__.py:59
+#: src/flpostcards/blueprints/map/__init__.py:62
 msgid "Localisez ma collection de cartes postales sur la carte."
 msgstr "Localisez ma collection de cartes postales sur la carte."
 
@@ -337,7 +333,7 @@ msgstr "Verso de la carte"
 msgid "Ajoutée le"
 msgstr "Ajoutée le"
 
-#: src/flpostcards/templates/map/index.html:27
+#: src/flpostcards/templates/map/index.html:30
 msgid "Points d'intérêt"
 msgstr "Points d'intérêt"
 
@@ -387,4 +383,7 @@ msgstr "Aucun parcours disponible."
 
 #~ msgid "Tous les parcours"
 #~ msgstr "Tous les parcours"
+
+#~ msgid "Carte - Points d'intérêt"
+#~ msgstr "Carte - Points d'intérêt"
 
