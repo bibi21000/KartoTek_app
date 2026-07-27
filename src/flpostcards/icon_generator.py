@@ -8,10 +8,11 @@ Génération de l'icône du site (favicon) :
   légère rotation) ;
 - sinon, aucune icône n'est générée (404 sur la route favicon).
 
-Le résultat est mis en cache sur disque (datadir/cache), avec un nom de
-fichier dépendant d'un hash de la source (mtime du fichier image, ou
-texte de configuration), pour invalider automatiquement le cache si la
-source change.
+Le résultat est mis en cache sur disque (le répertoire de cache
+configurable via [DEFAULT] cachedir, cf. flpostcards.load_config),
+avec un nom de fichier dépendant d'un hash de la source (mtime du
+fichier image, ou texte de configuration), pour invalider
+automatiquement le cache si la source change.
 """
 
 from __future__ import annotations
@@ -258,12 +259,12 @@ def cache_filename(signature: str) -> str:
 
 
 def get_or_generate_icon(
-    datadir: Path, static_dir: Path, icon_config: str | None
+    cache_dir: Path, static_dir: Path, icon_config: str | None
 ) -> Path | None:
     """
     Retourne le chemin de l'icône (PNG carré, ICON_SIZE x ICON_SIZE) à
     utiliser comme favicon, en la générant et la mettant en cache sur
-    disque si nécessaire.
+    disque (dans ``cache_dir``, cf. [DEFAULT] cachedir) si nécessaire.
 
     Ordre de priorité : static/icon.(png|jpg|jpeg) > texte de config
     [flask] icon > None (pas d'icône).
@@ -272,7 +273,7 @@ def get_or_generate_icon(
     if not signature:
         return None
 
-    cache_dir = Path(datadir) / "cache"
+    cache_dir = Path(cache_dir)
     cache_path = cache_dir / cache_filename(signature)
 
     if cache_path.exists():

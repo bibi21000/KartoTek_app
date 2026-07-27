@@ -104,6 +104,25 @@ def images(filename: str):
 
     N'autorise que les sous-répertoires size_divX, conformément aux
     contraintes du projet (les images de cards/ ne sont pas exposées).
+
+    Cache HTTP : ``Cache-Control: public, max-age=<IMAGE_CACHE_MAX_AGE_S>,
+    immutable`` (30 jours par défaut, voir postcards.conf [flask]
+    image_cache_max_age_s), en plus de l'ETag/Last-Modified déjà posés
+    par Werkzeug (``send_from_directory`` est "conditional" par défaut :
+    une requête avec ``If-None-Match``/``If-Modified-Since`` reçoit un
+    304 sans re-télécharger l'image). Sans ce réglage, le client mobile
+    retéléchargeait chaque image à chaque affichage de la galerie/vue
+    "ici", faute de toute instruction de cache -- coûteux en données
+    mobiles et en bande passante serveur pour un contenu qui ne change
+    pour ainsi dire jamais une fois publié.
+
+    Si une carte est malgré tout corrigée/republiée (nouvel export
+    KartoTek App), le fichier change de date de modification : l'ETag/
+    Last-Modified suivent, donc un client qui revalide (cache expiré,
+    ou ``Cache-Control`` local à max-age=0) verra bien la nouvelle
+    version -- seule une lecture strictement depuis le cache local
+    (dans la fenêtre des `image_cache_max_age_s` secondes) resterait sur
+    l'ancienne image le temps que ce cache expire.
     """
     allowed_dirs = ALLOWED_SIZE_DIRS
     parts = filename.split("/", 1)
@@ -111,7 +130,15 @@ def images(filename: str):
         abort(404)
 
     datadir = current_app.config["DATADIR"]
-    return send_from_directory(datadir, filename)
+    max_age = current_app.config.get("IMAGE_CACHE_MAX_AGE_S", 0)
+    response = send_from_directory(datadir, filename, max_age=max_age or None)
+    if max_age:
+        # send_from_directory pose déjà un Cache-Control avec max-age via
+        # le paramètre max_age, mais sans "public"/"immutable" -- on les
+        # ajoute nous-mêmes plutôt que de dépendre du comportement par
+        # défaut de Werkzeug (qui a varié selon les versions).
+        response.headers["Cache-Control"] = f"public, max-age={max_age}, immutable"
+    return response
 
 
 @bp.route("/favicon.ico")
@@ -127,7 +154,7 @@ def icon():
     icon_config = current_app.config.get("ICON")
 
     icon_path = get_or_generate_icon(
-        current_app.config["DATADIR"], static_dir, icon_config
+        current_app.config["CACHEDIR"], static_dir, icon_config
     )
     if icon_path is None:
         abort(404)

@@ -49,6 +49,10 @@ class ParcoursCartes:
             travel_data['id'] = travels[tt]['id']
             travel_data['title'] = travels[tt]['title']
             travel_data['title2'] = travels[tt]['title2']
+
+            # model.write_travel() met à jour mdate lui-même, uniquement
+            # si "cards" a réellement changé par rapport à la version déjà
+            # en base (cf. sa docstring) : pas besoin de le faire ici.
             model.write_travel(travel_data)
 
     @staticmethod

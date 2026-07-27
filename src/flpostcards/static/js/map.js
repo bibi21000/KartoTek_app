@@ -120,8 +120,20 @@
             });
     }
 
+    // Groupe de calques dédié aux POI : les marqueurs y sont ajoutés une
+    // seule fois (au premier chargement) puis le groupe entier est
+    // simplement ajouté/retiré de la carte lorsqu'on coche/décoche la
+    // case, sans re-fetch ni repositionnement de la vue (fitBounds).
+    var poisLayer = L.layerGroup();
+    var poisLoaded = false;
+    var poisLoading = null;
+
     function loadPois() {
-        return fetch(config.poisUrl)
+        if (poisLoading) {
+            return poisLoading;
+        }
+
+        poisLoading = fetch(config.poisUrl)
             .then(function (resp) {
                 if (!resp.ok) {
                     throw new Error("no poi data");
@@ -144,7 +156,7 @@
                         weight: 2,
                         fillColor: "#2ecc71",
                         fillOpacity: 0.9
-                    }).addTo(map);
+                    }).addTo(poisLayer);
 
                     var label = poi.description || poi.id;
                     var popupHtml =
@@ -168,15 +180,64 @@
                         marker.setStyle({ fillColor: "#2ecc71", radius: 6 });
                     });
                 });
+
+                poisLoaded = true;
             })
             .catch(function () {
-                // Silencieux, cf. loadCards().
+                // Silencieux : la case reste cochée mais aucun marqueur
+                // n'apparaît ; un nouveau clic retentera le chargement
+                // (poisLoaded reste false).
+            })
+            .finally(function () {
+                poisLoading = null;
             });
+
+        return poisLoading;
+    }
+
+    // Case à cocher "Points d'intérêt" : purement client, elle n'entraîne
+    // plus de soumission de formulaire (donc plus de rechargement de
+    // page) afin de conserver l'échelle et le centrage courants de la
+    // carte lorsqu'on l'active ou la désactive.
+    var poisCheckbox = document.getElementById("show-pois-checkbox");
+    var poisHiddenInput = document.getElementById("show-pois-hidden");
+
+    function syncHiddenInput(checked) {
+        // Garde l'état de la case dans le formulaire de sélection de
+        // collection, pour qu'il survive à un changement de collection
+        // (qui, lui, recharge la page).
+        if (poisHiddenInput) {
+            poisHiddenInput.value = checked ? "1" : "";
+        }
+    }
+
+    if (poisCheckbox) {
+        poisCheckbox.addEventListener("change", function () {
+            var checked = poisCheckbox.checked;
+            syncHiddenInput(checked);
+
+            if (checked) {
+                if (poisLoaded) {
+                    poisLayer.addTo(map);
+                } else {
+                    loadPois().then(function () {
+                        poisLayer.addTo(map);
+                    });
+                }
+            } else {
+                map.removeLayer(poisLayer);
+            }
+        });
     }
 
     var tasks = [loadCards()];
     if (config.showPois) {
         tasks.push(loadPois());
     }
-    Promise.all(tasks).then(fitAll);
+    Promise.all(tasks).then(function () {
+        if (config.showPois) {
+            poisLayer.addTo(map);
+        }
+        fitAll();
+    });
 })();

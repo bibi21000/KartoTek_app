@@ -8,12 +8,13 @@ msgid ""
 msgstr ""
 "Project-Id-Version: flpostcards 3.4.2\n"
 "Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
-"POT-Creation-Date: 2026-07-26 12:01+0000\n"
+"POT-Creation-Date: 2026-07-26 23:47+0000\n"
 "PO-Revision-Date: 2026-07-22 11:56+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: uk\n"
 "Language-Team: uk <LL@li.org>\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -81,25 +82,25 @@ msgstr "Моя колекція листівок"
 msgid "Découvrez ma collection de cartes postales anciennes."
 msgstr "Відкрийте для себе мою колекцію старовинних листівок."
 
-#: blueprints/home/__init__.py:306 templates/card/detail.html:3
+#: blueprints/home/__init__.py:333 templates/card/detail.html:3
 #: templates/gallery/index.html:89
 #, python-format
 msgid "Carte #%(id)s"
 msgstr "Листівка №%(id)s"
 
-#: blueprints/home/__init__.py:318
+#: blueprints/home/__init__.py:345
 msgid "Retour à la galerie"
 msgstr "Повернутися до галереї"
 
-#: blueprints/home/__init__.py:320
+#: blueprints/home/__init__.py:347
 msgid "Retour à la balade"
 msgstr "Повернутися до подорожі"
 
-#: blueprints/home/__init__.py:322
+#: blueprints/home/__init__.py:349
 msgid "Retour à la carte"
 msgstr "Повернутися до карти"
 
-#: blueprints/home/__init__.py:324 templates/card/detail.html:12
+#: blueprints/home/__init__.py:351 templates/card/detail.html:12
 msgid "Retour au diaporama"
 msgstr "Повернутися до слайд-шоу"
 
@@ -329,7 +330,7 @@ msgstr "Зворотна сторона листівки"
 msgid "Ajoutée le"
 msgstr "Додано"
 
-#: templates/map/index.html:30
+#: templates/map/index.html:38
 msgid "Points d'intérêt"
 msgstr "Цікаві місця"
 
@@ -340,8 +341,17 @@ msgstr "Востаннє оновлено: %(date)s"
 
 #: templates/privacy/index.html:18
 #, python-format
-msgid "Ce site fait partie du réseau KartoTek : un ensemble de sites indépendants, chacun géré par la personne qui a numérisé sa propre collection de cartes postales, et consultables aussi depuis l'application mobile KartoTek. Cette page décrit les données traitées par CE site en particulier (%(url)s)."
-msgstr "Цей сайт входить до мережі KartoTek — сукупності незалежних сайтів, кожен з яких веде людина, що оцифрувала власну колекцію листівок; їх також можна переглядати в мобільному додатку KartoTek. На цій сторінці описано дані, які обробляє САМЕ цей сайт (%(url)s)."
+msgid ""
+"Ce site fait partie du réseau KartoTek : un ensemble de sites "
+"indépendants, chacun géré par la personne qui a numérisé sa propre "
+"collection de cartes postales, et consultables aussi depuis l'application"
+" mobile KartoTek. Cette page décrit les données traitées par CE site en "
+"particulier (%(url)s)."
+msgstr ""
+"Цей сайт входить до мережі KartoTek — сукупності незалежних сайтів, кожен"
+" з яких веде людина, що оцифрувала власну колекцію листівок; їх також "
+"можна переглядати в мобільному додатку KartoTek. На цій сторінці описано "
+"дані, які обробляє САМЕ цей сайт (%(url)s)."
 
 #: templates/privacy/index.html:26
 msgid "Responsable de ce site"
@@ -358,8 +368,13 @@ msgid "Contact : %(email)s."
 msgstr "Контакт: %(email)s."
 
 #: templates/privacy/index.html:32
-msgid "Aucune adresse de contact n'est publiée sur ce site pour le moment ; utilisez le site de référence du réseau, kartotek.eu, pour signaler une question relative aux données."
-msgstr "Наразі на цьому сайті не опубліковано контактної адреси; для будь-якого питання щодо даних скористайтеся основним сайтом мережі kartotek.eu."
+msgid ""
+"Aucune adresse de contact n'est publiée sur ce site pour le moment ; "
+"utilisez le site de référence du réseau, kartotek.eu, pour signaler une "
+"question relative aux données."
+msgstr ""
+"Наразі на цьому сайті не опубліковано контактної адреси; для будь-якого "
+"питання щодо даних скористайтеся основним сайтом мережі kartotek.eu."
 
 #: templates/privacy/index.html:39
 msgid "Quelles données sont traitées, et pourquoi"
@@ -370,20 +385,50 @@ msgid "Position GPS de votre téléphone"
 msgstr "GPS-положення вашого телефону"
 
 #: templates/privacy/index.html:43
-msgid "Quand l'application mobile utilise l'écran « ici », elle envoie votre position (ou une zone géographique) à ce serveur pour obtenir les cartes postales situées à proximité (endpoints /api/v1/nearby, /api/v1/next-update, /api/v1/bounds). Cette position est utilisée le temps de répondre à la requête et n'est pas enregistrée de façon durable ni associée à une identité, sauf si vous êtes connecté·e en tant que gestionnaire (voir ci-dessous)."
-msgstr "Коли мобільний додаток використовує екран «поруч», він надсилає ваше місцезнаходження (або географічну зону) на цей сервер, щоб отримати листівки поблизу (кінцеві точки /api/v1/nearby, /api/v1/next-update, /api/v1/bounds). Це місцезнаходження використовується лише для відповіді на запит і не зберігається тривало та не пов'язується з особою, крім випадку, якщо ви увійшли як керівник сайту (див. нижче)."
+msgid ""
+"Quand l'application mobile utilise l'écran « ici », elle envoie votre "
+"position (ou une zone géographique) à ce serveur pour obtenir les cartes "
+"postales situées à proximité (endpoints /api/v1/nearby, /api/v1/next-"
+"update, /api/v1/bounds). Cette position est utilisée le temps de répondre"
+" à la requête et n'est pas enregistrée de façon durable ni associée à une"
+" identité, sauf si vous êtes connecté·e en tant que gestionnaire (voir "
+"ci-dessous)."
+msgstr ""
+"Коли мобільний додаток використовує екран «поруч», він надсилає ваше "
+"місцезнаходження (або географічну зону) на цей сервер, щоб отримати "
+"листівки поблизу (кінцеві точки /api/v1/nearby, /api/v1/next-update, "
+"/api/v1/bounds). Це місцезнаходження використовується лише для відповіді "
+"на запит і не зберігається тривало та не пов'язується з особою, крім "
+"випадку, якщо ви увійшли як керівник сайту (див. нижче)."
 
 #: templates/privacy/index.html:53
 msgid "Compte gestionnaire (email et mot de passe)"
 msgstr "Обліковий запис керівника (email і пароль)"
 
 #: templates/privacy/index.html:55
-msgid "Un compte de gestionnaire permet de signaler l'emplacement réel d'une carte postale depuis le terrain. Ces comptes ne sont ni créés ni modifiables depuis l'application mobile ou le site web : ils sont créés et supprimés uniquement par l'administrateur du site, via le logiciel de bureau KartoTek App. Le mot de passe n'est jamais stocké en clair."
-msgstr "Обліковий запис керівника дає змогу повідомляти фактичне розташування листівки з місцевості. Такі облікові записи не можна створити чи змінити з мобільного додатка або сайту: їх створює і видаляє лише адміністратор сайту через настільну програму KartoTek App. Пароль ніколи не зберігається у відкритому вигляді."
+msgid ""
+"Un compte de gestionnaire permet de signaler l'emplacement réel d'une "
+"carte postale depuis le terrain. Ces comptes ne sont ni créés ni "
+"modifiables depuis l'application mobile ou le site web : ils sont créés "
+"et supprimés uniquement par l'administrateur du site, via le logiciel de "
+"bureau KartoTek App. Le mot de passe n'est jamais stocké en clair."
+msgstr ""
+"Обліковий запис керівника дає змогу повідомляти фактичне розташування "
+"листівки з місцевості. Такі облікові записи не можна створити чи змінити "
+"з мобільного додатка або сайту: їх створює і видаляє лише адміністратор "
+"сайту через настільну програму KartoTek App. Пароль ніколи не "
+"зберігається у відкритому вигляді."
 
 #: templates/privacy/index.html:63
-msgid "Une fois connecté·e, l'application mobile reçoit un jeton d'accès de courte durée et un jeton de renouvellement de longue durée ; ce dernier peut être révoqué à tout moment (déconnexion, changement de téléphone, perte de l'appareil) via l'application elle-même."
-msgstr "Після входу мобільний додаток отримує короткостроковий токен доступу та довгостроковий токен оновлення; останній можна будь-коли відкликати (вихід із системи, зміна телефону, втрата пристрою) прямо з додатка."
+msgid ""
+"Une fois connecté·e, l'application mobile reçoit un jeton d'accès de "
+"courte durée et un jeton de renouvellement de longue durée ; ce dernier "
+"peut être révoqué à tout moment (déconnexion, changement de téléphone, "
+"perte de l'appareil) via l'application elle-même."
+msgstr ""
+"Після входу мобільний додаток отримує короткостроковий токен доступу та "
+"довгостроковий токен оновлення; останній можна будь-коли відкликати "
+"(вихід із системи, зміна телефону, втрата пристрою) прямо з додатка."
 
 #: templates/privacy/index.html:70
 msgid "Repérages de terrain"
@@ -391,8 +436,17 @@ msgstr "Польові позначення"
 
 #: templates/privacy/index.html:72
 #, python-format
-msgid "Lorsqu'un·e gestionnaire connecté·e utilise le bouton de repérage (« ici », version pro), la position GPS envoyée est enregistrée avec l'email du compte et un horodatage, afin que l'administrateur du site puisse mettre à jour les coordonnées officielles des cartes postales. Ces repérages sont conservés %(retention)s."
-msgstr "Коли увійшовший керівник використовує кнопку позначення (екран «поруч», pro-версія), надіслане GPS-положення зберігається разом із email облікового запису та часовою міткою, щоб адміністратор сайту міг оновити офіційні координати листівок. Ці записи зберігаються %(retention)s."
+msgid ""
+"Lorsqu'un·e gestionnaire connecté·e utilise le bouton de repérage (« ici "
+"», version pro), la position GPS envoyée est enregistrée avec l'email du "
+"compte et un horodatage, afin que l'administrateur du site puisse mettre "
+"à jour les coordonnées officielles des cartes postales. Ces repérages "
+"sont conservés %(retention)s."
+msgstr ""
+"Коли увійшовший керівник використовує кнопку позначення (екран «поруч», "
+"pro-версія), надіслане GPS-положення зберігається разом із email "
+"облікового запису та часовою міткою, щоб адміністратор сайту міг оновити "
+"офіційні координати листівок. Ці записи зберігаються %(retention)s."
 
 #: templates/privacy/index.html:79
 #, python-format
@@ -408,8 +462,18 @@ msgid "Photo envoyée pour « cartes similaires »"
 msgstr "Фото, надіслане для «схожих листівок»"
 
 #: templates/privacy/index.html:88
-msgid "La fonction « cartes similaires » (version pro) permet d'envoyer la photo d'une carte postale trouvée pour retrouver l'original numérisé dans la collection. Cette photo sert uniquement au calcul d'empreintes visuelles au moment de la requête ; elle n'est pas conservée sur ce serveur ni sur le service qui calcule ces empreintes."
-msgstr "Функція «схожі листівки» (pro-версія) дає змогу надіслати фото знайденої листівки, щоб знайти оцифрований оригінал у колекції. Це фото використовується лише для обчислення візуального відбитка під час запиту; воно не зберігається ані на цьому сервері, ані на службі, що обчислює ці відбитки."
+msgid ""
+"La fonction « cartes similaires » (version pro) permet d'envoyer la photo"
+" d'une carte postale trouvée pour retrouver l'original numérisé dans la "
+"collection. Cette photo sert uniquement au calcul d'empreintes visuelles "
+"au moment de la requête ; elle n'est pas conservée sur ce serveur ni sur "
+"le service qui calcule ces empreintes."
+msgstr ""
+"Функція «схожі листівки» (pro-версія) дає змогу надіслати фото знайденої "
+"листівки, щоб знайти оцифрований оригінал у колекції. Це фото "
+"використовується лише для обчислення візуального відбитка під час запиту;"
+" воно не зберігається ані на цьому сервері, ані на службі, що обчислює ці"
+" відбитки."
 
 #: templates/privacy/index.html:98
 msgid "Notifications push"
@@ -417,8 +481,19 @@ msgstr "Push-сповіщення"
 
 #: templates/privacy/index.html:100
 #, python-format
-msgid "Ce site ne gère pas lui-même les notifications : il se contente de signaler « une nouvelle carte a été ajoutée près de tel endroit » au registre centralisé du réseau KartoTek (kartotek.eu), qui se charge de l'envoi via Apple/Google et conserve le jeton de votre appareil. Voir la politique de confidentialité de kartotek.eu pour le détail de ce traitement%(link)s."
-msgstr "Цей сайт не керує сповіщеннями самостійно: він лише повідомляє централізованому реєстру мережі KartoTek (kartotek.eu) про «нову листівку поблизу такого місця», а той надсилає сповіщення через Apple/Google і зберігає токен вашого пристрою. Подробиці цієї обробки — у політиці конфіденційності kartotek.eu%(link)s."
+msgid ""
+"Ce site ne gère pas lui-même les notifications : il se contente de "
+"signaler « une nouvelle carte a été ajoutée près de tel endroit » au "
+"registre centralisé du réseau KartoTek (kartotek.eu), qui se charge de "
+"l'envoi via Apple/Google et conserve le jeton de votre appareil. Voir la "
+"politique de confidentialité de kartotek.eu pour le détail de ce "
+"traitement%(link)s."
+msgstr ""
+"Цей сайт не керує сповіщеннями самостійно: він лише повідомляє "
+"централізованому реєстру мережі KartoTek (kartotek.eu) про «нову листівку"
+" поблизу такого місця», а той надсилає сповіщення через Apple/Google і "
+"зберігає токен вашого пристрою. Подробиці цієї обробки — у політиці "
+"конфіденційності kartotek.eu%(link)s."
 
 #: templates/privacy/index.html:108
 #, python-format
@@ -430,16 +505,31 @@ msgid "Journaux techniques"
 msgstr "Технічні журнали"
 
 #: templates/privacy/index.html:115
-msgid "Comme tout serveur web, ce site conserve brièvement des journaux techniques (adresse IP, requêtes effectuées) à des fins de sécurité et de limitation des abus (voir la limite de requêtes appliquée à chaque endpoint de l'API). Ces journaux ne sont pas utilisés à des fins commerciales et ne sont transmis à personne d'autre."
-msgstr "Як і будь-який вебсервер, цей сайт короткочасно зберігає технічні журнали (IP-адреса, виконані запити) для безпеки та обмеження зловживань (див. обмеження частоти запитів для кожної кінцевої точки API). Ці журнали не використовуються в комерційних цілях і нікому не передаються."
+msgid ""
+"Comme tout serveur web, ce site conserve brièvement des journaux "
+"techniques (adresse IP, requêtes effectuées) à des fins de sécurité et de"
+" limitation des abus (voir la limite de requêtes appliquée à chaque "
+"endpoint de l'API). Ces journaux ne sont pas utilisés à des fins "
+"commerciales et ne sont transmis à personne d'autre."
+msgstr ""
+"Як і будь-який вебсервер, цей сайт короткочасно зберігає технічні журнали"
+" (IP-адреса, виконані запити) для безпеки та обмеження зловживань (див. "
+"обмеження частоти запитів для кожної кінцевої точки API). Ці журнали не "
+"використовуються в комерційних цілях і нікому не передаються."
 
 #: templates/privacy/index.html:124
 msgid "Mesure d'audience"
 msgstr "Аналітика відвідуваності"
 
 #: templates/privacy/index.html:126
-msgid "Ce site utilise Matomo pour mesurer la fréquentation des pages web (pas de l'application mobile). Matomo est hébergé par l'administrateur du site, sans transmission des données à un tiers publicitaire."
-msgstr "Цей сайт використовує Matomo для вимірювання відвідуваності вебсторінок (не мобільного додатка). Matomo розміщено на власному сервері адміністратора сайту, без передачі даних рекламним третім сторонам."
+msgid ""
+"Ce site utilise Matomo pour mesurer la fréquentation des pages web (pas "
+"de l'application mobile). Matomo est hébergé par l'administrateur du "
+"site, sans transmission des données à un tiers publicitaire."
+msgstr ""
+"Цей сайт використовує Matomo для вимірювання відвідуваності вебсторінок "
+"(не мобільного додатка). Matomo розміщено на власному сервері "
+"адміністратора сайту, без передачі даних рекламним третім сторонам."
 
 #: templates/privacy/index.html:133
 msgid "Vos droits"
@@ -447,8 +537,14 @@ msgstr "Ваші права"
 
 #: templates/privacy/index.html:135
 #, python-format
-msgid "Vous pouvez demander l'accès, la rectification ou la suppression des données vous concernant (notamment un compte gestionnaire ou un repérage de terrain) en contactant l'administrateur de ce site%(via_email)s."
-msgstr "Ви можете вимагати доступ, виправлення або видалення даних, що стосуються вас (зокрема облікового запису керівника чи польового позначення), звернувшись до адміністратора цього сайту%(via_email)s."
+msgid ""
+"Vous pouvez demander l'accès, la rectification ou la suppression des "
+"données vous concernant (notamment un compte gestionnaire ou un repérage "
+"de terrain) en contactant l'administrateur de ce site%(via_email)s."
+msgstr ""
+"Ви можете вимагати доступ, виправлення або видалення даних, що стосуються"
+" вас (зокрема облікового запису керівника чи польового позначення), "
+"звернувшись до адміністратора цього сайту%(via_email)s."
 
 #: templates/privacy/index.html:139
 #, python-format
@@ -460,16 +556,29 @@ msgid "Autres sites du réseau KartoTek"
 msgstr "Інші сайти мережі KartoTek"
 
 #: templates/privacy/index.html:144
-msgid "L'application mobile KartoTek peut se connecter à plusieurs sites indépendants les uns des autres. Chaque site applique sa propre politique de confidentialité pour les données qu'il gère (comptes gestionnaires, repérages) ; seul le registre des notifications push est mutualisé, via kartotek.eu."
-msgstr "Мобільний додаток KartoTek може підключатися до кількох незалежних одне від одного сайтів. Кожен сайт застосовує власну політику конфіденційності щодо даних, якими він керує (облікові записи керівників, позначення); спільним є лише реєстр push-сповіщень через kartotek.eu."
+msgid ""
+"L'application mobile KartoTek peut se connecter à plusieurs sites "
+"indépendants les uns des autres. Chaque site applique sa propre politique"
+" de confidentialité pour les données qu'il gère (comptes gestionnaires, "
+"repérages) ; seul le registre des notifications push est mutualisé, via "
+"kartotek.eu."
+msgstr ""
+"Мобільний додаток KartoTek може підключатися до кількох незалежних одне "
+"від одного сайтів. Кожен сайт застосовує власну політику конфіденційності"
+" щодо даних, якими він керує (облікові записи керівників, позначення); "
+"спільним є лише реєстр push-сповіщень через kartotek.eu."
 
 #: templates/privacy/index.html:151
 msgid "Absence de sous-traitance publicitaire"
 msgstr "Відсутність передачі даних рекламодавцям"
 
 #: templates/privacy/index.html:153
-msgid "Ce site ne vend ni ne partage vos données avec des annonceurs ou courtiers en données. Il n'affiche aucune publicité."
-msgstr "Цей сайт не продає й не передає ваші дані рекламодавцям чи брокерам даних. Він не показує жодної реклами."
+msgid ""
+"Ce site ne vend ni ne partage vos données avec des annonceurs ou "
+"courtiers en données. Il n'affiche aucune publicité."
+msgstr ""
+"Цей сайт не продає й не передає ваші дані рекламодавцям чи брокерам "
+"даних. Він не показує жодної реклами."
 
 #: templates/travel/detail.html:23
 msgid "Toutes les balades"
@@ -492,7 +601,12 @@ msgstr "Продовжити"
 msgid "%(distance)s km"
 msgstr "%(distance)s км"
 
-#: templates/travel/index.html:38
+#: templates/travel/index.html:35
+#, python-format
+msgid "Mis à jour le %(date)s"
+msgstr "Оновлено %(date)s"
+
+#: templates/travel/index.html:43
 msgid "Aucun parcours disponible."
 msgstr "Немає доступних подорожей."
 

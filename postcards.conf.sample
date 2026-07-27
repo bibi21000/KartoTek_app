@@ -1,196 +1,176 @@
 # ==============================================================================
 # postcards.conf.example
 #
-# Example configuration file for the "tkpostcards" application
-# (tkscan, tkimport, tkmanager, tktools) and the "libpostcards" library.
+# Fichier de configuration d'exemple pour flpostcards, généré à partir du
+# code (flpostcards/__init__.py::load_config, et les blueprints contact,
+# privacy, push, api). Copier ce fichier en "postcards.conf" à la racine
+# du projet (ou l'emplacement passé à create_app()/--config) puis adapter
+# les valeurs à votre déploiement.
 #
-# Format: INI (Python "configparser" module).
-# Copy this to "postcards.conf" (or the name passed via --conffile)
-# at the root of the project, or in the tkpostcards/ folder depending on
-# the tool used.
+# Format : configparser (ini). Les commentaires "#" ou ";" en fin de ligne
+# sont ignorés (inline_comment_prefixes=("#", ";")).
 #
-# Any key placed in [DEFAULT] is automatically inherited by all other
-# sections (native configparser behavior).
+# Sections :
+#   [DEFAULT]     - toujours lue, quelques clés dédiées + héritée par [flask]
+#   [flask]       - configuration de l'application web (toutes les clés non
+#                   listées explicitement dans load_config() sont quand même
+#                   reprises telles quelles, en MAJUSCULES, dans app.config)
+#   [push]        - notifications push (optionnelle)
+#   [app_version] - gouvernance de version de l'appli mobile (optionnelle)
 # ==============================================================================
 
-
-# ------------------------------------------------------------------------------
-# [DEFAULT] - settings common to all tools / all sections
-# ------------------------------------------------------------------------------
 [DEFAULT]
 
-# Folder where images and JSON/SQLite metadata are stored
-datadir = data
+# Répertoire de données : cartes (cards/), pois.json, collections.json,
+# updates.json, travels.json, postcards.sqlite, postcards.pkl, ...
+datadir = datadir
 
-# Drop folder for scanned images to be imported (tkscan -> tkimport)
-importdir = import
+# Répertoire de cache (icône générée par icon_generator, image statique
+# OSM générée par osm_static_map pour og:image, ...). Optionnel : par
+# défaut <datadir>/cache. À définir explicitement pour le rediriger
+# ailleurs (autre disque, tmpfs, ...) -- ce cache n'est jamais synchronisé
+# ni écrasé lors d'une publication, contrairement à postcards.sqlite.
+;cachedir = datadir/cache
 
-# Temporary folder used by processing tasks (conversions, etc.)
-tmpdir = tmp
-
-# Default file format for images (tiff, png, jpeg)
-file_format = tiff
-
-# Folder for storing session logs for remote synchronization
-# (inherited by the [sync_default] section below)
-logdir = logs
-
-
-# ------------------------------------------------------------------------------
-# [tkscan] - batch scanning application (scanner)
-# ------------------------------------------------------------------------------
-[tkscan]
-
-# Scanner identifier (e.g. SANE device "escl:https://192.168.1.28:443")
-# Leave empty to choose the scanner from the graphical interface
-scanner =
-
-# Scan resolution in DPI
-resolution = 300
-
-# File format for saving scans (tiff, png, jpeg)
-file_format = tiff
-
-# Prefix for files generated during scanning
-prefix = scanned
-
-# Interval (in seconds) between two scans in "batch" mode
-batch_interval = 30
-
-# Interface language (2-letter ISO code: fr, en, ...). Empty = auto-detect
-language =
-
-# Enable a custom scan area (cropping at the source)
-scan_area_enabled = false
-
-# Scan area coordinates (in mm)
-scan_area_left = 0
-scan_area_top = 0
-scan_area_width = 148
-scan_area_height = 105
-
-# Edge trimming after scan (in pixels)
-crop_border = 0
-
-# JPEG quality (0-100), used only if file_format = jpeg
-jpeg_quality = 85
-
-# PNG compression level (0-9), used only if file_format = png
-png_compress = 6
-
-# TIFF compression type (e.g. deflate, lzw, none), used if file_format = tiff
-tiff_compression = deflate
-
-
-# ------------------------------------------------------------------------------
-# [tkimport] - review/validation application between tkscan and tkmanager
-# ------------------------------------------------------------------------------
-[tkimport]
-
-# Prefix used when adding cards to the collection
-prefix =
-
-# White threshold (0-255) used to detect the transparent background
-white_threshold = 240
-
-# Interface language (2-letter ISO code). Empty = auto-detect
-language =
-
-# Tesseract languages
-ocr_langs = fra+eng
-
-# Remove files from the import folder once added to the collection
-remove_after_add = false
-
-# Preferred external application for editing an image, per platform
-# (leave empty to use the system's default application)
-editor_linux =
-editor_macos =
-editor_windows =
-
-
-# ------------------------------------------------------------------------------
-# [tkmanager] - collection management / browsing application
-# ------------------------------------------------------------------------------
-[tkmanager]
-
-# List of known collections, comma-separated
-collections = collection1, collection2
-
-# Last collection filter used (managed automatically by the app)
-last_filter =
-
-# Last card ID displayed (managed automatically by the app)
-last_id =
-
-# Publish the full data set (routes, ...) by default during publish
-publish_full = 0
-
-# Default similarity threshold (%) for similar card search
-search_threshold = 70
-
-# Default maximum number of results for similarity search
-search_max_results = 20
-
-# Default similarity threshold (%) for duplicate detection
-doubles_threshold = 90
-
-
-# ------------------------------------------------------------------------------
-# [sync_default] - remote synchronization section (used by
-# "tktools publish"). The name of this section is free: it corresponds to
-# the "config" argument passed to the "publish" command (e.g. tktools publish
-# sync_default). Several sections of this type can be defined to publish
-# to different destinations (e.g. [sync_prod], [sync_staging], ...).
-# ------------------------------------------------------------------------------
-[sync_default]
-
-# Transfer protocol: ftp, ftps, ftptls or sftp
-protocol = sftp
-
-# Remote server address
-host = ftp.example.com
-
-# Connection port (default: 21=ftp/ftptls, 990=ftps, 22=sftp)
-port = 22
-
-# Login credentials
-username = my_username
-password = my_password
-
-# Path to an SSH private key (used only for SFTP, replaces the password)
-ssh_key_path =
-
-# Base remote folder where files will be uploaded
-remote_base_dir = /postcards
-
-# Passive mode for FTP/FTPS/FTPTLS connections
-passive_mode = true
-
-# Network timeout (in seconds)
-timeout = 30
-
-# Delete files on the remote side that no longer exist locally
-delete_orphans = false
-
-# Simulate synchronization without actually transferring files
-dry_run = false
-
-# Number of simultaneous transfers when syncing a folder
-max_workers = 5
-
-# Suffix of the lock file used for remote locking (fetch_locked)
+# Verrouillage fichier (lockfile) utilisé pour les écritures concurrentes
+# dans updates.json.
 lock_suffix = .lck
-
-# Interval (in seconds) between two checks of the remote lock
 lock_poll_interval = 2.0
-
-# Delay (in seconds) before giving up if the remote lock stays in place too long
 lock_timeout = 60.0
 
+
+[flask]
+
+# --- Général -----------------------------------------------------------
+
+# Mode debug Flask (NE JAMAIS activer en production : expose la console
+# Werkzeug interactive en cas d'erreur).
+debug = false
+
+# Port d'écoute du serveur de développement (flask run / run.py).
+port = 5000
+
+# Secret utilisé pour signer les access tokens JWT (flpostcards/auth.py)
+# et la session Flask. OBLIGATOIRE en production : une valeur absente,
+# vide ou laissée à "secret" déclenche un avertissement au démarrage.
+# Générer une valeur aléatoire, par exemple :
+#   python -c "import secrets; print(secrets.token_urlsafe(48))"
+secret_key = change-me-please
+
+# URL publique de CE serveur (informative : transmise au master dans le
+# payload de /api/v1/push/notify, non utilisée pour l'authentification).
+;public_url = https://mon-serveur.example.com
+
+# Texte court utilisé pour générer une icône stylisée (favicon) si aucun
+# fichier static/icon.png|jpg|jpeg n'est présent.
+;icon = Ma Collection
+
+# Vue OpenStreetMap statique (zoom/latitude/longitude) utilisée comme
+# image og:image sur la page /map/.
+;osm_map = 12/46.7667/4.8333
+
+# Matomo (mesure d'audience) : site_matomo = domaine du serveur Matomo,
+# id_matomo = identifiant du site Matomo (siteId), "1" par défaut.
+;site_matomo = matomo.example.com
+;id_matomo = 1
+
+# --- Page d'accueil / listes -------------------------------------------
+
+# Nombre de jours définissant les cartes "récentes" affichées en avant.
+recent_days = 30
+
+# Nombre de cartes affichées si moins de "recent_days" jours n'en fournit
+# assez.
+recent_fallback_count = 20
+
+# Au-delà de ce nombre de cartes, /api/v1/news et /api/v1/slideshow
+# basculent automatiquement en pagination, même sans page/per_page
+# explicite dans la requête.
+mobile_list_max_unpaginated = 200
+
+# --- Formulaire de contact (SMTP) ---------------------------------------
+# La page /contact/ n'est activée que si smtp_host ET contact_email sont
+# tous les deux renseignés.
+
+;contact_email = contact@example.com
+;smtp_host = smtp.example.com
+smtp_port = 587
+;smtp_user = smtp-user
+;smtp_password = smtp-password
+# "starttls" (port 587, par défaut) ou "ssl" (port 465)
+;smtp_security = starttls
+
+# --- Politique de confidentialité (/privacy/, toujours active) ---------
+
+;privacy_operator_name = Jean Dupont
+;privacy_operator_contact = jean@example.com
+;privacy_last_updated = 2026-07-26
+;data_retention_days = 730
+
+# --- Recherche de cartes similaires (/api/v1/similar) -------------------
+# URL du service simpostcards (POST /compute_hashes) utilisé pour
+# comparer une photo envoyée par l'appli mobile aux cartes existantes.
+
+similar_server = http://simpostcards:8004
+similar_default_threshold = 70.0
+similar_max_results = 20
+similar_timeout_s = 30.0
+
+# --- Auth JWT (flpostcards/auth.py) -------------------------------------
+
+# Durée de vie de l'access token (secondes). 15 minutes par défaut.
+jwt_access_ttl_s = 900
+# Durée de vie du refresh token (secondes). 30 jours par défaut.
+jwt_refresh_ttl_s = 2592000
+
+# --- Cache HTTP des images de cartes -------------------------------------
+
+# Cache-Control max-age (secondes) envoyé pour les images de cartes
+# postales (immuables une fois publiées). 30 jours par défaut ; 0 pour
+# désactiver et revenir au comportement sans Cache-Control explicite.
+image_cache_max_age_s = 2592000
+
+# --- Reverse proxy / rate limiting ---------------------------------------
+
+# Nombre de reverse proxies "de confiance" en amont de flpostcards
+# (ex : BunkerWeb = 1), pour ProxyFix / X-Forwarded-*.
+trusted_proxies = 1
+
+# Backend de comptage du rate limiting (flask-limiter). "memory://" par
+# défaut (suffisant en dev ou avec un seul worker). En production avec
+# plusieurs workers/instances, utiliser Redis (nécessite le paquet
+# Python "redis") :
+;rate_limit_storage_uri = redis://localhost:6379/0
+rate_limit_storage_uri = memory://
+
+# Préfixe des clés de rate limiting : indispensable si plusieurs serveurs
+# flpostcards distincts partagent la même instance Redis, pour ne pas
+# mélanger leurs compteurs.
+;rate_limit_key_prefix = mon-site
+
+
 [push]
-enabled = true
-master_url = https://kartotek.eu
-notify_secret = <même valeur que [push] notify_secret côté master>
+# Notifications push : ce serveur ne fait que relayer au master
+# centralisé (kartotek.eu), qui gère le registre des tokens et l'envoi
+# FCM/APNs. Section optionnelle ; sans elle (ou avec enabled=false), la
+# détection tourne quand même mais n'appelle jamais le master.
+
+enabled = false
+;master_url = https://kartotek.eu
+;notify_secret = <même valeur que [push] notify_secret côté master>
 watch_interval_s = 120
 http_timeout_s = 10
+
+
+[app_version]
+# Gouvernance de version pour le client mobile (voir
+# /api/v1/capabilities). Section optionnelle ; sans elle, aucune version
+# minimale n'est imposée.
+
+;api_version = 1.3
+;min_supported_client = 1.0.0
+;recommended_client = 1.4.0
+;force_update_required = false
+;force_update_reason =
+;store_url_ios = https://apps.apple.com/app/idXXXXXXXXX
+;store_url_android = https://play.google.com/store/apps/details?id=eu.kartotek.mobile

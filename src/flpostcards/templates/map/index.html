@@ -24,13 +24,19 @@
                 </option>
                 {% endfor %}
             </select>
-            <label class="poi-toggle">
-                <input type="checkbox" id="show-pois-checkbox" name="show_pois" value="1"
-                       {% if show_pois %}checked{% endif %} onchange="this.form.submit()">
-                {{ _("Points d'intérêt") }}
-            </label>
+            {# La case POI n'est plus dans le formulaire (elle ne doit pas
+               provoquer de rechargement de page, cf. #show-pois-checkbox
+               ci-dessous) ; on transmet néanmoins son état courant si
+               l'utilisateur change de collection, pour qu'il soit conservé
+               après le rechargement. #}
+            <input type="hidden" id="show-pois-hidden" name="show_pois" value="{{ '1' if show_pois else '' }}">
         </form>
     </header>
+
+    <label class="poi-toggle map-poi-toggle">
+        <input type="checkbox" id="show-pois-checkbox" {% if show_pois %}checked{% endif %}>
+        {{ _("Points d'intérêt") }}
+    </label>
 
 </div>
 {% endblock %}

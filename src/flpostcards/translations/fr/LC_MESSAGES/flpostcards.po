@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-26 12:01+0000\n"
+"POT-Creation-Date: 2026-07-27 08:39+0200\n"
 "PO-Revision-Date: 2026-06-14 12:15+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -18,480 +18,620 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: blueprints/contact/__init__.py:49
+#: src/flpostcards/blueprints/contact/__init__.py:49
 msgid "Nouveau message depuis le site"
 msgstr "Nouveau message depuis le site"
 
-#: blueprints/contact/__init__.py:85 templates/base.html:79
+#: src/flpostcards/blueprints/contact/__init__.py:85
+#: src/flpostcards/templates/base.html:79
 msgid "Contact"
 msgstr "Contact"
 
-#: blueprints/contact/__init__.py:94 blueprints/contact/__init__.py:120
+#: src/flpostcards/blueprints/contact/__init__.py:94
+#: src/flpostcards/blueprints/contact/__init__.py:120
 msgid "Votre message a bien été envoyé, merci !"
 msgstr "Votre message a bien été envoyé, merci !"
 
-#: blueprints/contact/__init__.py:101
+#: src/flpostcards/blueprints/contact/__init__.py:101
 msgid "Le nom est obligatoire."
 msgstr "Le nom est obligatoire."
 
-#: blueprints/contact/__init__.py:103
+#: src/flpostcards/blueprints/contact/__init__.py:103
 msgid "L'adresse email est obligatoire."
 msgstr "L'adresse email est obligatoire."
 
-#: blueprints/contact/__init__.py:105
+#: src/flpostcards/blueprints/contact/__init__.py:105
 msgid "L'adresse email n'est pas valide."
 msgstr "L'adresse email n'est pas valide."
 
-#: blueprints/contact/__init__.py:107
+#: src/flpostcards/blueprints/contact/__init__.py:107
 msgid "Le message ne peut pas être vide."
 msgstr "Le message ne peut pas être vide."
 
-#: blueprints/contact/__init__.py:117
+#: src/flpostcards/blueprints/contact/__init__.py:117
 msgid "L'envoi du message a échoué. Réessayez plus tard."
 msgstr "L'envoi du message a échoué. Réessayez plus tard."
 
-#: blueprints/contact/__init__.py:129
+#: src/flpostcards/blueprints/contact/__init__.py:129
 msgid "Contactez-moi à propos de ma collection de cartes postales."
 msgstr "Contactez-moi à propos de ma collection de cartes postales."
 
-#: blueprints/gallery/__init__.py:109
+#: src/flpostcards/blueprints/gallery/__init__.py:109
 #, python-format
 msgid "Toutes les cartes postales - %(collection)s"
 msgstr "Toutes les cartes postales - %(collection)s"
 
-#: blueprints/gallery/__init__.py:112
+#: src/flpostcards/blueprints/gallery/__init__.py:112
 msgid "Toutes les cartes postales"
 msgstr "Toutes les cartes postales"
 
-#: blueprints/gallery/__init__.py:132
+#: src/flpostcards/blueprints/gallery/__init__.py:132
 msgid "Parcourez ma collection de cartes postales anciennes."
 msgstr "Parcourez ma collection de cartes postales anciennes."
 
-#: blueprints/home/__init__.py:57
+#: src/flpostcards/blueprints/home/__init__.py:57
 #, python-format
 msgid "Ma collection de cartes postales - %(collection)s"
 msgstr "Ma collection de cartes postales - %(collection)s"
 
-#: blueprints/home/__init__.py:61
+#: src/flpostcards/blueprints/home/__init__.py:61
 msgid "Ma collection de cartes postales"
 msgstr "Ma collection de cartes postales"
 
-#: blueprints/home/__init__.py:91 templates/base.html:12
+#: src/flpostcards/blueprints/home/__init__.py:91
+#: src/flpostcards/templates/base.html:12
 msgid "Découvrez ma collection de cartes postales anciennes."
 msgstr "Découvrez ma collection de cartes postales anciennes."
 
-#: blueprints/home/__init__.py:306 templates/card/detail.html:3
-#: templates/gallery/index.html:89
+#: src/flpostcards/blueprints/home/__init__.py:333
+#: src/flpostcards/templates/card/detail.html:3
+#: src/flpostcards/templates/gallery/index.html:89
 #, python-format
 msgid "Carte #%(id)s"
 msgstr "Carte #%(id)s"
 
-#: blueprints/home/__init__.py:318
+#: src/flpostcards/blueprints/home/__init__.py:345
 msgid "Retour à la galerie"
 msgstr "Retour à la galerie"
 
-#: blueprints/home/__init__.py:320
+#: src/flpostcards/blueprints/home/__init__.py:347
 msgid "Retour à la balade"
 msgstr "Retour à la balade"
 
-#: blueprints/home/__init__.py:322
+#: src/flpostcards/blueprints/home/__init__.py:349
 msgid "Retour à la carte"
 msgstr "Retour à la carte"
 
-#: blueprints/home/__init__.py:324 templates/card/detail.html:12
+#: src/flpostcards/blueprints/home/__init__.py:351
+#: src/flpostcards/templates/card/detail.html:12
 msgid "Retour au diaporama"
 msgstr "Retour au diaporama"
 
-#: blueprints/map/__init__.py:34
+#: src/flpostcards/blueprints/map/__init__.py:34
 #, python-format
 msgid "Carte - %(collection)s"
 msgstr "Carte - %(collection)s"
 
-#: blueprints/map/__init__.py:36 templates/base.html:75
+#: src/flpostcards/blueprints/map/__init__.py:36
+#: src/flpostcards/templates/base.html:75
 msgid "Carte"
 msgstr "Carte"
 
-#: blueprints/map/__init__.py:62
+#: src/flpostcards/blueprints/map/__init__.py:62
 msgid "Localisez ma collection de cartes postales sur la carte."
 msgstr "Localisez ma collection de cartes postales sur la carte."
 
-#: blueprints/privacy/__init__.py:62
+#: src/flpostcards/blueprints/privacy/__init__.py:62
 msgid "L'administrateur de ce site KartoTek"
 msgstr "L'administrateur de ce site KartoTek"
 
-#: blueprints/privacy/__init__.py:72 templates/base.html:98
+#: src/flpostcards/blueprints/privacy/__init__.py:72
+#: src/flpostcards/templates/base.html:98
 msgid "Politique de confidentialité"
 msgstr "Politique de confidentialité"
 
-#: blueprints/privacy/__init__.py:87
+#: src/flpostcards/blueprints/privacy/__init__.py:87
 msgid "Quelles données ce site KartoTek collecte et pourquoi."
 msgstr "Quelles données ce site KartoTek collecte et pourquoi."
 
-#: blueprints/slideshow/__init__.py:43
+#: src/flpostcards/blueprints/slideshow/__init__.py:43
 #, python-format
 msgid "Diaporama - %(collection)s"
 msgstr "Diaporama - %(collection)s"
 
-#: blueprints/slideshow/__init__.py:46 templates/base.html:63
+#: src/flpostcards/blueprints/slideshow/__init__.py:46
+#: src/flpostcards/templates/base.html:63
 msgid "Diaporama"
 msgstr "Diaporama"
 
-#: blueprints/slideshow/__init__.py:55
+#: src/flpostcards/blueprints/slideshow/__init__.py:55
 msgid "Toutes mes cartes postales en diaporama."
 msgstr "Toutes mes cartes postales en diaporama."
 
-#: blueprints/travel/__init__.py:22
+#: src/flpostcards/blueprints/travel/__init__.py:22
 msgid "Balades dans le temps au fil des cartes postales"
 msgstr "Balades dans le temps au fil des cartes postales"
 
-#: blueprints/travel/__init__.py:30 blueprints/travel/__init__.py:70
+#: src/flpostcards/blueprints/travel/__init__.py:30
+#: src/flpostcards/blueprints/travel/__init__.py:70
 msgid "Suivez mes parcours à travers ma collection de cartes postales."
 msgstr "Suivez mes parcours à travers ma collection de cartes postales."
 
-#: blueprints/travel/__init__.py:49
+#: src/flpostcards/blueprints/travel/__init__.py:49
 #, python-format
 msgid "Parcours #%(id)s"
 msgstr "Parcours #%(id)s"
 
-#: templates/base.html:6 templates/base.html:11 templates/card/detail.html:5
+#: src/flpostcards/templates/base.html:6 src/flpostcards/templates/base.html:11
+#: src/flpostcards/templates/card/detail.html:5
 msgid "Cartes postales"
 msgstr "Cartes postales"
 
-#: templates/base.html:59
+#: src/flpostcards/templates/base.html:59
 msgid "Accueil"
 msgstr "Accueil"
 
-#: templates/base.html:67
+#: src/flpostcards/templates/base.html:67
 msgid "Galerie"
 msgstr "Galerie"
 
-#: templates/base.html:71
+#: src/flpostcards/templates/base.html:71
 msgid "Balades"
 msgstr "Balades"
 
-#: templates/card/detail.html:10
+#: src/flpostcards/templates/card/detail.html:10
 msgid "Retour"
 msgstr "Retour"
 
-#: templates/card/detail.html:15
+#: src/flpostcards/templates/card/detail.html:15
 msgid "Cliquer pour agrandir"
 msgstr "Cliquer pour agrandir"
 
-#: templates/card/detail.html:19 templates/gallery/index.html:94
+#: src/flpostcards/templates/card/detail.html:19
+#: src/flpostcards/templates/gallery/index.html:94
 #, python-format
 msgid "Recto de la carte %(id)s"
 msgstr "Recto de la carte %(id)s"
 
-#: templates/card/detail.html:23 templates/gallery/index.html:100
+#: src/flpostcards/templates/card/detail.html:23
+#: src/flpostcards/templates/gallery/index.html:100
 #, python-format
 msgid "Verso de la carte %(id)s"
 msgstr "Verso de la carte %(id)s"
 
-#: templates/card/detail.html:25
+#: src/flpostcards/templates/card/detail.html:25
 msgid "Afficher l'autre face"
 msgstr "Afficher l'autre face"
 
-#: templates/card/detail.html:28
+#: src/flpostcards/templates/card/detail.html:28
 msgid "Aperçu de l'autre face"
 msgstr "Aperçu de l'autre face"
 
-#: templates/card/detail.html:61
+#: src/flpostcards/templates/card/detail.html:61
 msgid "OpenStreetMap"
 msgstr "OpenStreetMap"
 
-#: templates/card/detail.html:66
+#: src/flpostcards/templates/card/detail.html:66
 msgid "Google Maps"
 msgstr "Google Maps"
 
-#: templates/card/detail.html:71
+#: src/flpostcards/templates/card/detail.html:71
 msgid "Street View"
 msgstr "Street View"
 
-#: templates/card/detail.html:85
+#: src/flpostcards/templates/card/detail.html:85
 msgid "Aperçu du recto"
 msgstr "Aperçu du recto"
 
-#: templates/card/detail.html:86
+#: src/flpostcards/templates/card/detail.html:86
 msgid "Aperçu du verso"
 msgstr "Aperçu du verso"
 
-#: templates/contact/index.html:17
+#: src/flpostcards/templates/contact/index.html:17
 msgid "Nom"
 msgstr "Nom"
 
-#: templates/contact/index.html:23
+#: src/flpostcards/templates/contact/index.html:23
 msgid "Email"
 msgstr "Email"
 
-#: templates/contact/index.html:29
+#: src/flpostcards/templates/contact/index.html:29
 msgid "Sujet"
 msgstr "Sujet"
 
-#: templates/contact/index.html:34
+#: src/flpostcards/templates/contact/index.html:34
 msgid "Message"
 msgstr "Message"
 
-#: templates/contact/index.html:42
+#: src/flpostcards/templates/contact/index.html:42
 msgid "Site web"
 msgstr "Site web"
 
-#: templates/contact/index.html:46
+#: src/flpostcards/templates/contact/index.html:46
 msgid "Envoyer"
 msgstr "Envoyer"
 
-#: templates/contact/index.html:50
+#: src/flpostcards/templates/contact/index.html:50
 msgid "Site propulsé et hébergé par"
 msgstr "Site propulsé et hébergé par"
 
-#: templates/gallery/index.html:12
+#: src/flpostcards/templates/gallery/index.html:12
 #, python-format
 msgid "%(count)d carte"
 msgstr "%(count)d carte"
 
-#: templates/gallery/index.html:12 templates/travel/index.html:31
+#: src/flpostcards/templates/gallery/index.html:12
+#: src/flpostcards/templates/travel/index.html:31
 #, python-format
 msgid "%(count)d cartes"
 msgstr "%(count)d cartes"
 
-#: templates/gallery/index.html:18
+#: src/flpostcards/templates/gallery/index.html:18
 msgid "Recherche"
 msgstr "Recherche"
 
-#: templates/gallery/index.html:24
+#: src/flpostcards/templates/gallery/index.html:24
 msgid "Rechercher..."
 msgstr "Rechercher..."
 
-#: templates/gallery/index.html:31 templates/home/index.html:22
-#: templates/map/index.html:16 templates/slideshow/index.html:18
+#: src/flpostcards/templates/gallery/index.html:31
+#: src/flpostcards/templates/home/index.html:22
+#: src/flpostcards/templates/map/index.html:16
+#: src/flpostcards/templates/slideshow/index.html:18
 msgid "Collection"
 msgstr "Collection"
 
-#: templates/gallery/index.html:34 templates/home/index.html:25
-#: templates/map/index.html:19 templates/slideshow/index.html:21
+#: src/flpostcards/templates/gallery/index.html:34
+#: src/flpostcards/templates/home/index.html:25
+#: src/flpostcards/templates/map/index.html:19
+#: src/flpostcards/templates/slideshow/index.html:21
 msgid "Toutes les collections"
 msgstr "Toutes les collections"
 
-#: templates/gallery/index.html:46
+#: src/flpostcards/templates/gallery/index.html:46
 msgid "Affichage"
 msgstr "Affichage"
 
-#: templates/gallery/index.html:49
+#: src/flpostcards/templates/gallery/index.html:49
 msgid "Recto / verso"
 msgstr "Recto / verso"
 
-#: templates/gallery/index.html:52
+#: src/flpostcards/templates/gallery/index.html:52
 msgid "Recto"
 msgstr "Recto"
 
-#: templates/gallery/index.html:55
+#: src/flpostcards/templates/gallery/index.html:55
 msgid "Verso"
 msgstr "Verso"
 
-#: templates/gallery/index.html:61
+#: src/flpostcards/templates/gallery/index.html:61
 msgid "Doublons"
 msgstr "Doublons"
 
-#: templates/gallery/index.html:64
+#: src/flpostcards/templates/gallery/index.html:64
 msgid "Sans doublons"
 msgstr "Sans doublons"
 
-#: templates/gallery/index.html:67
+#: src/flpostcards/templates/gallery/index.html:67
 msgid "Avec doublons"
 msgstr "Avec doublons"
 
-#: templates/gallery/index.html:73
+#: src/flpostcards/templates/gallery/index.html:73
 msgid "Cartes par page"
 msgstr "Cartes par page"
 
-#: templates/gallery/index.html:77
+#: src/flpostcards/templates/gallery/index.html:77
 #, python-format
 msgid "%(n)d par page"
 msgstr "%(n)d par page"
 
-#: templates/gallery/index.html:116
+#: src/flpostcards/templates/gallery/index.html:116
 msgid "Première page"
 msgstr "Première page"
 
-#: templates/gallery/index.html:141
+#: src/flpostcards/templates/gallery/index.html:141
 msgid "Dernière page"
 msgstr "Dernière page"
 
-#: templates/gallery/index.html:152
+#: src/flpostcards/templates/gallery/index.html:152
 msgid "Aucune carte ne correspond à ces critères."
 msgstr "Aucune carte ne correspond à ces critères."
 
-#: templates/home/index.html:12 templates/slideshow/index.html:12
+#: src/flpostcards/templates/home/index.html:12
+#: src/flpostcards/templates/slideshow/index.html:12
 msgid "Verso de la carte"
 msgstr "Verso de la carte"
 
-#: templates/home/index.html:49
+#: src/flpostcards/templates/home/index.html:49
 msgid "Ajoutée le"
 msgstr "Ajoutée le"
 
-#: templates/map/index.html:30
+#: src/flpostcards/templates/map/index.html:38
 msgid "Points d'intérêt"
 msgstr "Points d'intérêt"
 
-#: templates/privacy/index.html:13
+#: src/flpostcards/templates/privacy/index.html:13
 #, python-format
 msgid "Dernière mise à jour : %(date)s"
 msgstr "Dernière mise à jour : %(date)s"
 
-#: templates/privacy/index.html:18
+#: src/flpostcards/templates/privacy/index.html:18
 #, python-format
-msgid "Ce site fait partie du réseau KartoTek : un ensemble de sites indépendants, chacun géré par la personne qui a numérisé sa propre collection de cartes postales, et consultables aussi depuis l'application mobile KartoTek. Cette page décrit les données traitées par CE site en particulier (%(url)s)."
-msgstr "Ce site fait partie du réseau KartoTek : un ensemble de sites indépendants, chacun géré par la personne qui a numérisé sa propre collection de cartes postales, et consultables aussi depuis l'application mobile KartoTek. Cette page décrit les données traitées par CE site en particulier (%(url)s)."
+msgid ""
+"Ce site fait partie du réseau KartoTek : un ensemble de sites "
+"indépendants, chacun géré par la personne qui a numérisé sa propre "
+"collection de cartes postales, et consultables aussi depuis l'application"
+" mobile KartoTek. Cette page décrit les données traitées par CE site en "
+"particulier (%(url)s)."
+msgstr ""
+"Ce site fait partie du réseau KartoTek : un ensemble de sites "
+"indépendants, chacun géré par la personne qui a numérisé sa propre "
+"collection de cartes postales, et consultables aussi depuis l'application"
+" mobile KartoTek. Cette page décrit les données traitées par CE site en "
+"particulier (%(url)s)."
 
-#: templates/privacy/index.html:26
+#: src/flpostcards/templates/privacy/index.html:26
 msgid "Responsable de ce site"
 msgstr "Responsable de ce site"
 
-#: templates/privacy/index.html:28
+#: src/flpostcards/templates/privacy/index.html:28
 #, python-format
 msgid "Ce site est géré par : %(name)s."
 msgstr "Ce site est géré par : %(name)s."
 
-#: templates/privacy/index.html:30
+#: src/flpostcards/templates/privacy/index.html:30
 #, python-format
 msgid "Contact : %(email)s."
 msgstr "Contact : %(email)s."
 
-#: templates/privacy/index.html:32
-msgid "Aucune adresse de contact n'est publiée sur ce site pour le moment ; utilisez le site de référence du réseau, kartotek.eu, pour signaler une question relative aux données."
-msgstr "Aucune adresse de contact n'est publiée sur ce site pour le moment ; utilisez le site de référence du réseau, kartotek.eu, pour signaler une question relative aux données."
+#: src/flpostcards/templates/privacy/index.html:32
+msgid ""
+"Aucune adresse de contact n'est publiée sur ce site pour le moment ; "
+"utilisez le site de référence du réseau, kartotek.eu, pour signaler une "
+"question relative aux données."
+msgstr ""
+"Aucune adresse de contact n'est publiée sur ce site pour le moment ; "
+"utilisez le site de référence du réseau, kartotek.eu, pour signaler une "
+"question relative aux données."
 
-#: templates/privacy/index.html:39
+#: src/flpostcards/templates/privacy/index.html:39
 msgid "Quelles données sont traitées, et pourquoi"
 msgstr "Quelles données sont traitées, et pourquoi"
 
-#: templates/privacy/index.html:41
+#: src/flpostcards/templates/privacy/index.html:41
 msgid "Position GPS de votre téléphone"
 msgstr "Position GPS de votre téléphone"
 
-#: templates/privacy/index.html:43
-msgid "Quand l'application mobile utilise l'écran « ici », elle envoie votre position (ou une zone géographique) à ce serveur pour obtenir les cartes postales situées à proximité (endpoints /api/v1/nearby, /api/v1/next-update, /api/v1/bounds). Cette position est utilisée le temps de répondre à la requête et n'est pas enregistrée de façon durable ni associée à une identité, sauf si vous êtes connecté·e en tant que gestionnaire (voir ci-dessous)."
-msgstr "Quand l'application mobile utilise l'écran « ici », elle envoie votre position (ou une zone géographique) à ce serveur pour obtenir les cartes postales situées à proximité (endpoints /api/v1/nearby, /api/v1/next-update, /api/v1/bounds). Cette position est utilisée le temps de répondre à la requête et n'est pas enregistrée de façon durable ni associée à une identité, sauf si vous êtes connecté·e en tant que gestionnaire (voir ci-dessous)."
+#: src/flpostcards/templates/privacy/index.html:43
+msgid ""
+"Quand l'application mobile utilise l'écran « ici », elle envoie votre "
+"position (ou une zone géographique) à ce serveur pour obtenir les cartes "
+"postales situées à proximité (endpoints /api/v1/nearby, /api/v1/next-"
+"update, /api/v1/bounds). Cette position est utilisée le temps de répondre"
+" à la requête et n'est pas enregistrée de façon durable ni associée à une"
+" identité, sauf si vous êtes connecté·e en tant que gestionnaire (voir "
+"ci-dessous)."
+msgstr ""
+"Quand l'application mobile utilise l'écran « ici », elle envoie votre "
+"position (ou une zone géographique) à ce serveur pour obtenir les cartes "
+"postales situées à proximité (endpoints /api/v1/nearby, /api/v1/next-"
+"update, /api/v1/bounds). Cette position est utilisée le temps de répondre"
+" à la requête et n'est pas enregistrée de façon durable ni associée à une"
+" identité, sauf si vous êtes connecté·e en tant que gestionnaire (voir "
+"ci-dessous)."
 
-#: templates/privacy/index.html:53
+#: src/flpostcards/templates/privacy/index.html:53
 msgid "Compte gestionnaire (email et mot de passe)"
 msgstr "Compte gestionnaire (email et mot de passe)"
 
-#: templates/privacy/index.html:55
-msgid "Un compte de gestionnaire permet de signaler l'emplacement réel d'une carte postale depuis le terrain. Ces comptes ne sont ni créés ni modifiables depuis l'application mobile ou le site web : ils sont créés et supprimés uniquement par l'administrateur du site, via le logiciel de bureau KartoTek App. Le mot de passe n'est jamais stocké en clair."
-msgstr "Un compte de gestionnaire permet de signaler l'emplacement réel d'une carte postale depuis le terrain. Ces comptes ne sont ni créés ni modifiables depuis l'application mobile ou le site web : ils sont créés et supprimés uniquement par l'administrateur du site, via le logiciel de bureau KartoTek App. Le mot de passe n'est jamais stocké en clair."
+#: src/flpostcards/templates/privacy/index.html:55
+msgid ""
+"Un compte de gestionnaire permet de signaler l'emplacement réel d'une "
+"carte postale depuis le terrain. Ces comptes ne sont ni créés ni "
+"modifiables depuis l'application mobile ou le site web : ils sont créés "
+"et supprimés uniquement par l'administrateur du site, via le logiciel de "
+"bureau KartoTek App. Le mot de passe n'est jamais stocké en clair."
+msgstr ""
+"Un compte de gestionnaire permet de signaler l'emplacement réel d'une "
+"carte postale depuis le terrain. Ces comptes ne sont ni créés ni "
+"modifiables depuis l'application mobile ou le site web : ils sont créés "
+"et supprimés uniquement par l'administrateur du site, via le logiciel de "
+"bureau KartoTek App. Le mot de passe n'est jamais stocké en clair."
 
-#: templates/privacy/index.html:63
-msgid "Une fois connecté·e, l'application mobile reçoit un jeton d'accès de courte durée et un jeton de renouvellement de longue durée ; ce dernier peut être révoqué à tout moment (déconnexion, changement de téléphone, perte de l'appareil) via l'application elle-même."
-msgstr "Une fois connecté·e, l'application mobile reçoit un jeton d'accès de courte durée et un jeton de renouvellement de longue durée ; ce dernier peut être révoqué à tout moment (déconnexion, changement de téléphone, perte de l'appareil) via l'application elle-même."
+#: src/flpostcards/templates/privacy/index.html:63
+msgid ""
+"Une fois connecté·e, l'application mobile reçoit un jeton d'accès de "
+"courte durée et un jeton de renouvellement de longue durée ; ce dernier "
+"peut être révoqué à tout moment (déconnexion, changement de téléphone, "
+"perte de l'appareil) via l'application elle-même."
+msgstr ""
+"Une fois connecté·e, l'application mobile reçoit un jeton d'accès de "
+"courte durée et un jeton de renouvellement de longue durée ; ce dernier "
+"peut être révoqué à tout moment (déconnexion, changement de téléphone, "
+"perte de l'appareil) via l'application elle-même."
 
-#: templates/privacy/index.html:70
+#: src/flpostcards/templates/privacy/index.html:70
 msgid "Repérages de terrain"
 msgstr "Repérages de terrain"
 
-#: templates/privacy/index.html:72
+#: src/flpostcards/templates/privacy/index.html:72
 #, python-format
-msgid "Lorsqu'un·e gestionnaire connecté·e utilise le bouton de repérage (« ici », version pro), la position GPS envoyée est enregistrée avec l'email du compte et un horodatage, afin que l'administrateur du site puisse mettre à jour les coordonnées officielles des cartes postales. Ces repérages sont conservés %(retention)s."
-msgstr "Lorsqu'un·e gestionnaire connecté·e utilise le bouton de repérage (« ici », version pro), la position GPS envoyée est enregistrée avec l'email du compte et un horodatage, afin que l'administrateur du site puisse mettre à jour les coordonnées officielles des cartes postales. Ces repérages sont conservés %(retention)s."
+msgid ""
+"Lorsqu'un·e gestionnaire connecté·e utilise le bouton de repérage (« ici "
+"», version pro), la position GPS envoyée est enregistrée avec l'email du "
+"compte et un horodatage, afin que l'administrateur du site puisse mettre "
+"à jour les coordonnées officielles des cartes postales. Ces repérages "
+"sont conservés %(retention)s."
+msgstr ""
+"Lorsqu'un·e gestionnaire connecté·e utilise le bouton de repérage (« ici "
+"», version pro), la position GPS envoyée est enregistrée avec l'email du "
+"compte et un horodatage, afin que l'administrateur du site puisse mettre "
+"à jour les coordonnées officielles des cartes postales. Ces repérages "
+"sont conservés %(retention)s."
 
-#: templates/privacy/index.html:79
+#: src/flpostcards/templates/privacy/index.html:79
 #, python-format
 msgid "pendant %(days)s jours environ"
 msgstr "pendant %(days)s jours environ"
 
-#: templates/privacy/index.html:81
+#: src/flpostcards/templates/privacy/index.html:81
 msgid "le temps nécessaire à la mise à jour des données du site"
 msgstr "le temps nécessaire à la mise à jour des données du site"
 
-#: templates/privacy/index.html:86
+#: src/flpostcards/templates/privacy/index.html:86
 msgid "Photo envoyée pour « cartes similaires »"
 msgstr "Photo envoyée pour « cartes similaires »"
 
-#: templates/privacy/index.html:88
-msgid "La fonction « cartes similaires » (version pro) permet d'envoyer la photo d'une carte postale trouvée pour retrouver l'original numérisé dans la collection. Cette photo sert uniquement au calcul d'empreintes visuelles au moment de la requête ; elle n'est pas conservée sur ce serveur ni sur le service qui calcule ces empreintes."
-msgstr "La fonction « cartes similaires » (version pro) permet d'envoyer la photo d'une carte postale trouvée pour retrouver l'original numérisé dans la collection. Cette photo sert uniquement au calcul d'empreintes visuelles au moment de la requête ; elle n'est pas conservée sur ce serveur ni sur le service qui calcule ces empreintes."
+#: src/flpostcards/templates/privacy/index.html:88
+msgid ""
+"La fonction « cartes similaires » (version pro) permet d'envoyer la photo"
+" d'une carte postale trouvée pour retrouver l'original numérisé dans la "
+"collection. Cette photo sert uniquement au calcul d'empreintes visuelles "
+"au moment de la requête ; elle n'est pas conservée sur ce serveur ni sur "
+"le service qui calcule ces empreintes."
+msgstr ""
+"La fonction « cartes similaires » (version pro) permet d'envoyer la photo"
+" d'une carte postale trouvée pour retrouver l'original numérisé dans la "
+"collection. Cette photo sert uniquement au calcul d'empreintes visuelles "
+"au moment de la requête ; elle n'est pas conservée sur ce serveur ni sur "
+"le service qui calcule ces empreintes."
 
-#: templates/privacy/index.html:98
+#: src/flpostcards/templates/privacy/index.html:98
 msgid "Notifications push"
 msgstr "Notifications push"
 
-#: templates/privacy/index.html:100
+#: src/flpostcards/templates/privacy/index.html:100
 #, python-format
-msgid "Ce site ne gère pas lui-même les notifications : il se contente de signaler « une nouvelle carte a été ajoutée près de tel endroit » au registre centralisé du réseau KartoTek (kartotek.eu), qui se charge de l'envoi via Apple/Google et conserve le jeton de votre appareil. Voir la politique de confidentialité de kartotek.eu pour le détail de ce traitement%(link)s."
-msgstr "Ce site ne gère pas lui-même les notifications : il se contente de signaler « une nouvelle carte a été ajoutée près de tel endroit » au registre centralisé du réseau KartoTek (kartotek.eu), qui se charge de l'envoi via Apple/Google et conserve le jeton de votre appareil. Voir la politique de confidentialité de kartotek.eu pour le détail de ce traitement%(link)s."
+msgid ""
+"Ce site ne gère pas lui-même les notifications : il se contente de "
+"signaler « une nouvelle carte a été ajoutée près de tel endroit » au "
+"registre centralisé du réseau KartoTek (kartotek.eu), qui se charge de "
+"l'envoi via Apple/Google et conserve le jeton de votre appareil. Voir la "
+"politique de confidentialité de kartotek.eu pour le détail de ce "
+"traitement%(link)s."
+msgstr ""
+"Ce site ne gère pas lui-même les notifications : il se contente de "
+"signaler « une nouvelle carte a été ajoutée près de tel endroit » au "
+"registre centralisé du réseau KartoTek (kartotek.eu), qui se charge de "
+"l'envoi via Apple/Google et conserve le jeton de votre appareil. Voir la "
+"politique de confidentialité de kartotek.eu pour le détail de ce "
+"traitement%(link)s."
 
-#: templates/privacy/index.html:108
+#: src/flpostcards/templates/privacy/index.html:108
 #, python-format
 msgid " (%(url)s)"
 msgstr " (%(url)s)"
 
-#: templates/privacy/index.html:113
+#: src/flpostcards/templates/privacy/index.html:113
 msgid "Journaux techniques"
 msgstr "Journaux techniques"
 
-#: templates/privacy/index.html:115
-msgid "Comme tout serveur web, ce site conserve brièvement des journaux techniques (adresse IP, requêtes effectuées) à des fins de sécurité et de limitation des abus (voir la limite de requêtes appliquée à chaque endpoint de l'API). Ces journaux ne sont pas utilisés à des fins commerciales et ne sont transmis à personne d'autre."
-msgstr "Comme tout serveur web, ce site conserve brièvement des journaux techniques (adresse IP, requêtes effectuées) à des fins de sécurité et de limitation des abus (voir la limite de requêtes appliquée à chaque endpoint de l'API). Ces journaux ne sont pas utilisés à des fins commerciales et ne sont transmis à personne d'autre."
+#: src/flpostcards/templates/privacy/index.html:115
+msgid ""
+"Comme tout serveur web, ce site conserve brièvement des journaux "
+"techniques (adresse IP, requêtes effectuées) à des fins de sécurité et de"
+" limitation des abus (voir la limite de requêtes appliquée à chaque "
+"endpoint de l'API). Ces journaux ne sont pas utilisés à des fins "
+"commerciales et ne sont transmis à personne d'autre."
+msgstr ""
+"Comme tout serveur web, ce site conserve brièvement des journaux "
+"techniques (adresse IP, requêtes effectuées) à des fins de sécurité et de"
+" limitation des abus (voir la limite de requêtes appliquée à chaque "
+"endpoint de l'API). Ces journaux ne sont pas utilisés à des fins "
+"commerciales et ne sont transmis à personne d'autre."
 
-#: templates/privacy/index.html:124
+#: src/flpostcards/templates/privacy/index.html:124
 msgid "Mesure d'audience"
 msgstr "Mesure d'audience"
 
-#: templates/privacy/index.html:126
-msgid "Ce site utilise Matomo pour mesurer la fréquentation des pages web (pas de l'application mobile). Matomo est hébergé par l'administrateur du site, sans transmission des données à un tiers publicitaire."
-msgstr "Ce site utilise Matomo pour mesurer la fréquentation des pages web (pas de l'application mobile). Matomo est hébergé par l'administrateur du site, sans transmission des données à un tiers publicitaire."
+#: src/flpostcards/templates/privacy/index.html:126
+msgid ""
+"Ce site utilise Matomo pour mesurer la fréquentation des pages web (pas "
+"de l'application mobile). Matomo est hébergé par l'administrateur du "
+"site, sans transmission des données à un tiers publicitaire."
+msgstr ""
+"Ce site utilise Matomo pour mesurer la fréquentation des pages web (pas "
+"de l'application mobile). Matomo est hébergé par l'administrateur du "
+"site, sans transmission des données à un tiers publicitaire."
 
-#: templates/privacy/index.html:133
+#: src/flpostcards/templates/privacy/index.html:133
 msgid "Vos droits"
 msgstr "Vos droits"
 
-#: templates/privacy/index.html:135
+#: src/flpostcards/templates/privacy/index.html:135
 #, python-format
-msgid "Vous pouvez demander l'accès, la rectification ou la suppression des données vous concernant (notamment un compte gestionnaire ou un repérage de terrain) en contactant l'administrateur de ce site%(via_email)s."
-msgstr "Vous pouvez demander l'accès, la rectification ou la suppression des données vous concernant (notamment un compte gestionnaire ou un repérage de terrain) en contactant l'administrateur de ce site%(via_email)s."
+msgid ""
+"Vous pouvez demander l'accès, la rectification ou la suppression des "
+"données vous concernant (notamment un compte gestionnaire ou un repérage "
+"de terrain) en contactant l'administrateur de ce site%(via_email)s."
+msgstr ""
+"Vous pouvez demander l'accès, la rectification ou la suppression des "
+"données vous concernant (notamment un compte gestionnaire ou un repérage "
+"de terrain) en contactant l'administrateur de ce site%(via_email)s."
 
-#: templates/privacy/index.html:139
+#: src/flpostcards/templates/privacy/index.html:139
 #, python-format
 msgid " à %(email)s"
 msgstr " à %(email)s"
 
-#: templates/privacy/index.html:142
+#: src/flpostcards/templates/privacy/index.html:142
 msgid "Autres sites du réseau KartoTek"
 msgstr "Autres sites du réseau KartoTek"
 
-#: templates/privacy/index.html:144
-msgid "L'application mobile KartoTek peut se connecter à plusieurs sites indépendants les uns des autres. Chaque site applique sa propre politique de confidentialité pour les données qu'il gère (comptes gestionnaires, repérages) ; seul le registre des notifications push est mutualisé, via kartotek.eu."
-msgstr "L'application mobile KartoTek peut se connecter à plusieurs sites indépendants les uns des autres. Chaque site applique sa propre politique de confidentialité pour les données qu'il gère (comptes gestionnaires, repérages) ; seul le registre des notifications push est mutualisé, via kartotek.eu."
+#: src/flpostcards/templates/privacy/index.html:144
+msgid ""
+"L'application mobile KartoTek peut se connecter à plusieurs sites "
+"indépendants les uns des autres. Chaque site applique sa propre politique"
+" de confidentialité pour les données qu'il gère (comptes gestionnaires, "
+"repérages) ; seul le registre des notifications push est mutualisé, via "
+"kartotek.eu."
+msgstr ""
+"L'application mobile KartoTek peut se connecter à plusieurs sites "
+"indépendants les uns des autres. Chaque site applique sa propre politique"
+" de confidentialité pour les données qu'il gère (comptes gestionnaires, "
+"repérages) ; seul le registre des notifications push est mutualisé, via "
+"kartotek.eu."
 
-#: templates/privacy/index.html:151
+#: src/flpostcards/templates/privacy/index.html:151
 msgid "Absence de sous-traitance publicitaire"
 msgstr "Absence de sous-traitance publicitaire"
 
-#: templates/privacy/index.html:153
-msgid "Ce site ne vend ni ne partage vos données avec des annonceurs ou courtiers en données. Il n'affiche aucune publicité."
-msgstr "Ce site ne vend ni ne partage vos données avec des annonceurs ou courtiers en données. Il n'affiche aucune publicité."
+#: src/flpostcards/templates/privacy/index.html:153
+msgid ""
+"Ce site ne vend ni ne partage vos données avec des annonceurs ou "
+"courtiers en données. Il n'affiche aucune publicité."
+msgstr ""
+"Ce site ne vend ni ne partage vos données avec des annonceurs ou "
+"courtiers en données. Il n'affiche aucune publicité."
 
-#: templates/travel/detail.html:23
+#: src/flpostcards/templates/travel/detail.html:23
 msgid "Toutes les balades"
 msgstr "Toutes les balades"
 
-#: templates/travel/detail.html:26 templates/travel/detail.html:50
+#: src/flpostcards/templates/travel/detail.html:26
+#: src/flpostcards/templates/travel/detail.html:50
 msgid "Mettre en pause"
 msgstr "Mettre en pause"
 
-#: templates/travel/detail.html:49
+#: src/flpostcards/templates/travel/detail.html:49
 msgid "Suivant"
 msgstr "Suivant"
 
-#: templates/travel/detail.html:51
+#: src/flpostcards/templates/travel/detail.html:51
 msgid "Reprendre"
 msgstr "Reprendre"
 
-#: templates/travel/index.html:29
+#: src/flpostcards/templates/travel/index.html:29
 #, python-format
 msgid "%(distance)s km"
 msgstr "%(distance)s km"
 
-#: templates/travel/index.html:38
+#: src/flpostcards/templates/travel/index.html:35
+#, python-format
+msgid "Mis à jour le %(date)s"
+msgstr "Mis à jour le %(date)s"
+
+#: src/flpostcards/templates/travel/index.html:43
 msgid "Aucun parcours disponible."
 msgstr "Aucun parcours disponible."
 

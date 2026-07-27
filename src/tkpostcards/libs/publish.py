@@ -38,6 +38,10 @@ class PostcardPublish:
         # ~ print(result)
         result = sync.sync_directory(datadir / 'verification', 'verification')
         # ~ print(result)
+        # NB : ne PAS synchroniser refresh_tokens.sqlite ici -- ce fichier
+        # est propre au serveur flpostcards en cours d'exécution (sessions
+        # actives) et ne doit jamais être écrasé par une publication,
+        # contrairement à postcards.sqlite. Voir libpostcards.model.Model.
         result = sync.sync_file(datadir / 'postcards.sqlite')
         # ~ print(result)
         result = sync.sync_file(datadir / 'collections.json')

@@ -17,6 +17,7 @@ Routes :
                                 inapproprié, doublon, ...) — public, aucune auth requise
   GET  /api/v1/reports       → liste les signalements (managers uniquement, auth JWT requise)
   POST /api/v1/reports/<id>/resolve → marque un signalement comme traité (managers uniquement)
+  GET  /api/v1/metrics       → télémétrie légère (managers uniquement, auth JWT requise)
   # NB : /api/v1/push/register et /unregister vivent désormais sur le
   # master (kartotek.eu) — l'app mobile s'y inscrit une seule fois pour
   # tous les serveurs. Ce serveur appelle seulement le master en interne
@@ -1925,3 +1926,24 @@ def resolve_report(report_id: str, auth_email: str):
         "report : %s résolu par %s", report_id, auth_email,
     )
     return jsonify({"status": "ok"})
+
+
+@bp.route("/api/v1/metrics")
+@require_auth
+def metrics(auth_email: str):
+    """
+    Instantané de télémétrie légère (managers uniquement — mêmes
+    accès que /api/v1/reports) : nombre de requêtes par endpoint,
+    répartition par classe de statut HTTP, latence moyenne/max.
+
+    Voir flpostcards.metrics pour la portée et les limites (compteurs
+    en mémoire, propres à CE worker, remis à zéro à chaque redémarrage
+    — pas un remplacement d'un vrai APM).
+
+    Réponse (200) : voir flpostcards.metrics.snapshot().
+    Erreurs :
+      401 { "error": "unauthorized" }  — access token absent, invalide ou expiré
+    """
+    from flpostcards import metrics as metrics_module
+
+    return jsonify(metrics_module.snapshot())

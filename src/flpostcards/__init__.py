@@ -6,9 +6,10 @@ from __future__ import annotations
 
 import configparser
 import logging
+import time
 from pathlib import Path
 
-from flask import Flask, request
+from flask import Flask, g, request
 from flask_babel import Babel
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -31,6 +32,16 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
 
     datadir = parser.get("DEFAULT", "datadir", fallback="datadir")
     app.config["DATADIR"] = Path(datadir).resolve()
+
+    # Répertoire de cache (icône générée par icon_generator, image
+    # statique OSM générée par osm_static_map, ...). Par défaut
+    # <datadir>/cache, mais peut être redirigé ailleurs (ex : un disque
+    # différent, un tmpfs) via [DEFAULT] cachedir dans postcards.conf.
+    cachedir = parser.get("DEFAULT", "cachedir", fallback=None)
+    if cachedir:
+        app.config["CACHEDIR"] = Path(cachedir).resolve()
+    else:
+        app.config["CACHEDIR"] = app.config["DATADIR"] / "cache"
 
     # Paramètres de verrouillage fichier (lockfile) pour updates.json
     app.config["LOCK_SUFFIX"] = parser.get(
@@ -104,6 +115,10 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["RATELIMIT_STORAGE_URI"] = value
             elif key == "rate_limit_key_prefix":
                 app.config["RATELIMIT_KEY_PREFIX"] = value
+            elif key == "image_cache_max_age_s":
+                app.config["IMAGE_CACHE_MAX_AGE_S"] = parser.getint(
+                    "flask", "image_cache_max_age_s"
+                )
             else:
                 app.config[key.upper()] = value
 
@@ -133,6 +148,13 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     # (15 min) et du refresh token (30 jours) par défaut.
     app.config.setdefault("JWT_ACCESS_TTL_S", 15 * 60)
     app.config.setdefault("JWT_REFRESH_TTL_S", 30 * 86400)
+    # Cache HTTP des images de cartes postales (voir home.images) : une
+    # image déjà publiée sous ce nom de fichier ne change quasiment
+    # jamais (un nouvel export produit un nouveau fichier, voir
+    # KartoTek App) -- 30 jours par défaut. Clé de configuration :
+    # [flask] image_cache_max_age_s (0 pour désactiver et revenir au
+    # comportement précédent, sans Cache-Control explicite).
+    app.config.setdefault("IMAGE_CACHE_MAX_AGE_S", 30 * 86400)
     # Nombre de reverse proxies "de confiance" en amont de flpostcards
     # (ex : BunkerWeb = 1) — voir ProxyFix dans create_app(). Détermine
     # combien de valeurs, en partant de la droite, sont prises en
@@ -296,6 +318,18 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
             path = path[:-1]
         return {"current_path": path}
 
+    @app.template_filter("format_date")
+    def format_date_filter(timestamp):
+        """Formate un timestamp UNIX (mdate, cdate, ...) en date localisée
+        courte (ex : "27 juil. 2026"), ou chaîne vide si absent."""
+        if not timestamp:
+            return ""
+        from datetime import datetime, timezone
+        from flask_babel import format_date
+
+        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        return format_date(dt, format="medium")
+
     limiter.init_app(app)
 
     if app.config["RATELIMIT_STORAGE_URI"] == "memory://" and not app.debug:
@@ -345,5 +379,21 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
 
     from flpostcards.blueprints.privacy import bp as privacy_bp
     app.register_blueprint(privacy_bp)
+
+    # Télémétrie légère (voir flpostcards.metrics) : chaque requête est
+    # chronométrée et comptée par endpoint/classe de statut HTTP, sans
+    # dépendance externe -- consultable via GET /api/v1/metrics
+    # (managers uniquement, voir blueprints/api/__init__.py).
+    @app.before_request
+    def _metrics_start_timer():
+        g._metrics_start = time.perf_counter()
+
+    @app.after_request
+    def _metrics_record(response):
+        start = g.get("_metrics_start")
+        if start is not None and request.endpoint:
+            from flpostcards import metrics
+            metrics.record(request.endpoint, response.status_code, time.perf_counter() - start)
+        return response
 
     return app

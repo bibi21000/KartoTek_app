@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tkpostcards 2.0.0\n"
 "Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
-"POT-Creation-Date: 2026-07-25 23:48+0200\n"
+"POT-Creation-Date: 2026-07-27 08:39+0200\n"
 "PO-Revision-Date: 2026-07-24 22:03+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -1318,146 +1318,146 @@ msgstr "Arrêté"
 msgid "Finishing scan before closing..."
 msgstr "Finalisation de la numérisation avant fermeture..."
 
-#: src/tkpostcards/scripts/tktools.py:42
+#: src/tkpostcards/scripts/tktools.py:46
 msgid "Export postcards"
 msgstr "Exporter les cartes postales"
 
-#: src/tkpostcards/scripts/tktools.py:47
+#: src/tkpostcards/scripts/tktools.py:51
 msgid "Export to PNG"
 msgstr "Exporter en PNG"
 
-#: src/tkpostcards/scripts/tktools.py:53
+#: src/tkpostcards/scripts/tktools.py:57
 msgid "Generate database"
 msgstr "Générer la base de données"
 
-#: src/tkpostcards/scripts/tktools.py:61
+#: src/tkpostcards/scripts/tktools.py:65
 msgid "Sync database"
 msgstr "Synchroniser la base de données"
 
-#: src/tkpostcards/scripts/tktools.py:69
+#: src/tkpostcards/scripts/tktools.py:73
 msgid "Delete card in database and its linked json and images"
 msgstr ""
 "Supprimer la carte de la base de données ainsi que son json et ses images"
 " associés"
 
-#: src/tkpostcards/scripts/tktools.py:76 src/tkpostcards/scripts/tktools.py:118
+#: src/tkpostcards/scripts/tktools.py:80 src/tkpostcards/scripts/tktools.py:122
 msgid "Give me id(s) to add"
 msgstr "Indiquez le(s) identifiant(s) à ajouter"
 
-#: src/tkpostcards/scripts/tktools.py:78
+#: src/tkpostcards/scripts/tktools.py:82
 #, python-brace-format
 msgid "Do you want to delete card with id {pcid} ?"
 msgstr "Voulez-vous supprimer la carte d'identifiant {pcid} ?"
 
-#: src/tkpostcards/scripts/tktools.py:87
+#: src/tkpostcards/scripts/tktools.py:91
 msgid "Prepare scanned postcards for import"
 msgstr "Préparer les cartes postales numérisées pour l'import"
 
-#: src/tkpostcards/scripts/tktools.py:88
+#: src/tkpostcards/scripts/tktools.py:92
 msgid "Prefix of scanned files"
 msgstr "Préfixe des fichiers numérisés"
 
-#: src/tkpostcards/scripts/tktools.py:89 src/tkpostcards/scripts/tktools.py:410
+#: src/tkpostcards/scripts/tktools.py:93 src/tkpostcards/scripts/tktools.py:414
 msgid "white threshold for background transpare"
 msgstr "seuil de blanc pour la transparence de l'arrière-plan"
 
-#: src/tkpostcards/scripts/tktools.py:107
+#: src/tkpostcards/scripts/tktools.py:111
 msgid "Add postcards"
 msgstr "Ajouter des cartes postales"
 
-#: src/tkpostcards/scripts/tktools.py:110
-#: src/tkpostcards/scripts/tktools.py:382
+#: src/tkpostcards/scripts/tktools.py:114
+#: src/tkpostcards/scripts/tktools.py:386
 msgid ""
 "OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"). Defaults to"
 " the [tkimport] ocr_langs setting in the configuration file."
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:124
-#: src/tkpostcards/scripts/tktools.py:398
-#: src/tkpostcards/scripts/tktools.py:418
+#: src/tkpostcards/scripts/tktools.py:128
+#: src/tkpostcards/scripts/tktools.py:402
+#: src/tkpostcards/scripts/tktools.py:422
 msgid "Postcards"
 msgstr "Cartes postales"
 
-#: src/tkpostcards/scripts/tktools.py:141
+#: src/tkpostcards/scripts/tktools.py:145
 msgid "Backup cards directory"
 msgstr "Sauvegarder le répertoire des cartes"
 
-#: src/tkpostcards/scripts/tktools.py:142
+#: src/tkpostcards/scripts/tktools.py:146
 msgid "Compression level"
 msgstr "Niveau de compression"
 
-#: src/tkpostcards/scripts/tktools.py:143
-#: src/tkpostcards/scripts/tktools.py:160
+#: src/tkpostcards/scripts/tktools.py:147
+#: src/tkpostcards/scripts/tktools.py:164
 msgid "Name of archive to create (backup_(date).tar.zst if None)"
 msgstr "Nom de l'archive à créer (backup_(date).tar.zst si non renseigné)"
 
-#: src/tkpostcards/scripts/tktools.py:158
+#: src/tkpostcards/scripts/tktools.py:162
 msgid "Extract cards in directory"
 msgstr "Extraire les cartes dans le répertoire"
 
-#: src/tkpostcards/scripts/tktools.py:159
+#: src/tkpostcards/scripts/tktools.py:163
 msgid "Destination dir"
 msgstr "Répertoire de destination"
 
-#: src/tkpostcards/scripts/tktools.py:169
+#: src/tkpostcards/scripts/tktools.py:173
 msgid "Need a dest directory"
 msgstr "Un répertoire de destination est nécessaire"
 
-#: src/tkpostcards/scripts/tktools.py:179
+#: src/tkpostcards/scripts/tktools.py:183
 msgid "Index similar postcards"
 msgstr "Indexer les cartes postales similaires"
 
-#: src/tkpostcards/scripts/tktools.py:209
+#: src/tkpostcards/scripts/tktools.py:213
 msgid "Find similar postcards from directory"
 msgstr "Rechercher des cartes postales similaires depuis un répertoire"
 
-#: src/tkpostcards/scripts/tktools.py:250
+#: src/tkpostcards/scripts/tktools.py:254
 msgid "Find similar postcard from url"
 msgstr "Rechercher une carte postale similaire depuis une url"
 
-#: src/tkpostcards/scripts/tktools.py:288
+#: src/tkpostcards/scripts/tktools.py:292
 msgid "Find similar postcard from clipboard"
 msgstr "Rechercher une carte postale similaire depuis le presse-papiers"
 
-#: src/tkpostcards/scripts/tktools.py:323
+#: src/tkpostcards/scripts/tktools.py:327
 msgid "Check for missing ids and replace cards wih last ones"
 msgstr ""
 "Vérifier les identifiants manquants et remplacer les cartes par les "
 "dernières"
 
-#: src/tkpostcards/scripts/tktools.py:379
+#: src/tkpostcards/scripts/tktools.py:383
 msgid "Redo OCR for postcards"
 msgstr "Relancer l'OCR pour les cartes postales"
 
-#: src/tkpostcards/scripts/tktools.py:390
+#: src/tkpostcards/scripts/tktools.py:394
 msgid "Give me a name"
 msgstr "Indiquez un nom"
 
-#: src/tkpostcards/scripts/tktools.py:408
+#: src/tkpostcards/scripts/tktools.py:412
 msgid "Redo transparent on postcards"
 msgstr "Refaire la transparence sur les cartes postales"
 
-#: src/tkpostcards/scripts/tktools.py:431
+#: src/tkpostcards/scripts/tktools.py:435
 msgid "Calculate travels and add them to database"
 msgstr "Calculer les parcours et les ajouter à la base de données"
 
-#: src/tkpostcards/scripts/tktools.py:439
+#: src/tkpostcards/scripts/tktools.py:443
 msgid "Publish data to a remote web server"
 msgstr "Publier les données sur un serveur web distant"
 
-#: src/tkpostcards/scripts/tktools.py:441
+#: src/tkpostcards/scripts/tktools.py:445
 msgid "Update all data (travel, ...) before publishing"
 msgstr "Mettre à jour toutes les données (parcours, ...) avant la publication"
 
-#: src/tkpostcards/scripts/tktools.py:448
+#: src/tkpostcards/scripts/tktools.py:452
 msgid "Give me a config"
 msgstr "Indiquez une configuration"
 
-#: src/tkpostcards/scripts/tktools.py:453
+#: src/tkpostcards/scripts/tktools.py:457
 msgid "Fix non-reciprocal double relations between cards"
 msgstr "Corriger les relations de doublons non réciproques entre les cartes"
 
-#: src/tkpostcards/scripts/tktools.py:454
+#: src/tkpostcards/scripts/tktools.py:458
 msgid "Do not update files"
 msgstr "Ne pas mettre à jour les fichiers"
 

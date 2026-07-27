@@ -131,7 +131,8 @@ CREATE TABLE IF NOT EXISTS travels (
     end_lat     REAL,
     end_lon     REAL,
     count       INTEGER,
-    cards       TEXT        -- JSON array sérialisé [{id, title}, ...]
+    cards       TEXT,       -- JSON array sérialisé [{id, title}, ...]
+    mdate       INTEGER     -- timestamp UNIX de dernière modification de "cards"
 );
 """
 
@@ -159,7 +160,28 @@ CREATE TABLE IF NOT EXISTS auths (
 );
 """
 
-_DDL_REFRESH_TOKENS = """
+# La table refresh_tokens ne vit plus dans postcards.sqlite (cf.
+# _DDL_REFRESH_TOKENS_DB plus bas) : cette base est intégralement
+# écrasée à chaque publication/synchronisation (copie depuis le poste
+# de travail vers le serveur, voir PostcardPublish.publish), ce qui
+# invaliderait toutes les sessions (déconnexion de tous les
+# utilisateurs) à chaque déploiement. Elle réside donc dans un fichier
+# sqlite séparé, propre au serveur flpostcards, jamais écrasé par une
+# synchronisation. `auths`, à l'inverse, reste ici : géré depuis
+# l'outil de bureau (AuthManagerView) et destiné à être publié.
+
+_DDL_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_cards_cdate ON cards (cdate);
+CREATE INDEX IF NOT EXISTS idx_cards_mdate ON cards (mdate);
+"""
+
+# ---------------------------------------------------------------------------
+# Base sqlite séparée pour refresh_tokens (cf. commentaire ci-dessus) :
+# fichier propre à flpostcards, distinct de postcards.sqlite, jamais
+# touché par generate()/sync() ni par la publication.
+# ---------------------------------------------------------------------------
+
+_DDL_REFRESH_TOKENS_DB = """
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     email         TEXT NOT NULL,
@@ -169,11 +191,6 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     revoked_at    INTEGER,
     device_info   TEXT                    -- optionnel : user-agent / identifiant appareil, pour affichage "sessions actives"
 );
-"""
-
-_DDL_INDEXES = """
-CREATE INDEX IF NOT EXISTS idx_cards_cdate ON cards (cdate);
-CREATE INDEX IF NOT EXISTS idx_cards_mdate ON cards (mdate);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_email ON refresh_tokens(email);
 """
 
@@ -253,6 +270,7 @@ def _travel_to_row(travel: dict) -> dict:
         "end_lon": end[1] if len(end) > 1 else None,
         "count": travel.get("count"),
         "cards": json.dumps(travel.get("cards") or [], ensure_ascii=False),
+        "mdate": travel.get("mdate"),
     }
 
 
@@ -315,6 +333,15 @@ class Model:
         # de redémarrer le processus (utile avec gunicorn).
         self._db_signature: tuple[float, int] | None = None
 
+        # Base séparée pour refresh_tokens (cf. _DDL_REFRESH_TOKENS_DB) :
+        # propre à flpostcards, jamais écrasée par generate()/sync() ni
+        # par une publication. Ouverte paresseusement (uniquement par les
+        # méthodes create_refresh_token/verify_refresh_token/...), pour
+        # que les autres usages de Model (outil de bureau, scripts) qui
+        # ne s'en servent jamais n'aient pas à la créer.
+        self.refresh_tokens_db_path = self.datadir / "refresh_tokens.sqlite"
+        self._refresh_conn: sqlite3.Connection | None = None
+
     # ------------------------------------------------------------------
     # Connexion SQLite
     # ------------------------------------------------------------------
@@ -372,18 +399,32 @@ class Model:
             self._conn.execute("PRAGMA foreign_keys=ON;")
             self._db_signature = self._current_db_signature()
 
-            # Garantit la présence de auths/refresh_tokens/collections même
-            # sur une base existante générée avant leur ajout (IF NOT
-            # EXISTS : sans effet si déjà présentes). Utile car
-            # generate() supprime et recrée tout le fichier sqlite à
-            # partir des JSON de cards/ — ces tables n'en font pas
-            # partie et seraient sinon perdues à la prochaine
-            # régénération sans cette création défensive.
-            self._conn.executescript(
-                _DDL_AUTHS + _DDL_REFRESH_TOKENS + _DDL_COLLECTIONS +
-                "CREATE INDEX IF NOT EXISTS idx_refresh_tokens_email ON refresh_tokens(email);"
-            )
+            # Garantit la présence de auths/collections même sur une base
+            # existante générée avant leur ajout (IF NOT EXISTS : sans
+            # effet si déjà présentes). Utile car generate() supprime et
+            # recrée tout le fichier sqlite à partir des JSON de cards/ —
+            # ces tables n'en font pas partie et seraient sinon perdues à
+            # la prochaine régénération sans cette création défensive.
+            self._conn.executescript(_DDL_AUTHS + _DDL_COLLECTIONS)
             self._conn.commit()
+
+            # Migration défensive, une fois : une base existante générée
+            # avant l'introduction de refresh_tokens.sqlite peut encore
+            # avoir une table refresh_tokens ici (avec des sessions
+            # actives) ; on les transfère vers la nouvelle base dédiée
+            # puis on supprime la table d'ici, pour ne pas la laisser
+            # traîner (et qu'un futur `generate()` ne perde plus rien
+            # qu'il n'est de toute façon plus censé gérer).
+            self._migrate_legacy_refresh_tokens()
+
+            # Ajout défensif de travels.mdate sur une base existante créée
+            # avant son introduction (CREATE TABLE IF NOT EXISTS, ci-dessus,
+            # ne modifie pas une table déjà présente sans cette colonne).
+            try:
+                self._conn.execute("ALTER TABLE travels ADD COLUMN mdate INTEGER")
+                self._conn.commit()
+            except sqlite3.OperationalError:
+                pass  # colonne déjà présente
 
             # Fonction SQL personnalisée pour les recherches insensibles
             # aux accents et à la casse (ex: "dodanes", "dôdanes" et
@@ -398,12 +439,78 @@ class Model:
 
         return self._conn
 
+    # ------------------------------------------------------------------
+    # Connexion sqlite séparée : refresh_tokens.sqlite
+    # ------------------------------------------------------------------
+    # Fichier distinct de postcards.sqlite, propre au serveur flpostcards
+    # en cours d'exécution : jamais recréé par generate()/sync(), jamais
+    # écrasé par une publication (PostcardPublish.publish() ne synchronise
+    # que postcards.sqlite). Les sessions (refresh tokens) survivent donc
+    # aux déploiements, contrairement à avant où elles vivaient dans
+    # postcards.sqlite et étaient effacées à chaque synchronisation.
+
+    def _get_refresh_conn(self) -> sqlite3.Connection:
+        """Retourne (et ouvre/crée si nécessaire) la connexion à
+        refresh_tokens.sqlite."""
+        if self._refresh_conn is None:
+            self.datadir.mkdir(parents=True, exist_ok=True)
+            self._refresh_conn = sqlite3.connect(
+                self.refresh_tokens_db_path,
+                check_same_thread=False,
+                timeout=10,
+            )
+            self._refresh_conn.row_factory = sqlite3.Row
+            self._refresh_conn.execute("PRAGMA journal_mode=WAL;")
+            self._refresh_conn.executescript(_DDL_REFRESH_TOKENS_DB)
+            self._refresh_conn.commit()
+
+        return self._refresh_conn
+
+    def _migrate_legacy_refresh_tokens(self) -> None:
+        """Migration défensive, une fois : transfère vers
+        refresh_tokens.sqlite les éventuelles lignes d'une table
+        refresh_tokens encore présente dans postcards.sqlite (base créée
+        avant l'introduction de ce fichier séparé), puis supprime cette
+        table de postcards.sqlite. Sans effet (rapide) si elle est déjà
+        absente.
+        """
+        conn = self._conn
+        cur = conn.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type = 'table' AND name = 'refresh_tokens'"
+        )
+        if cur.fetchone() is None:
+            return
+
+        rows = conn.execute("SELECT * FROM refresh_tokens").fetchall()
+        if rows:
+            refresh_conn = self._get_refresh_conn()
+            cols = rows[0].keys()
+            placeholders = ", ".join(f":{c}" for c in cols)
+            col_list = ", ".join(cols)
+            refresh_conn.executemany(
+                f"INSERT OR IGNORE INTO refresh_tokens ({col_list}) "
+                f"VALUES ({placeholders})",
+                [dict(r) for r in rows],
+            )
+            refresh_conn.commit()
+            logger.info(
+                "Migration refresh_tokens : %d ligne(s) transférée(s) "
+                "vers %s", len(rows), self.refresh_tokens_db_path,
+            )
+
+        conn.execute("DROP TABLE refresh_tokens")
+        conn.commit()
+
     def close(self) -> None:
-        """Ferme la connexion SQLite."""
+        """Ferme les connexions SQLite (base principale et refresh_tokens)."""
         if self._conn is not None:
             self._conn.close()
             self._conn = None
             self._db_signature = None
+        if self._refresh_conn is not None:
+            self._refresh_conn.close()
+            self._refresh_conn = None
 
     def __enter__(self) -> "Model":
         return self
@@ -537,12 +644,31 @@ class Model:
     def write_travel(self, travel: dict) -> None:
         """
         Écrit (INSERT OR REPLACE) un trajet dans la base SQLite.
+
+        Le champ ``mdate`` (date de dernière modification) est calculé ici,
+        pas fourni par l'appelant : il n'est mis à jour (timestamp UNIX
+        courant) que si la liste de cartes (``cards``, le parcours calculé)
+        diffère effectivement de la version déjà en base, ou si le trajet
+        est nouveau. Sinon la ``mdate`` existante est conservée, même si
+        cette méthode est rappelée sans changement réel (ex : régénération
+        périodique des trajets). Toute valeur de ``mdate`` passée dans
+        ``travel`` est ignorée.
         """
         row = _travel_to_row(travel)
+        conn = self._get_conn()
+
+        cur = conn.execute(
+            "SELECT cards, mdate FROM travels WHERE id = ?", (row["id"],)
+        )
+        existing = cur.fetchone()
+        if existing is not None and existing["cards"] == row["cards"]:
+            row["mdate"] = existing["mdate"]
+        else:
+            row["mdate"] = int(time.time())
+
         cols = ", ".join(row.keys())
         placeholders = ", ".join(f":{k}" for k in row)
         sql = f"INSERT OR REPLACE INTO travels ({cols}) VALUES ({placeholders})"
-        conn = self._get_conn()
         conn.execute(sql, row)
         conn.commit()
 
@@ -614,7 +740,7 @@ class Model:
         self.datadir.mkdir(parents=True, exist_ok=True)
 
         conn = self._get_conn()
-        conn.executescript(_DDL_CARDS + _DDL_TRAVELS + _DDL_POIS + _DDL_COLLECTIONS + _DDL_AUTHS + _DDL_REFRESH_TOKENS + _DDL_INDEXES)
+        conn.executescript(_DDL_CARDS + _DDL_TRAVELS + _DDL_POIS + _DDL_COLLECTIONS + _DDL_AUTHS + _DDL_INDEXES)
         conn.commit()
         logger.info("Base créée : %s", self.db_path)
 
@@ -1488,7 +1614,7 @@ class Model:
         token = secrets.token_urlsafe(48)
         token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
         now = int(time.time())
-        conn = self._get_conn()
+        conn = self._get_refresh_conn()
         conn.execute(
             "INSERT INTO refresh_tokens "
             "(email, token_hash, created_at, expires_at, device_info) "
@@ -1508,7 +1634,7 @@ class Model:
         if not token:
             return None
         token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-        conn = self._get_conn()
+        conn = self._get_refresh_conn()
         cur = conn.execute(
             "SELECT * FROM refresh_tokens WHERE token_hash = ?", (token_hash,)
         )
@@ -1530,7 +1656,7 @@ class Model:
         if not token:
             return False
         token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-        conn = self._get_conn()
+        conn = self._get_refresh_conn()
         cur = conn.execute(
             "UPDATE refresh_tokens SET revoked_at = ? "
             "WHERE token_hash = ? AND revoked_at IS NULL",
@@ -1545,7 +1671,7 @@ class Model:
         de tous les appareils, ex : téléphone volé). Retourne le nombre
         de tokens révoqués.
         """
-        conn = self._get_conn()
+        conn = self._get_refresh_conn()
         cur = conn.execute(
             "UPDATE refresh_tokens SET revoked_at = ? "
             "WHERE email = ? AND revoked_at IS NULL",
@@ -1564,7 +1690,7 @@ class Model:
         nombre de lignes supprimées.
         """
         cutoff = int(time.time()) - grace_days * 86400
-        conn = self._get_conn()
+        conn = self._get_refresh_conn()
         cur = conn.execute(
             "DELETE FROM refresh_tokens WHERE expires_at <= ? "
             "OR (revoked_at IS NOT NULL AND revoked_at <= ?)",

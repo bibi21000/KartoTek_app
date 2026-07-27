@@ -30,6 +30,11 @@
                     &middot;
                     {{ _("%(count)d cartes", count=travel.count) }}
                 </p>
+                {% if travel.mdate %}
+                <p class="travel-card-updated">
+                    {{ _("Mis à jour le %(date)s", date=(travel.mdate | format_date)) }}
+                </p>
+                {% endif %}
             </div>
         </a>
         {% endfor %}

@@ -4,8 +4,9 @@ pour servir de og:image à la page /map/.
 
 L'image est générée une seule fois à partir du paramètre de configuration
 ``osm_map`` (format ``zoom/latitude/longitude``, identique à l'ancre d'URL
-openstreetmap.org), puis mise en cache sur disque. Si ``osm_map`` change,
-le nom de fichier change aussi (hash de la valeur), ce qui invalide
+openstreetmap.org), puis mise en cache sur disque (répertoire configurable
+via [DEFAULT] cachedir, cf. flpostcards.load_config). Si ``osm_map``
+change, le nom de fichier change aussi (hash de la valeur), ce qui invalide
 naturellement le cache sans qu'il faille de logique de purge explicite.
 """
 
@@ -126,10 +127,11 @@ def cache_filename(osm_map: str) -> str:
     return f"og-map-{digest}.png"
 
 
-def get_or_generate_map_image(datadir: Path, osm_map: str) -> Path | None:
+def get_or_generate_map_image(cache_dir: Path, osm_map: str) -> Path | None:
     """
     Retourne le chemin de l'image og:image générée pour la valeur ``osm_map``
-    donnée, en la générant et la mettant en cache sur disque si nécessaire.
+    donnée, en la générant et la mettant en cache sur disque (dans
+    ``cache_dir``, cf. [DEFAULT] cachedir) si nécessaire.
 
     Retourne None si ``osm_map`` est invalide ou si la génération échoue
     (par exemple absence d'accès réseau aux tuiles OpenStreetMap).
@@ -138,7 +140,7 @@ def get_or_generate_map_image(datadir: Path, osm_map: str) -> Path | None:
     if parsed is None:
         return None
 
-    cache_dir = Path(datadir) / "cache"
+    cache_dir = Path(cache_dir)
     cache_path = cache_dir / cache_filename(osm_map)
 
     if cache_path.exists():

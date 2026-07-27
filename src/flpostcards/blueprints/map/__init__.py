@@ -43,7 +43,7 @@ def index():
     osm_map = current_app.config.get("OSM_MAP")
     if osm_map:
         image_path = get_or_generate_map_image(
-            current_app.config["DATADIR"], osm_map
+            current_app.config["CACHEDIR"], osm_map
         )
         if image_path is not None:
             og_image_url = url_for("map.og_map_image", _external=True)
@@ -77,7 +77,7 @@ def og_map_image():
     if not osm_map:
         abort(404)
 
-    image_path = get_or_generate_map_image(current_app.config["DATADIR"], osm_map)
+    image_path = get_or_generate_map_image(current_app.config["CACHEDIR"], osm_map)
     if image_path is None:
         abort(404)
 
