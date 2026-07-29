@@ -1,0 +1,6 @@
+{
+  "name": "Exemple",
+  "description": "Thème de démonstration : surcharge une page, ajoute un fichier statique, ajoute une page via blueprint.",
+  "author": "vous",
+  "url_prefix": ""
+}

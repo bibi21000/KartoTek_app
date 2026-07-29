@@ -1,0 +1,531 @@
+/* =================================================================
+   byclaude — "Sur le bureau du collectionneur"
+   Habillage complet façon cartes postales anciennes : papier vergé,
+   encre sépia, tampons de la poste, cire à cacheter.
+
+   Ne redéfinit volontairement AUCUNE propriété structurelle du cœur
+   (position, display, grid-template, flex-direction, dimensions) :
+   uniquement couleurs, fonds, bordures, typographies, ombres et
+   quelques animations, pour ne jamais casser une mise en page ou un
+   script existant (gallery-filters.js, map.js, slideshow.js, ...).
+   ================================================================= */
+
+:root {
+    --bc-paper:        #f3e8d3;
+    --bc-paper-dark:   #e6d5ab;
+    --bc-paper-deep:   #ded0aa;
+    --bc-ink:          #3b2a1a;
+    --bc-ink-soft:     #6b5843;
+    --bc-wax:          #9c2b2f;
+    --bc-wax-dark:     #7a1f22;
+    --bc-postmark:     #33506b;
+    --bc-gold:         #b08d57;
+
+    --bc-font-title: "Playfair Display", Georgia, serif;
+    --bc-font-type:  "Special Elite", "Courier New", monospace;
+    --bc-font-body:  "Lora", Georgia, serif;
+}
+
+/* -----------------------------------------------------------------
+   Fond général : papier vergé, avec taches de rousseur discrètes
+   ----------------------------------------------------------------- */
+
+html.bc-desk, body.bc-desk {
+    background-color: var(--bc-paper);
+    background-image:
+        radial-gradient(circle at 12% 18%, rgba(155, 120, 70, 0.10) 0, transparent 22%),
+        radial-gradient(circle at 82% 8%,  rgba(155, 120, 70, 0.08) 0, transparent 20%),
+        radial-gradient(circle at 68% 74%, rgba(155, 120, 70, 0.09) 0, transparent 24%),
+        radial-gradient(circle at 24% 92%, rgba(155, 120, 70, 0.07) 0, transparent 18%),
+        repeating-linear-gradient(90deg, rgba(59,42,26,0.015) 0 1px, transparent 1px 3px);
+    color: var(--bc-ink);
+    font-family: var(--bc-font-body);
+}
+
+.bc-desk ::selection {
+    background: var(--bc-wax);
+    color: var(--bc-paper);
+}
+
+.bc-desk ::-webkit-scrollbar {
+    width: 12px;
+}
+.bc-desk ::-webkit-scrollbar-track {
+    background: var(--bc-paper-dark);
+}
+.bc-desk ::-webkit-scrollbar-thumb {
+    background: var(--bc-gold);
+    border-radius: 8px;
+    border: 3px solid var(--bc-paper-dark);
+}
+
+/* -----------------------------------------------------------------
+   Tampon de la poste — filigrane décoratif fixe
+   ----------------------------------------------------------------- */
+
+.bc-postmark {
+    position: fixed;
+    top: 4.2rem;
+    right: -1.5rem;
+    width: 150px;
+    height: 150px;
+    background-repeat: no-repeat;
+    background-size: contain;
+    opacity: 0.16;
+    transform: rotate(9deg);
+    pointer-events: none;
+    z-index: 3;
+    mix-blend-mode: multiply;
+}
+
+@media (max-width: 780px) {
+    .bc-postmark { display: none; }
+}
+
+/* -----------------------------------------------------------------
+   Navigation — étiquettes de bagage / languettes postales
+   ----------------------------------------------------------------- */
+
+.bc-tags.site-nav {
+    gap: 0.6rem;
+}
+
+.bc-tags .site-nav-link {
+    font-family: var(--bc-font-type);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    color: var(--bc-ink);
+    background: var(--bc-paper);
+    border: 1px solid var(--bc-ink-soft);
+    outline: 1px dashed var(--bc-gold);
+    outline-offset: -4px;
+    border-radius: 3px;
+    box-shadow: 2px 3px 0 rgba(59, 42, 26, 0.22);
+    backdrop-filter: none;
+    transform: rotate(-2deg);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.bc-tags .site-nav-link:nth-child(even) {
+    transform: rotate(1.5deg);
+}
+
+.bc-tags .site-nav-link:hover {
+    transform: rotate(0deg) translateY(-2px);
+    background: var(--bc-paper-dark);
+    border-color: var(--bc-wax);
+    box-shadow: 3px 4px 0 rgba(59, 42, 26, 0.28);
+}
+
+.bc-tags .site-nav-link.active {
+    background: var(--bc-wax);
+    color: var(--bc-paper);
+    border-color: var(--bc-wax-dark);
+    font-weight: 400;
+    transform: rotate(0deg);
+}
+
+.bc-tags .site-nav-link--right {
+    outline-color: var(--bc-postmark);
+}
+
+/* -----------------------------------------------------------------
+   Titres de page — encre + soulignement "à la plume"
+   ----------------------------------------------------------------- */
+
+.page-title {
+    font-family: var(--bc-font-title);
+    font-style: italic;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-shadow: none !important;
+}
+
+.page-header {
+    background: linear-gradient(to bottom, rgba(59, 42, 26, 0.5), transparent) !important;
+}
+
+.gallery-header .page-title,
+.travel-list-header .page-title,
+.contact-header .page-title {
+    color: var(--bc-ink);
+    position: relative;
+    display: inline-block;
+    padding-bottom: 0.3rem;
+}
+
+.gallery-header .page-title::after,
+.travel-list-header .page-title::after,
+.contact-header .page-title::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    width: 70%;
+    height: 6px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10'%3E%3Cpath d='M0 6 Q10 0 20 6 T40 6 T60 6 T80 6 T100 6' stroke='%239c2b2f' stroke-width='2' fill='none'/%3E%3C/svg%3E") no-repeat left / contain;
+}
+
+/* -----------------------------------------------------------------
+   Fonds de page (remplace l'aplat sombre du cœur par le papier)
+   ----------------------------------------------------------------- */
+
+.gallery-page,
+.travel-list-page,
+.contact-page,
+.privacy-page {
+    background: var(--bc-paper) !important;
+}
+
+.cards-map,
+.map-popup-wrapper .leaflet-popup-content-wrapper {
+    background: var(--bc-paper-dark) !important;
+    color: var(--bc-ink) !important;
+}
+
+/* style.css fixe .map-popup-title en gris clair (#ddd) pour la popup
+   sombre d'origine ; sur le fond papier clair du thème byclaude, ce
+   texte devient quasi invisible au survol. On force la couleur d'encre
+   du thème. */
+.map-popup-wrapper .map-popup-title {
+    color: var(--bc-ink) !important;
+}
+
+.map-page-header {
+    background: linear-gradient(to bottom, rgba(59, 42, 26, 0.55), transparent) !important;
+}
+
+.privacy-page,
+.privacy-page h2,
+.privacy-page h3,
+.privacy-page p,
+.contact-header .page-title {
+    color: var(--bc-ink) !important;
+}
+
+.privacy-header .page-title { color: var(--bc-ink); }
+
+/* -----------------------------------------------------------------
+   Galerie — cartes postales éparpillées sur le bureau
+   ----------------------------------------------------------------- */
+
+.gallery-grid {
+    padding-top: 0.5rem;
+}
+
+.gallery-item {
+    background: var(--bc-paper);
+    border: 1px solid var(--bc-paper-deep);
+    box-shadow: 0 3px 0 var(--bc-paper-deep), 0 6px 16px rgba(59, 42, 26, 0.25);
+    padding: 6px 6px 10px;
+    transform: rotate(-1.4deg);
+}
+
+.gallery-item:nth-child(3n) { transform: rotate(1.6deg); }
+.gallery-item:nth-child(3n+1) { transform: rotate(-0.6deg); }
+.gallery-item:nth-child(5n) { transform: rotate(0.9deg); }
+
+.gallery-item:hover {
+    transform: rotate(0deg) translateY(-5px) scale(1.015);
+    box-shadow: 0 3px 0 var(--bc-gold), 0 14px 26px rgba(59, 42, 26, 0.35);
+    border-color: var(--bc-gold);
+}
+
+.gallery-thumb {
+    background: var(--bc-paper-dark);
+    border-radius: 2px;
+}
+
+.gallery-img {
+    filter: sepia(0.35) contrast(1.05) saturate(1.1);
+}
+
+.gallery-caption {
+    font-family: var(--bc-font-type);
+    color: var(--bc-ink-soft);
+}
+
+.gallery-count,
+.gallery-empty {
+    color: var(--bc-ink-soft) !important;
+    font-family: var(--bc-font-type);
+}
+
+.gallery-filters input[type="search"],
+.gallery-filters select,
+.collection-filter select {
+    background: var(--bc-paper) !important;
+    color: var(--bc-ink) !important;
+    border: 1px solid var(--bc-ink-soft) !important;
+    font-family: var(--bc-font-body);
+    font-size: 0.82rem;
+    padding: 0.3rem 0.5rem !important;
+}
+
+.gallery-filters input[type="search"] {
+    min-width: 160px !important;
+}
+
+.gallery-filters .filter-field {
+    gap: 0.15rem;
+}
+.gallery-pagination .page-link {
+    color: var(--bc-ink);
+    background: var(--bc-paper);
+    border: 1px solid var(--bc-ink-soft);
+    font-family: var(--bc-font-type);
+}
+
+.gallery-pagination .page-link:hover {
+    border-color: var(--bc-wax);
+    background: var(--bc-paper-dark);
+}
+
+.gallery-pagination .page-link.disabled {
+    color: var(--bc-ink-soft);
+    border-color: var(--bc-paper-deep);
+}
+
+.gallery-pagination .page-current {
+    background: var(--bc-wax);
+    border-color: var(--bc-wax-dark);
+    color: var(--bc-paper);
+}
+
+.gallery-pagination .page-ellipsis {
+    color: var(--bc-ink-soft);
+}
+
+/* -----------------------------------------------------------------
+   Détail d'une carte — posée seule sur le bureau, cachet à l'appui
+   ----------------------------------------------------------------- */
+
+.card-detail {
+    background: radial-gradient(ellipse at center, rgba(59,42,26,0.08), rgba(59,42,26,0.35)),
+                var(--bc-paper-dark) !important;
+}
+
+.card-detail .back-link {
+    font-family: var(--bc-font-type);
+    color: var(--bc-paper) !important;
+    background: var(--bc-wax);
+    padding: 0.3rem 0.8rem;
+    border-radius: 2px;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.25);
+}
+
+.card-detail .back-link:hover {
+    background: var(--bc-wax-dark) !important;
+}
+
+.card-image-wrapper {
+    background: var(--bc-paper) !important;
+    border: 10px solid var(--bc-paper);
+    box-shadow:
+        0 0 0 1px var(--bc-paper-deep),
+        0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.card-image-wrapper img {
+    filter: sepia(0.3) contrast(1.05);
+}
+
+.card-meta {
+    font-family: var(--bc-font-type);
+    color: var(--bc-paper) !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+}
+
+.card-gps-links a,
+.gps-link {
+    color: var(--bc-paper) !important;
+    border-color: var(--bc-gold) !important;
+}
+
+/* -----------------------------------------------------------------
+   Balades — carnet de voyage, bandes de "scotch" papier
+   ----------------------------------------------------------------- */
+
+.travel-card {
+    background: var(--bc-paper) !important;
+    border: 1px solid var(--bc-paper-deep);
+    box-shadow: 0 3px 10px rgba(59, 42, 26, 0.2);
+}
+
+.travel-card::before {
+    content: "";
+    display: block;
+    position: absolute;
+    top: -8px;
+    left: 20%;
+    width: 34%;
+    height: 16px;
+    background: rgba(176, 141, 87, 0.55);
+    transform: rotate(-3deg);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.travel-card {
+    position: relative;
+    overflow: visible !important;
+}
+
+.travel-card-thumb img {
+    filter: sepia(0.3) contrast(1.05);
+}
+
+.travel-card-info h2 {
+    font-family: var(--bc-font-title);
+    font-style: italic;
+    color: var(--bc-ink) !important;
+}
+
+.travel-card-subtitle,
+.travel-card-meta,
+.travel-card-updated {
+    color: var(--bc-ink-soft) !important;
+    font-family: var(--bc-font-type);
+}
+
+.travel-back-link {
+    color: var(--bc-wax) !important;
+    font-family: var(--bc-font-type);
+}
+
+.travel-caption-current,
+.travel-caption-next,
+.travel-captions {
+    font-family: var(--bc-font-body);
+}
+
+/* -----------------------------------------------------------------
+   Formulaire de contact — comme écrire au dos d'une carte
+   ----------------------------------------------------------------- */
+
+.contact-form {
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 2.05rem,
+            rgba(59, 42, 26, 0.14) 2.05rem,
+            rgba(59, 42, 26, 0.14) calc(2.05rem + 1px)
+        ),
+        var(--bc-paper);
+    padding: 1.5rem 1.5rem 1.75rem;
+    border: 1px solid var(--bc-paper-deep);
+    box-shadow: 0 10px 30px rgba(59, 42, 26, 0.25);
+    font-family: var(--bc-font-body);
+}
+
+.contact-form input,
+.contact-form textarea,
+.contact-form select {
+    background: rgba(255, 255, 255, 0.5) !important;
+    border: 1px solid var(--bc-ink-soft) !important;
+    color: var(--bc-ink) !important;
+    font-family: var(--bc-font-body) !important;
+}
+
+.contact-submit {
+    font-family: var(--bc-font-type);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: transparent !important;
+    color: var(--bc-wax) !important;
+    border: 3px double var(--bc-wax) !important;
+    border-radius: 4px;
+    transform: rotate(-2deg);
+    transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.contact-submit:hover {
+    transform: rotate(0deg);
+    background: var(--bc-wax) !important;
+    color: var(--bc-paper) !important;
+}
+
+.form-error,
+.form-error-global {
+    color: var(--bc-wax-dark) !important;
+}
+
+/* -----------------------------------------------------------------
+   Messages flash — petits mots épinglés
+   ----------------------------------------------------------------- */
+
+.flash-messages {
+    font-family: var(--bc-font-body);
+}
+
+.flash-message {
+    background: #fdf6e3 !important;
+    color: var(--bc-ink) !important;
+    border: 1px solid var(--bc-paper-deep);
+    border-left: 6px solid var(--bc-ink-soft);
+    box-shadow: 2px 3px 8px rgba(59, 42, 26, 0.25);
+    transform: rotate(-1deg);
+}
+
+.flash-success { border-left-color: #4a7a4a !important; }
+
+/* -----------------------------------------------------------------
+   Boutons génériques — tampon encreur
+   ----------------------------------------------------------------- */
+
+.fullscreen-btn,
+.face-toggle,
+.poi-toggle,
+.map-poi-toggle,
+.travel-pause-btn,
+.slide-nav-btn {
+    font-family: var(--bc-font-type) !important;
+    background: rgba(243, 232, 211, 0.9) !important;
+    color: var(--bc-ink) !important;
+    border: 1px solid var(--bc-ink-soft) !important;
+}
+
+.fullscreen-btn:hover,
+.face-toggle:hover,
+.poi-toggle:hover,
+.map-poi-toggle:hover,
+.travel-pause-btn:hover,
+.slide-nav-btn:hover {
+    background: var(--bc-wax) !important;
+    color: var(--bc-paper) !important;
+    border-color: var(--bc-wax-dark) !important;
+}
+
+/* -----------------------------------------------------------------
+   Pied de page — sceau de cire
+   ----------------------------------------------------------------- */
+
+.bc-footer.site-footer {
+    display: flex;
+    justify-content: center;
+    padding: 2rem 1rem 2.5rem;
+}
+
+.bc-seal.site-footer-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--bc-ink-soft) !important;
+    font-family: var(--bc-font-type);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-align: center;
+    transition: transform 0.2s ease;
+}
+
+.bc-seal.site-footer-link:hover {
+    transform: translateY(-3px) rotate(-4deg);
+    color: var(--bc-wax) !important;
+}
+
+.bc-seal-img {
+    width: 40px;
+    height: 40px;
+    filter: drop-shadow(0 3px 4px rgba(59, 42, 26, 0.35));
+}

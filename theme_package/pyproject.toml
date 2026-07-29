@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flpostcards-theme-noel"
+version = "1.0.0"
+description = "Thème 'Noël' pour flpostcards, installable séparément."
+requires-python = ">=3.9"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+flpostcards_theme_noel = ["theme_data/**/*"]
+
+# C'est ici que le thème s'enregistre auprès de flpostcards : le nom
+# "noel" est celui que l'admin met dans postcards.conf ([flask] theme
+# = noel), la cible pointe vers la fonction theme_dir() ci-dessous.
+[project.entry-points."flpostcards.themes"]
+noel = "flpostcards_theme_noel:theme_dir"

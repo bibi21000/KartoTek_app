@@ -20,7 +20,7 @@ from flask import (
 )
 
 from flpostcards.images import SIZE_SMALL, ALLOWED_SIZE_DIRS, card_images, image_dimensions
-from flpostcards.icon_generator import get_or_generate_icon
+from flpostcards.icon_generator import find_uploaded_icon, get_or_generate_icon
 
 bp = Blueprint("home", __name__, template_folder="../../templates")
 
@@ -150,7 +150,14 @@ def icon():
     """
     from flask import send_file
 
-    static_dir = Path(current_app.static_folder)
+    # Un thème actif (voir flpostcards/theming.py) peut fournir son
+    # propre static/icon.(png|jpg|jpeg) ; sinon on retombe sur celui
+    # du cœur, comme sans thème.
+    theme_static_dir = current_app.config.get("THEME_STATIC_DIR")
+    if theme_static_dir is not None and find_uploaded_icon(theme_static_dir) is not None:
+        static_dir = theme_static_dir
+    else:
+        static_dir = Path(current_app.static_folder)
     icon_config = current_app.config.get("ICON")
 
     icon_path = get_or_generate_icon(

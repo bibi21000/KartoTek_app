@@ -11,6 +11,7 @@ from pathlib import Path
 
 from flask import Flask, g, request
 from flask_babel import Babel
+from markupsafe import Markup
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from libpostcards.model import Model
@@ -119,8 +120,22 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["IMAGE_CACHE_MAX_AGE_S"] = parser.getint(
                     "flask", "image_cache_max_age_s"
                 )
+            elif key == "theme":
+                app.config["THEME"] = value.strip()
+            elif key == "themesdir":
+                app.config["THEMESDIR"] = value.strip()
             else:
                 app.config[key.upper()] = value
+
+    # Système de templates admin ("thèmes", voir flpostcards.theming) :
+    # sous-dossier de THEMESDIR choisi par l'admin via [flask] theme,
+    # jamais par l'utilisateur final. THEMESDIR par défaut : ./themes
+    # (relatif au répertoire de travail, comme postcards.conf), mais
+    # peut être redirigé via [flask] themesdir.
+    app.config.setdefault("THEME", "")
+    app.config["THEMESDIR"] = Path(
+        app.config.get("THEMESDIR", "themes")
+    ).resolve()
 
     # Identifiant du site (siteId) pour le suivi Matomo, utilisé dans
     # base.html avec [flask] site_matomo. Clé de configuration :
@@ -269,8 +284,17 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
 
 
 def create_app(config_path: str | Path = "postcards.conf") -> Flask:
-    app = Flask(__name__)
+    # static_folder=None : la route /static est enregistrée "à la main"
+    # dans theming.register_static_route, pour pouvoir faire un repli
+    # fichier par fichier entre le static/ d'un éventuel thème actif et
+    # celui du cœur (voir flpostcards/theming.py).
+    app = Flask(__name__, static_folder=None)
     load_config(app, config_path)
+
+    from flpostcards import theming
+
+    theme = theming.load_theme(app)
+    app.config["ACTIVE_THEME"] = theme.name if theme is not None else None
 
     # Sans ça, seuls les WARNING+ remontent par défaut (que ce soit en
     # dev ou sous gunicorn) : les logs INFO de /api/v1/similar (taille
@@ -300,10 +324,18 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
 
     app.config.setdefault("LANGUAGES", LANGUAGES)
     app.config.setdefault("BABEL_DEFAULT_LOCALE", "fr")
-    app.config.setdefault("BABEL_TRANSLATION_DIRECTORIES", "translations")
+    app.config.setdefault(
+        "BABEL_TRANSLATION_DIRECTORIES",
+        theming.translation_directories(app, theme),
+    )
     app.config.setdefault("BABEL_DOMAIN", "flpostcards")
 
     babel = Babel(app, locale_selector=select_locale)
+
+    # Route /static (repli thème -> cœur) et surcharge des templates
+    # (repli thème -> cœur/blueprints) -- voir flpostcards/theming.py.
+    theming.register_static_route(app, theme)
+    theming.apply_templates(app, theme)
 
     @app.context_processor
     def inject_locale():
@@ -329,6 +361,53 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
 
         dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         return format_date(dt, format="medium")
+
+    @app.template_filter("obfuscate_email")
+    def obfuscate_email_filter(email):
+        """Protège une adresse email contre la moisson automatisée en
+        évitant qu'elle apparaisse *en clair, ou sous une forme
+        directement décodable, dans le HTML tel qu'il est servi*.
+
+        Contrairement à un simple encodage en entités HTML (&#64; pour
+        @, etc.), qui reste trivial à inverser pour n'importe quel
+        parseur -- y compris un robot qui ne fait QUE lire le HTML brut
+        sans exécuter de JS -- ce filtre ne renvoie aucune donnée
+        permettant de reconstruire l'adresse sans exécuter le script
+        static/js/email-deobfuscation.js : le payload embarqué dans
+        data-e est l'adresse inversée caractère par caractère puis
+        encodée en base64 (obscurcissement, pas du chiffrement -- voir
+        les commentaires du fichier JS pour la portée réelle de cette
+        protection). Ce script construit le vrai lien mailto: au
+        chargement de la page, dans un vrai navigateur uniquement.
+
+        Un <noscript> fournit un repli lisible par un humain sans JS
+        (adresse avec "@" et "." remplacés par "[at]"/"[dot]") --
+        toujours pas un motif exploitable tel quel par une regex
+        "texte@texte.tld", même si un scraper spécifiquement écrit
+        pour reconnaître ce genre de repli pourrait le normaliser.
+
+        Retourne une chaîne Markup (déjà sûre pour Jinja) ; utiliser
+        cette valeur directement, sans passer par un %(...)s de
+        gettext, sous peine de perdre le marquage "safe" (voir usages
+        dans templates/privacy/index.html, où l'expression englobante
+        est explicitement passée à |safe pour cette raison). La page
+        doit aussi charger static/js/email-deobfuscation.js (voir
+        {% block scripts %} de privacy/index.html) pour que le lien
+        apparaisse réellement.
+        """
+        if not email:
+            return ""
+
+        import base64
+
+        payload = base64.b64encode(email[::-1].encode("utf-8")).decode("ascii")
+        human_fallback = email.replace("@", " [at] ").replace(".", " [dot] ")
+
+        return Markup(
+            '<span class="obfuscated-email" data-e="{payload}">'
+            "<noscript>{fallback}</noscript>"
+            "</span>"
+        ).format(payload=payload, fallback=human_fallback)
 
     limiter.init_app(app)
 
@@ -379,6 +458,13 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
 
     from flpostcards.blueprints.privacy import bp as privacy_bp
     app.register_blueprint(privacy_bp)
+
+    # Nouvelles pages ajoutées par le thème actif, le cas échéant (voir
+    # flpostcards/theming.py) -- enregistré après les blueprints du
+    # cœur : un thème ajoute des pages, il ne redéfinit pas les routes
+    # existantes (redéfinir une route déjà enregistrée échouerait).
+    if theme is not None:
+        theming.register_theme_blueprint(app, theme)
 
     # Télémétrie légère (voir flpostcards.metrics) : chaque requête est
     # chronométrée et comptée par endpoint/classe de statut HTTP, sans

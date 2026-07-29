@@ -397,35 +397,6 @@ def _load_deprecations() -> list[dict[str, Any]]:
     return data if isinstance(data, list) else []
 
 
-def _load_deprecations() -> list[dict[str, Any]]:
-    """
-    Lit ``deprecations.json``, distribué à l'intérieur du paquet Python
-    ``flpostcards`` lui-même (voir ``pyproject.toml`` →
-    ``[tool.setuptools.package-data]``), pour signaler aux clients
-    mobiles qu'un endpoint est en cours de retrait.
-
-    Contrairement à ``collections.json`` (donnée d'exploitation, propre
-    à chaque site, modifiable par l'admin sans toucher au code), une
-    dépréciation d'endpoint est une information liée au CODE de
-    l'API : elle apparaît et disparaît au fil des releases de
-    flpostcards, donc versionnée dans git avec le reste du paquet et
-    livrée avec chaque déploiement — pas dans ``datadir``.
-
-    Absent ou invalide -> liste vide, jamais d'erreur 500 pour un
-    simple fichier manquant (utile en particulier en développement,
-    où le paquet peut ne pas être installé via le mécanisme
-    package-data mais lancé directement depuis les sources).
-    """
-    try:
-        raw = importlib_resources.files("flpostcards").joinpath(
-            "deprecations.json"
-        ).read_text(encoding="utf-8")
-        data = json.loads(raw)
-    except (FileNotFoundError, OSError, json.JSONDecodeError):
-        return []
-    return data if isinstance(data, list) else []
-
-
 @bp.route("/api/v1/capabilities")
 # Route de découverte, appelée typiquement une fois par sélection de
 # serveur (voir appli mobile KartoTek : écran paramètres / "ici") plutôt

@@ -1,0 +1,6 @@
+{
+  "name": "byclaude — Sur le bureau du collectionneur",
+  "description": "Habillage complet façon cartes postales anciennes : papier vergé, encre sépia, tampons de la poste et cire à cacheter. Ne surcharge que base.html + son propre CSS/images ; aucune page, script ou fonctionnalité du cœur n'est modifiée.",
+  "author": "Claude",
+  "url_prefix": ""
+}

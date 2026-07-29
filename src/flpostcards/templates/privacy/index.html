@@ -27,7 +27,7 @@
   <p>
     {{ _("Ce site est géré par : %(name)s.", name=operator_name) }}
     {% if contact_email %}
-      {{ _("Contact : %(email)s.", email=contact_email) }}
+      {{ _("Contact : %(email)s.", email=contact_email|obfuscate_email) | safe }}
     {% else %}
       {{ _("Aucune adresse de contact n'est publiée sur ce site pour le "
            "moment ; utilisez le site de référence du réseau, "
@@ -38,7 +38,7 @@
 
   <h2>{{ _("Quelles données sont traitées, et pourquoi") }}</h2>
 
-  <h3>{{ _("Position GPS de votre téléphone") }}</h3>
+  <h3>{{ _("Position GPS (application mobile et site web)") }}</h3>
   <p>
     {{ _("Quand l'application mobile utilise l'écran « ici », elle "
          "envoie votre position (ou une zone géographique) à ce serveur "
@@ -48,6 +48,17 @@
          "répondre à la requête et n'est pas enregistrée de façon "
          "durable ni associée à une identité, sauf si vous êtes "
          "connecté·e en tant que gestionnaire (voir ci-dessous).") }}
+  </p>
+  <p>
+    {{ _("Sur le site web, la page carte (/map/) demande également "
+         "l'accès à votre position GPS via votre navigateur, afin de "
+         "centrer la carte à votre emplacement. Cette position est "
+         "traitée de la même façon : elle sert uniquement à afficher "
+         "les cartes postales à proximité et n'est pas enregistrée de "
+         "façon durable ni associée à une identité. Vous pouvez "
+         "refuser cette demande de géolocalisation dans votre "
+         "navigateur ; la carte reste utilisable en la déplaçant "
+         "manuellement.") }}
   </p>
 
   <h3>{{ _("Compte gestionnaire (email et mot de passe)") }}</h3>
@@ -136,7 +147,7 @@
          "suppression des données vous concernant (notamment un compte "
          "gestionnaire ou un repérage de terrain) en contactant "
          "l'administrateur de ce site%(via_email)s.",
-         via_email=(_(" à %(email)s", email=contact_email) if contact_email else "")) }}
+         via_email=(_(" à %(email)s", email=contact_email|obfuscate_email) if contact_email else "")) | safe }}
   </p>
 
   <h2>{{ _("Autres sites du réseau KartoTek") }}</h2>
@@ -155,4 +166,11 @@
          "publicité.") }}
   </p>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+{% if contact_email %}
+<script src="{{ url_for('static', filename='js/email-deobfuscation.js') }}" defer></script>
+{% endif %}
 {% endblock %}

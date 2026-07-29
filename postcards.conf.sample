@@ -148,6 +148,13 @@ rate_limit_storage_uri = memory://
 # mélanger leurs compteurs.
 ;rate_limit_key_prefix = mon-site
 
+# --- Themes --------------------------------------------------------------
+
+# nom du thème ; vide = aucun thème
+theme = mon_theme
+# optionnel, défaut "themes" (dossier externe, relatif au dossier de travail)
+themesdir = themes
+
 
 [push]
 # Notifications push : ce serveur ne fait que relayer au master

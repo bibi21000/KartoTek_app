@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <g stroke="#33506b" stroke-width="2.5" opacity="0.85">
+    <circle cx="100" cy="100" r="86" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <circle cx="100" cy="100" r="70"/>
+    <path d="M20 100 h160" stroke-width="1.5"/>
+    <path d="M32 84 q68 -26 136 0" stroke-width="3" fill="none"/>
+    <path d="M32 116 q68 26 136 0" stroke-width="3" fill="none"/>
+    <path d="M100 14 v18 M100 168 v18 M14 100 h18 M168 100 h18" stroke-width="2"/>
+  </g>
+  <text x="100" y="72" text-anchor="middle" font-family="Georgia, serif" font-size="13"
+        letter-spacing="3" fill="#33506b" opacity="0.85">COLLECTION</text>
+  <text x="100" y="136" text-anchor="middle" font-family="Georgia, serif" font-size="13"
+        letter-spacing="3" fill="#33506b" opacity="0.85">POSTALE</text>
+  <text x="100" y="104" text-anchor="middle" font-family="'Special Elite', monospace" font-size="15"
+        fill="#33506b" opacity="0.9">✦ ✦ ✦</text>
+</svg>

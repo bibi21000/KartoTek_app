@@ -1,0 +1,6 @@
+/* Surcharge ou complète static/css/style.css du cœur.
+   Référencé depuis un template surchargé via :
+   <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}"> */
+body {
+    --accent-color: #e63946;
+}

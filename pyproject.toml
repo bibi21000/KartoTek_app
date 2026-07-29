@@ -141,6 +141,7 @@ flpostcards = [
     "translations/**/*.mo",
     "templates/**/*",
     "static/**/*",
+    "themes/**/*",
     "deprecations.json",
 ]
 libpostcards = [
