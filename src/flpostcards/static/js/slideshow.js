@@ -123,9 +123,12 @@
 
     function showCard(card) {
         var rectoUrl = imageUrl(card.recto);
-        var versoUrl = imageUrl(card.verso_small);
+        var showVerso = config.showVerso !== false && pip && pipImg;
+        var versoUrl = showVerso ? imageUrl(card.verso_small) : null;
 
-        return Promise.all([preload(rectoUrl), preload(versoUrl)]).then(function () {
+        var preloads = showVerso ? [preload(rectoUrl), preload(versoUrl)] : [preload(rectoUrl)];
+
+        return Promise.all(preloads).then(function () {
             // -- Fondu croisé du recto ------------------------------------------------
             var nextIndex = 1 - activeIndex;
             var nextLayer = layers[nextIndex];
@@ -143,15 +146,19 @@
             activeIndex = nextIndex;
 
             // -- Vignette PiP (verso) ---------------------------------------------------
-            if (pip.classList.contains("visible")) {
-                pipImg.classList.add("fading");
-                setTimeout(function () {
+            // Absente si [DEFAULT] postcards_verso = false (élément #pip non
+            // rendu dans le template) ou si désactivée via config.showVerso.
+            if (showVerso) {
+                if (pip.classList.contains("visible")) {
+                    pipImg.classList.add("fading");
+                    setTimeout(function () {
+                        pipImg.src = versoUrl;
+                        pipImg.classList.remove("fading");
+                    }, 300);
+                } else {
                     pipImg.src = versoUrl;
-                    pipImg.classList.remove("fading");
-                }, 300);
-            } else {
-                pipImg.src = versoUrl;
-                pip.classList.add("visible");
+                    pip.classList.add("visible");
+                }
             }
 
             // -- Date d'ajout -------------------------------------------------------

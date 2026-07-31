@@ -64,11 +64,11 @@ def index():
     og_image_url = None
     og_image_width = None
     og_image_height = None
-    total = model.count_unique_cards(collection=collection or None)
+    total = model.count_unique_cards(collection=collection or None, exclude_status="exchanged")
     if total:
         offset = random.randint(0, total - 1)
         featured = model.list_unique_cards(
-            collection=collection or None, limit=1, offset=offset
+            collection=collection or None, limit=1, offset=offset, exclude_status="exchanged"
         )
         if featured:
             featured_recto = card_images(featured[0]["id"])["recto"]
@@ -195,7 +195,8 @@ def api_recent_cards():
     fallback_count = current_app.config.get("RECENT_FALLBACK_COUNT", 20)
 
     cards = model.list_recent_unique_cards(
-        days=days, fallback_count=fallback_count, collection=collection or None
+        days=days, fallback_count=fallback_count, collection=collection or None,
+        exclude_status="exchanged",
     )
 
     items = []
@@ -279,7 +280,7 @@ def sitemap():
     def add(loc: str, lastmod: int | None = None, changefreq: str | None = None):
         urls.append({"loc": loc, "lastmod": lastmod, "changefreq": changefreq})
 
-    all_cards = model.list_unique_cards()
+    all_cards = model.list_unique_cards(exclude_status="exchanged")
 
     card_mdates = [c.get("mdate") for c in all_cards if c.get("mdate")]
     last_card_update = max(card_mdates) if card_mdates else None

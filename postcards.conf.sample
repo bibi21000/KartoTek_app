@@ -25,6 +25,9 @@
 # updates.json, travels.json, postcards.sqlite, postcards.pkl, ...
 datadir = datadir
 
+# Répertoire d'import des scans
+importdir = import
+
 # Répertoire de cache (icône générée par icon_generator, image statique
 # OSM générée par osm_static_map pour og:image, ...). Optionnel : par
 # défaut <datadir>/cache. À définir explicitement pour le rediriger

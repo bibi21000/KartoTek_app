@@ -682,6 +682,22 @@ msgstr "Колекції"
 msgid "field_doubles"
 msgstr "Дублікати"
 
+#: src/tkpostcards/tkmanager.py
+msgid "field_status"
+msgstr "Статус"
+
+#: src/tkpostcards/tkmanager.py
+msgid "status_active"
+msgstr "Активна"
+
+#: src/tkpostcards/tkmanager.py
+msgid "status_trade"
+msgstr "На обмін"
+
+#: src/tkpostcards/tkmanager.py
+msgid "status_exchanged"
+msgstr "Обміняно"
+
 #: src/tkpostcards/tkmanager.py:2355 src/tkpostcards/tkmanager.py:3952
 msgid "field_gps"
 msgstr "GPS"

@@ -103,7 +103,7 @@ def cards_json():
     if collection not in collections:
         collection = ""
 
-    cards = model.list_unique_cards(collection=collection or None)
+    cards = model.list_unique_cards(collection=collection or None, exclude_status="exchanged")
 
     items = []
     for card in cards:

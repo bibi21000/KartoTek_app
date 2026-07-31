@@ -205,6 +205,29 @@ html.bc-desk, body.bc-desk {
 
 .privacy-header .page-title { color: var(--bc-ink); }
 
+/* style.css fixe .privacy-updated en gris moyen (#888), un peu juste
+   sur le papier clair. */
+.privacy-updated {
+    color: var(--bc-ink-soft) !important;
+}
+
+/* style.css fixe le lien "afficher l'email" et le mailto révélé en
+   bleu clair (#6ab0f3), pensé pour un fond sombre : sur le papier du
+   thème byclaude le contraste est très insuffisant. Ce lien est un
+   élément propre (pas hérité de .privacy-page p), donc l'encre du
+   thème ne s'y applique pas automatiquement : on le fixe explicitement,
+   avec la teinte "tampon de la poste" pour rester dans l'esprit du
+   thème. */
+.obfuscated-email__reveal,
+.obfuscated-email a {
+    color: var(--bc-postmark) !important;
+}
+
+.obfuscated-email__reveal:hover,
+.obfuscated-email__reveal:focus-visible {
+    color: var(--bc-wax) !important;
+}
+
 /* -----------------------------------------------------------------
    Galerie — cartes postales éparpillées sur le bureau
    ----------------------------------------------------------------- */
@@ -342,6 +365,37 @@ html.bc-desk, body.bc-desk {
     border-color: var(--bc-gold) !important;
 }
 
+.card-share__label {
+    color: var(--bc-paper) !important;
+    opacity: 0.75;
+}
+
+/* Les liens de partage gardent leurs couleurs de marque au survol
+   (déjà bien visibles sur les tons papier/sépia du thème) : on ne
+   force donc pas ici, on ne remplace que la teinte de base ci-dessus. */
+.share-link:hover {
+    border-color: currentColor !important;
+}
+
+/* style.css fixe .card-meta h2 en gris clair (#aaa) et les puces
+   .collections en gris clair sur fond blanc quasi transparent (8%) :
+   pensés pour le fond sombre d'origine, ces styles deviennent très
+   peu lisibles sur le papier (voire quasi invisibles) du thème
+   byclaude. On les transforme en petites étiquettes/tampons opaques,
+   toujours lisibles quel que soit le fond derrière. */
+.card-meta h2 {
+    color: var(--bc-paper) !important;
+    opacity: 0.85;
+}
+
+.card-meta .collections span {
+    background: var(--bc-paper) !important;
+    color: var(--bc-ink) !important;
+    border: 1px solid var(--bc-gold);
+    font-family: var(--bc-font-type);
+    box-shadow: 1px 1px 0 rgba(59, 42, 26, 0.25);
+}
+
 /* -----------------------------------------------------------------
    Balades — carnet de voyage, bandes de "scotch" papier
    ----------------------------------------------------------------- */
@@ -389,6 +443,13 @@ html.bc-desk, body.bc-desk {
 
 .travel-back-link {
     color: var(--bc-wax) !important;
+    font-family: var(--bc-font-type);
+}
+
+/* style.css fixe .travel-empty en gris clair (#aaa), illisible sur le
+   papier clair du thème. */
+.travel-empty {
+    color: var(--bc-ink-soft) !important;
     font-family: var(--bc-font-type);
 }
 
@@ -448,6 +509,27 @@ html.bc-desk, body.bc-desk {
 .form-error,
 .form-error-global {
     color: var(--bc-wax-dark) !important;
+}
+
+/* style.css fixe les labels du formulaire (Nom, Email, Sujet, Message)
+   en gris clair (#aaa), illisibles sur le fond papier. */
+.form-field label {
+    color: var(--bc-ink-soft) !important;
+}
+
+/* Pied de page du formulaire de contact ("Site propulsé par...") :
+   gris moyen/clair d'origine, à réajuster sur fond clair. */
+.contact-footer {
+    color: var(--bc-ink-soft) !important;
+}
+
+.contact-footer a {
+    color: var(--bc-ink-soft) !important;
+    text-decoration: underline;
+}
+
+.contact-footer a:hover {
+    color: var(--bc-wax) !important;
 }
 
 /* -----------------------------------------------------------------

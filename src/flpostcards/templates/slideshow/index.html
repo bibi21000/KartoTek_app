@@ -8,9 +8,11 @@
     <div class="slide-layer" id="layer-a"></div>
     <div class="slide-layer" id="layer-b"></div>
 
+    {% if config.POSTCARDS_VERSO %}
     <div class="pip" id="pip">
         <img id="pip-img" alt="{{ _("Verso de la carte") }}" />
     </div>
+    {% endif %}
 
     <header class="page-header">
         {% if collections %}
@@ -41,7 +43,10 @@
         cardsUrl: "{{ url_for('slideshow.api_slideshow_cards') }}",
         cardDetailUrlBase: "{{ url_for('home.card_detail', card_id='__ID__', back=current_path) }}",
         imageBaseUrl: "{{ url_for('home.images', filename='') }}",
-        collection: {{ current_collection | tojson }}
+        collection: {{ current_collection | tojson }},
+        // Verso désactivé globalement ([DEFAULT] postcards_verso = false) :
+        // slideshow.js n'affiche alors plus la vignette PiP du verso.
+        showVerso: {{ config.POSTCARDS_VERSO | tojson }}
     };
 </script>
 <script src="{{ url_for('static', filename='js/nav-controls.js') }}"></script>

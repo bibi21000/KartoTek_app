@@ -23,7 +23,7 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import messagebox, ttk
 
-from libpostcards.model import Model
+from libpostcards.model import CARD_STATUSES, DEFAULT_CARD_STATUS, Model
 
 from . import cli
 from .libs.publish import PostcardPublish
@@ -93,6 +93,28 @@ def setup_i18n():
     return _
 
 
+# Association statut (valeur stockée en base) → clé de traduction du libellé
+# affiché dans le combobox du formulaire. L'ordre définit l'ordre d'affichage.
+_STATUS_LABEL_KEYS = {
+    "active": "status_active",
+    "trade": "status_trade",
+    "exchanged": "status_exchanged",
+}
+
+
+def _status_label(status: str) -> str:
+    """Libellé traduit affiché pour un statut de carte."""
+    return _(_STATUS_LABEL_KEYS.get(status, "status_active"))
+
+
+def _status_from_label(label: str) -> str:
+    """Retrouve le statut correspondant à un libellé traduit affiché."""
+    for status, key in _STATUS_LABEL_KEYS.items():
+        if _(key) == label:
+            return status
+    return DEFAULT_CARD_STATUS
+
+
 def _translatable_field_labels():  # pragma: no cover
     """Never called at runtime.
 
@@ -113,6 +135,11 @@ def _translatable_field_labels():  # pragma: no cover
         # App.LIST_FIELDS
         _("field_address"),
         _("field_poi"),
+        # App._build_fields (status)
+        _("field_status"),
+        _("status_active"),
+        _("status_exchanged"),
+        _("status_trade"),
         # CoordDialog
         _("coord_lat"),
         _("coord_lon"),
@@ -2334,6 +2361,19 @@ class App(tk.Tk):
                   bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
                   relief=tk.FLAT, padx=8, cursor="hand2").pack(side=tk.RIGHT, padx=8)
 
+        # Status (active / exchanged / trade)
+        sep(parent)
+        sf = tk.Frame(parent, bg=BG_CARD)
+        sf.pack(fill=tk.X, padx=8, pady=3)
+        tk.Label(sf, text=_("field_status"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, width=14, anchor=tk.W).pack(side=tk.LEFT, padx=(10, 4), pady=5)
+        self._status_var = tk.StringVar(value=_status_label(DEFAULT_CARD_STATUS))
+        self._status_menu = ttk.Combobox(sf, textvariable=self._status_var,
+                                         values=[_status_label(s) for s in CARD_STATUSES],
+                                         font=FONT_INPUT, state="readonly", width=20)
+        self._status_menu.pack(side=tk.LEFT, pady=5, padx=(0, 10))
+        self._status_menu.bind("<<ComboboxSelected>>", lambda _e: self._mark_dirty())
+
         # Doubles (list of integers)
         sep(parent)
         dbl_f = tk.Frame(parent, bg=BG_CARD)
@@ -2421,6 +2461,9 @@ class App(tk.Tk):
         cols_val = self._data.get("collections") or []
         self._lbl_collections.config(
             text=", ".join(cols_val) if cols_val else "")
+
+        # Status
+        self._status_var.set(_status_label(self._data.get("status") or DEFAULT_CARD_STATUS))
 
         # Doubles
         dbl_val = self._data.get("doubles") or []
@@ -2951,6 +2994,7 @@ class App(tk.Tk):
         self._data["date"]        = self._date_field.get_value()
         self._data["coord"]       = self._coord
         self._data["collections"] = self._data.get("collections") or []
+        self._data["status"]      = _status_from_label(self._status_var.get())
         self._data["doubles"]     = self._data.get("doubles") or []
 
         try:

@@ -55,6 +55,15 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
         "DEFAULT", "lock_timeout", fallback=60.0
     )
 
+    # Activation globale de l'affichage du verso des cartes (photo du
+    # verso sur la fiche carte, et mode d'affichage recto/verso/recto+verso
+    # dans la galerie). Certaines collections n'ont pas ou ne veulent pas
+    # exposer le verso (ex : mentions manuscrites privées) : postcards_verso
+    # = false désactive alors toute visualisation du verso dans l'appli.
+    app.config["POSTCARDS_VERSO"] = parser.getboolean(
+        "DEFAULT", "postcards_verso", fallback=True
+    )
+
     # Liste des collections connues, et sous-ensemble proposé comme
     # filtre sur la carte publique (/map/) : ne vivent plus dans
     # postcards.conf, mais dans <datadir>/collections.json (voir
@@ -366,7 +375,8 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
     def obfuscate_email_filter(email):
         """Protège une adresse email contre la moisson automatisée en
         évitant qu'elle apparaisse *en clair, ou sous une forme
-        directement décodable, dans le HTML tel qu'il est servi*.
+        directement décodable, dans le HTML tel qu'il est servi*, ET en
+        exigeant un clic explicite avant de la révéler.
 
         Contrairement à un simple encodage en entités HTML (&#64; pour
         @, etc.), qui reste trivial à inverser pour n'importe quel
@@ -377,8 +387,19 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
         data-e est l'adresse inversée caractère par caractère puis
         encodée en base64 (obscurcissement, pas du chiffrement -- voir
         les commentaires du fichier JS pour la portée réelle de cette
-        protection). Ce script construit le vrai lien mailto: au
-        chargement de la page, dans un vrai navigateur uniquement.
+        protection).
+
+        Le HTML rendu contient un bouton "Afficher l'adresse email" ;
+        ce n'est qu'au clic que le script décode le payload et remplace
+        le bouton par le vrai lien mailto:. Un bot qui se contente
+        d'exécuter le JS de la page au chargement (sans simuler
+        d'interaction utilisateur réelle -- le cas de la plupart des
+        moteurs de rendu utilisés par les scrapers, y compris beaucoup
+        de robots d'indexation) ne déclenche jamais cette révélation.
+        Seul un outil d'automatisation capable de simuler un vrai clic
+        (Puppeteer/Playwright piloté spécifiquement pour cibler ce
+        bouton) verrait l'adresse -- il n'existe pas de protection
+        purement côté client qui empêche ce dernier cas de figure.
 
         Un <noscript> fournit un repli lisible par un humain sans JS
         (adresse avec "@" et "." remplacés par "[at]"/"[dot]") --
@@ -392,22 +413,26 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
         dans templates/privacy/index.html, où l'expression englobante
         est explicitement passée à |safe pour cette raison). La page
         doit aussi charger static/js/email-deobfuscation.js (voir
-        {% block scripts %} de privacy/index.html) pour que le lien
-        apparaisse réellement.
+        {% block scripts %} de privacy/index.html) pour que le bouton
+        fonctionne.
         """
         if not email:
             return ""
 
         import base64
 
+        from flask_babel import gettext as _
+
         payload = base64.b64encode(email[::-1].encode("utf-8")).decode("ascii")
         human_fallback = email.replace("@", " [at] ").replace(".", " [dot] ")
+        reveal_label = _("Afficher l'adresse email")
 
         return Markup(
             '<span class="obfuscated-email" data-e="{payload}">'
+            '<button type="button" class="obfuscated-email__reveal">{label}</button>'
             "<noscript>{fallback}</noscript>"
             "</span>"
-        ).format(payload=payload, fallback=human_fallback)
+        ).format(payload=payload, label=reveal_label, fallback=human_fallback)
 
     limiter.init_app(app)
 

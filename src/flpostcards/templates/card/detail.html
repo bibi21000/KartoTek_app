@@ -17,6 +17,7 @@
              class="face-image"
              src="{{ url_for('home.images', filename=images.recto) }}"
              alt="{{ _("Recto de la carte %(id)s", id=card.id) }}">
+        {% if config.POSTCARDS_VERSO %}
         <img id="img-verso"
              class="face-image hidden-face"
              src="{{ url_for('home.images', filename=images.verso) }}"
@@ -27,6 +28,7 @@
                  src="{{ url_for('home.images', filename=images_small.verso) }}"
                  alt="{{ _("Aperçu de l'autre face") }}">
         </div>
+        {% endif %}
     </div>
 
     <div class="fullscreen-overlay" id="fullscreen-overlay">
@@ -72,6 +74,73 @@
             </a>
         </div>
         {% endif %}
+
+        {% set canonical_url = url_for('home.card_detail', card_id=card.id, _external=True) %}
+        {% set share_url = canonical_url | urlencode %}
+        {% set share_text = card_title | urlencode %}
+        {% set share_text_with_url = (card_title ~ " " ~ canonical_url) | urlencode %}
+        {% set share_image = (og_image | urlencode) if og_image else "" %}
+
+        <div class="card-share">
+            <span class="card-share__label">{{ _("Partager") }}</span>
+            <div class="card-share-links">
+                <button type="button"
+                        class="gps-link share-link share-link--native"
+                        id="share-native" hidden>
+                    {{ _("Partager…") }}
+                </button>
+                <a class="gps-link share-link share-link--facebook"
+                   href="https://www.facebook.com/sharer/sharer.php?u={{ share_url }}"
+                   target="_blank" rel="noopener noreferrer"
+                   title="{{ _("Partager sur Facebook") }}">
+                    Facebook
+                </a>
+                <a class="gps-link share-link share-link--x"
+                   href="https://twitter.com/intent/tweet?url={{ share_url }}&amp;text={{ share_text }}"
+                   target="_blank" rel="noopener noreferrer"
+                   title="{{ _("Partager sur X") }}">
+                    X
+                </a>
+                <a class="gps-link share-link share-link--bluesky"
+                   href="https://bsky.app/intent/compose?text={{ share_text_with_url }}"
+                   target="_blank" rel="noopener noreferrer"
+                   title="{{ _("Partager sur Bluesky") }}">
+                    Bluesky
+                </a>
+                <button type="button"
+                        class="gps-link share-link share-link--mastodon"
+                        id="share-mastodon"
+                        data-text="{{ card_title }}"
+                        data-url="{{ canonical_url }}"
+                        title="{{ _("Partager sur Mastodon") }}">
+                    Mastodon
+                </button>
+                <a class="gps-link share-link share-link--whatsapp"
+                   href="https://wa.me/?text={{ share_text }}%20{{ share_url }}"
+                   target="_blank" rel="noopener noreferrer"
+                   title="{{ _("Partager sur WhatsApp") }}">
+                    WhatsApp
+                </a>
+                <a class="gps-link share-link share-link--pinterest"
+                   href="https://pinterest.com/pin/create/button/?url={{ share_url }}&amp;media={{ share_image }}&amp;description={{ share_text }}"
+                   target="_blank" rel="noopener noreferrer"
+                   title="{{ _("Épingler sur Pinterest") }}">
+                    Pinterest
+                </a>
+                <a class="gps-link share-link share-link--email"
+                   href="mailto:?subject={{ share_text }}&amp;body={{ share_url }}"
+                   title="{{ _("Partager par e-mail") }}">
+                    {{ _("E-mail") }}
+                </a>
+                <button type="button"
+                        class="gps-link share-link share-link--copy"
+                        id="share-copy"
+                        data-url="{{ canonical_url }}"
+                        title="{{ _("Copier le lien") }}">
+                    {{ _("Copier le lien") }}
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -83,13 +152,23 @@
 
         var i18n = {
             rectoPreview: "{{ _("Aperçu du recto") }}",
-            versoPreview: "{{ _("Aperçu du verso") }}"
+            versoPreview: "{{ _("Aperçu du verso") }}",
+            copyLink: "{{ _("Copier le lien") }}",
+            linkCopied: "{{ _("Lien copié !") }}",
+            share: "{{ _("Partager…") }}",
+            shareTitle: {{ card_title | tojson }},
+            mastodonPrompt: "{{ _("Sur quelle instance Mastodon avez-vous un compte ? (ex. mastodon.social)") }}"
         };
 
         var rectoUrl = "{{ url_for('home.images', filename=images.recto) }}";
-        var versoUrl = "{{ url_for('home.images', filename=images.verso) }}";
         var rectoThumbUrl = "{{ url_for('home.images', filename=images_small.recto) }}";
+        {% if config.POSTCARDS_VERSO %}
+        var versoUrl = "{{ url_for('home.images', filename=images.verso) }}";
         var versoThumbUrl = "{{ url_for('home.images', filename=images_small.verso) }}";
+        {% else %}
+        var versoUrl = null;
+        var versoThumbUrl = null;
+        {% endif %}
 
         var imgRecto = document.getElementById("img-recto");
         var imgVerso = document.getElementById("img-verso");
@@ -101,22 +180,26 @@
 
         var showingVerso = false;
 
-        toggle.addEventListener("click", function (event) {
-            event.stopPropagation();
-            showingVerso = !showingVerso;
+        // Absent si [DEFAULT] postcards_verso = false (bascule vers le
+        // verso non rendue dans le template).
+        if (toggle) {
+            toggle.addEventListener("click", function (event) {
+                event.stopPropagation();
+                showingVerso = !showingVerso;
 
-            if (showingVerso) {
-                imgRecto.classList.add("hidden-face");
-                imgVerso.classList.remove("hidden-face");
-                thumb.src = rectoThumbUrl;
-                thumb.alt = i18n.rectoPreview;
-            } else {
-                imgVerso.classList.add("hidden-face");
-                imgRecto.classList.remove("hidden-face");
-                thumb.src = versoThumbUrl;
-                thumb.alt = i18n.versoPreview;
-            }
-        });
+                if (showingVerso) {
+                    imgRecto.classList.add("hidden-face");
+                    imgVerso.classList.remove("hidden-face");
+                    thumb.src = rectoThumbUrl;
+                    thumb.alt = i18n.rectoPreview;
+                } else {
+                    imgVerso.classList.add("hidden-face");
+                    imgRecto.classList.remove("hidden-face");
+                    thumb.src = versoThumbUrl;
+                    thumb.alt = i18n.versoPreview;
+                }
+            });
+        }
 
         // Plein écran : clic sur l'image principale
         wrapper.addEventListener("click", function () {
@@ -136,6 +219,89 @@
                 overlay.classList.remove("visible");
             }
         });
+
+        // Partage natif (mobile principalement) : affiché seulement si l'API
+        // est disponible, en plus des liens réseaux sociaux classiques.
+        var nativeShareBtn = document.getElementById("share-native");
+        var copyBtn = document.getElementById("share-copy");
+
+        if (nativeShareBtn && navigator.share) {
+            nativeShareBtn.hidden = false;
+            nativeShareBtn.addEventListener("click", function () {
+                navigator.share({
+                    title: i18n.shareTitle,
+                    url: copyBtn ? copyBtn.getAttribute("data-url") : window.location.href
+                }).catch(function () {
+                    // Annulation par l'utilisateur ou erreur : rien à faire.
+                });
+            });
+        }
+
+        if (copyBtn) {
+            copyBtn.addEventListener("click", function () {
+                var url = copyBtn.getAttribute("data-url") || window.location.href;
+
+                function showCopied() {
+                    copyBtn.textContent = i18n.linkCopied;
+                    copyBtn.classList.add("share-link--copied");
+                    setTimeout(function () {
+                        copyBtn.textContent = i18n.copyLink;
+                        copyBtn.classList.remove("share-link--copied");
+                    }, 2000);
+                }
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).then(showCopied).catch(function () {
+                        window.prompt(i18n.copyLink, url);
+                    });
+                } else {
+                    window.prompt(i18n.copyLink, url);
+                }
+            });
+        }
+
+        // Mastodon est fédéré : il n'existe pas d'URL de partage unique
+        // valable pour tout le monde. On demande l'instance de
+        // l'utilisateur (mémorisée pour les partages suivants) puis on
+        // ouvre son formulaire de partage sur cette instance.
+        var mastodonBtn = document.getElementById("share-mastodon");
+        var MASTODON_STORAGE_KEY = "flpostcards:mastodonInstance";
+
+        function sanitizeInstance(raw) {
+            if (!raw) {
+                return "";
+            }
+            var value = raw.trim().replace(/^https?:\/\//i, "");
+            value = value.split("/")[0];
+            return value;
+        }
+
+        if (mastodonBtn) {
+            mastodonBtn.addEventListener("click", function () {
+                var savedInstance = "";
+                try {
+                    savedInstance = window.localStorage.getItem(MASTODON_STORAGE_KEY) || "";
+                } catch (e) {
+                    savedInstance = "";
+                }
+
+                var input = window.prompt(i18n.mastodonPrompt, savedInstance || "mastodon.social");
+                var instance = sanitizeInstance(input);
+                if (!instance) {
+                    return;
+                }
+
+                try {
+                    window.localStorage.setItem(MASTODON_STORAGE_KEY, instance);
+                } catch (e) {
+                    // Stockage indisponible (navigation privée, etc.) : tant pis.
+                }
+
+                var text = mastodonBtn.getAttribute("data-text") + " " + mastodonBtn.getAttribute("data-url");
+                var shareUrl = "https://" + instance + "/share?text=" + encodeURIComponent(text);
+                window.open(shareUrl, "_blank", "noopener,noreferrer");
+            });
+        }
     })();
 </script>
 {% endblock %}

@@ -8,9 +8,11 @@
     <div class="slide-layer" id="layer-a"></div>
     <div class="slide-layer" id="layer-b"></div>
 
+    {% if config.POSTCARDS_VERSO %}
     <div class="pip" id="pip">
         <img id="pip-img" alt="{{ _("Verso de la carte") }}" />
     </div>
+    {% endif %}
 
     <div class="slideshow-meta">
         <div class="slideshow-cdate" id="slideshow-cdate"></div>
@@ -47,6 +49,9 @@
         imageBaseUrl: "{{ url_for('home.images', filename='') }}",
         collection: {{ current_collection | tojson }},
         addedOnLabel: "{{ _("Ajoutée le") }}",
+        // Verso désactivé globalement ([DEFAULT] postcards_verso = false) :
+        // slideshow.js n'affiche alors plus la vignette PiP du verso.
+        showVerso: {{ config.POSTCARDS_VERSO | tojson }},
         // Désactivé : la page d'accueil affiche les cartes par cdate
         // descendant (les plus récentes en premier), sans mélange aléatoire
         shuffle: false

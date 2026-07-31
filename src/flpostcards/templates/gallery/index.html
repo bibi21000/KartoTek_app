@@ -42,6 +42,7 @@
             </div>
             {% endif %}
 
+            {% if config.POSTCARDS_VERSO %}
             <div class="filter-field">
                 <label for="display-select" class="sr-only">{{ _("Affichage") }}</label>
                 <select id="display-select" name="display" onchange="this.form.submit()">
@@ -56,15 +57,22 @@
                     </option>
                 </select>
             </div>
+            {% endif %}
 
             <div class="filter-field">
                 <label for="doubles-select" class="sr-only">{{ _("Doublons") }}</label>
                 <select id="doubles-select" name="doubles" onchange="this.form.submit()">
-                    <option value="" {% if not show_doubles %}selected{% endif %}>
+                    <option value="" {% if doubles_mode == "" %}selected{% endif %}>
                         {{ _("Sans doublons") }}
                     </option>
-                    <option value="all" {% if show_doubles %}selected{% endif %}>
+                    <option value="all" {% if doubles_mode == "all" %}selected{% endif %}>
                         {{ _("Avec doublons") }}
+                    </option>
+                    <option value="trade" {% if doubles_mode == "trade" %}selected{% endif %}>
+                        {{ _("À échanger") }}
+                    </option>
+                    <option value="exchanged" {% if doubles_mode == "exchanged" %}selected{% endif %}>
+                        {{ _("Échangées") }}
                     </option>
                 </select>
             </div>
@@ -110,7 +118,7 @@
 
     {% if pages > 1 %}
     <nav class="gallery-pagination">
-        {% set base_args = {"collection": current_collection, "q": search, "display": display, "doubles": ("all" if show_doubles else ""), "per_page": per_page} %}
+        {% set base_args = {"collection": current_collection, "q": search, "display": display, "doubles": doubles_mode, "per_page": per_page} %}
 
         {% if page > 1 %}
         <a class="page-link" href="{{ url_for('gallery.index', page=1, **base_args) }}" title="{{ _("Première page") }}">

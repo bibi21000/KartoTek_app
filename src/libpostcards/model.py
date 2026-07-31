@@ -115,9 +115,14 @@ CREATE TABLE IF NOT EXISTS cards (
     coord_lon   REAL,
     poi         TEXT,       -- JSON array sérialisé
     collections TEXT,       -- JSON array sérialisé
-    doubles     TEXT        -- JSON array sérialisé
+    doubles     TEXT,       -- JSON array sérialisé
+    status      TEXT NOT NULL DEFAULT 'active'  -- active | exchanged | trade
 );
 """
+
+# Valeurs autorisées pour le champ ``status`` d'une carte.
+CARD_STATUSES = ("active", "exchanged", "trade")
+DEFAULT_CARD_STATUS = "active"
 
 _DDL_TRAVELS = """
 CREATE TABLE IF NOT EXISTS travels (
@@ -212,6 +217,7 @@ _CARD_DEFAULTS: dict[str, Any] = {
     "poi": [],
     "collections": [],
     "doubles": [],
+    "status": DEFAULT_CARD_STATUS,
 }
 
 
@@ -240,6 +246,7 @@ def _card_to_row(card: dict) -> dict:
         "poi": json.dumps(card.get("poi") or [], ensure_ascii=False),
         "collections": json.dumps(card.get("collections") or [], ensure_ascii=False),
         "doubles": json.dumps(card.get("doubles") or [], ensure_ascii=False),
+        "status": card.get("status") or DEFAULT_CARD_STATUS,
     }
 
 
@@ -293,6 +300,32 @@ def _poi_to_row(poi: dict) -> dict:
         "coord_lat": coord[0] if len(coord) > 0 else None,
         "coord_lon": coord[1] if len(coord) > 1 else None,
     }
+
+
+def _status_condition(
+    status: str | None,
+    exclude_status: str | list[str] | None,
+) -> tuple[str | None, list[Any]]:
+    """
+    Construit la condition SQL de filtrage sur ``cards.status``.
+
+    - ``status`` (prioritaire) : ne garde que les cartes ayant exactement
+      ce statut (ex : "trade" ou "exchanged" pour les filtres galerie).
+    - ``exclude_status`` : sinon, exclut le(s) statut(s) donné(s) (ex :
+      "exchanged" par défaut dans les listes flpostcards). Accepte une
+      chaîne unique ou une liste.
+
+    Retourne ``(None, [])`` si aucun filtre n'est demandé.
+    """
+    if status:
+        return "cards.status = ?", [status]
+    if exclude_status:
+        values = [exclude_status] if isinstance(exclude_status, str) else list(exclude_status)
+        if not values:
+            return None, []
+        placeholders = ", ".join("?" for _ in values)
+        return f"cards.status NOT IN ({placeholders})", list(values)
+    return None, []
 
 
 def _row_to_poi(row: sqlite3.Row) -> dict:
@@ -422,6 +455,19 @@ class Model:
             # ne modifie pas une table déjà présente sans cette colonne).
             try:
                 self._conn.execute("ALTER TABLE travels ADD COLUMN mdate INTEGER")
+                self._conn.commit()
+            except sqlite3.OperationalError:
+                pass  # colonne déjà présente
+
+            # Ajout défensif de cards.status sur une base existante créée
+            # avant son introduction (CREATE TABLE IF NOT EXISTS, ci-dessus,
+            # ne modifie pas une table déjà présente sans cette colonne).
+            # Le DEFAULT 'active' est appliqué par SQLite à toutes les
+            # lignes existantes lors de l'ajout de la colonne.
+            try:
+                self._conn.execute(
+                    f"ALTER TABLE cards ADD COLUMN status TEXT NOT NULL DEFAULT '{DEFAULT_CARD_STATUS}'"
+                )
                 self._conn.commit()
             except sqlite3.OperationalError:
                 pass  # colonne déjà présente
@@ -566,6 +612,8 @@ class Model:
         added_doubles = new_doubles - old_doubles
 
         card["doubles"] = sorted(new_doubles)
+        if card.get("status") not in CARD_STATUSES:
+            card["status"] = DEFAULT_CARD_STATUS
         card["mdate"] = int(time.time())
 
         self.cards_dir.mkdir(parents=True, exist_ok=True)
@@ -783,6 +831,8 @@ class Model:
         search: str | None = None,
         limit: int | None = None,
         offset: int = 0,
+        status: str | None = None,
+        exclude_status: str | list[str] | None = None,
     ) -> list[dict]:
         """
         Liste les cartes avec filtres optionnels.
@@ -801,6 +851,13 @@ class Model:
             Nombre maximum de résultats.
         offset : int
             Décalage pour la pagination.
+        status : str | None
+            Si renseigné, ne retourne que les cartes ayant exactement ce
+            statut (ex : "trade", "exchanged"). Prioritaire sur
+            ``exclude_status``.
+        exclude_status : str | list[str] | None
+            Si renseigné (et ``status`` absent), exclut les cartes ayant
+            ce(s) statut(s) (ex : "exchanged").
         """
         conditions: list[str] = []
         params: list[Any] = []
@@ -814,6 +871,11 @@ class Model:
                 ")"
             )
             params.append(collection)
+
+        status_cond, status_params = _status_condition(status, exclude_status)
+        if status_cond:
+            conditions.append(status_cond)
+            params.extend(status_params)
 
         if search:
             like = f"%{search}%"
@@ -841,6 +903,8 @@ class Model:
         self,
         collection: str | None = None,
         search: str | None = None,
+        status: str | None = None,
+        exclude_status: str | list[str] | None = None,
     ) -> int:
         """Retourne le nombre de cartes (avec les mêmes filtres que list_cards)."""
         conditions: list[str] = []
@@ -854,6 +918,11 @@ class Model:
                 ")"
             )
             params.append(collection)
+
+        status_cond, status_params = _status_condition(status, exclude_status)
+        if status_cond:
+            conditions.append(status_cond)
+            params.extend(status_params)
 
         if search:
             like = f"%{search}%"
@@ -969,6 +1038,8 @@ class Model:
         search: str | None = None,
         limit: int | None = None,
         offset: int = 0,
+        status: str | None = None,
+        exclude_status: str | list[str] | None = None,
     ) -> list[dict]:
         """
         Liste les cartes uniques : pour chaque groupe de doublons, retourne
@@ -988,6 +1059,12 @@ class Model:
             Nombre maximum de résultats.
         offset : int
             Décalage pour la pagination.
+        status : str | None
+            Si renseigné, ne retourne que les cartes ayant exactement ce
+            statut. Prioritaire sur ``exclude_status``.
+        exclude_status : str | list[str] | None
+            Si renseigné (et ``status`` absent), exclut les cartes ayant
+            ce(s) statut(s) (ex : "exchanged").
         """
         conditions: list[str] = [self._UNIQUE_CARD_CONDITION]
         params: list[Any] = []
@@ -1000,6 +1077,11 @@ class Model:
                 ")"
             )
             params.append(collection)
+
+        status_cond, status_params = _status_condition(status, exclude_status)
+        if status_cond:
+            conditions.append(status_cond)
+            params.extend(status_params)
 
         if search:
             like = f"%{search}%"
@@ -1031,6 +1113,7 @@ class Model:
         days: int,
         fallback_count: int,
         collection: str | None = None,
+        exclude_status: str | list[str] | None = None,
     ) -> list[dict]:
         """
         Liste les cartes uniques (sans doublons) ajoutées dans les
@@ -1048,6 +1131,8 @@ class Model:
             Nombre de cartes à retourner si la fenêtre récente est vide.
         collection : str | None
             Filtre optionnel sur la collection.
+        exclude_status : str | list[str] | None
+            Exclut les cartes ayant ce(s) statut(s) (ex : "exchanged").
         """
         conditions: list[str] = [self._UNIQUE_CARD_CONDITION]
         params: list[Any] = []
@@ -1060,6 +1145,11 @@ class Model:
                 ")"
             )
             params.append(collection)
+
+        status_cond, status_params = _status_condition(None, exclude_status)
+        if status_cond:
+            conditions.append(status_cond)
+            params.extend(status_params)
 
         base_where = " AND ".join(conditions)
         conn = self._get_conn()
@@ -1089,6 +1179,8 @@ class Model:
         self,
         collection: str | None = None,
         search: str | None = None,
+        status: str | None = None,
+        exclude_status: str | list[str] | None = None,
     ) -> int:
         """Retourne le nombre de cartes uniques (cf. list_unique_cards).
 
@@ -1106,6 +1198,11 @@ class Model:
                 ")"
             )
             params.append(collection)
+
+        status_cond, status_params = _status_condition(status, exclude_status)
+        if status_cond:
+            conditions.append(status_cond)
+            params.extend(status_params)
 
         if search:
             like = f"%{search}%"
@@ -1130,6 +1227,7 @@ class Model:
         self,
         after_id: int = 0,
         limit: int = 500,
+        exclude_status: str | list[str] | None = None,
     ) -> list[dict]:
         """
         Cartes uniques (sans doublons) possédant des coordonnées GPS,
@@ -1151,16 +1249,23 @@ class Model:
             "CAST(cards.id AS INTEGER) > ?",
         ]
         params: list[Any] = [after_id]
+        status_cond, status_params = _status_condition(None, exclude_status)
+        if status_cond:
+            conditions.append(status_cond)
+            params.extend(status_params)
         where = f"WHERE {' AND '.join(conditions)}"
         sql = (
             f"SELECT * FROM cards {where} "
-            f"ORDER BY CAST(id AS INTEGER) LIMIT {int(limit)}"
+            f"ORDER BY CAST(cards.id AS INTEGER) LIMIT {int(limit)}"
         )
         conn = self._get_conn()
         cur = conn.execute(sql, params)
         return [_row_to_card(r) for r in cur.fetchall()]
 
-    def count_unique_cards_with_coord(self) -> int:
+    def count_unique_cards_with_coord(
+        self,
+        exclude_status: str | list[str] | None = None,
+    ) -> int:
         """
         Nombre total de cartes uniques (sans doublons) possédant des
         coordonnées GPS. Utilise exactement le même filtre que
@@ -1173,10 +1278,15 @@ class Model:
             "cards.coord_lat IS NOT NULL",
             "cards.coord_lon IS NOT NULL",
         ]
+        params: list[Any] = []
+        status_cond, status_params = _status_condition(None, exclude_status)
+        if status_cond:
+            conditions.append(status_cond)
+            params.extend(status_params)
         where = f"WHERE {' AND '.join(conditions)}"
         sql = f"SELECT COUNT(*) FROM cards {where}"
         conn = self._get_conn()
-        cur = conn.execute(sql)
+        cur = conn.execute(sql, params)
         return cur.fetchone()[0]
 
     # ------------------------------------------------------------------

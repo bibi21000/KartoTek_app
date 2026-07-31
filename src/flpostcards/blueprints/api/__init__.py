@@ -155,7 +155,7 @@ def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 def _cards_with_coord(model) -> list[dict]:
     """Retourne toutes les cartes uniques ayant des coordonnées GPS."""
     return [
-        c for c in model.list_unique_cards()
+        c for c in model.list_unique_cards(exclude_status="exchanged")
         if c.get("coord") and c["coord"][0] is not None and c["coord"][1] is not None
     ]
 
@@ -626,7 +626,7 @@ def gps():
         except ValueError:
             return jsonify({"error": "start doit être un entier"}), 400
         page_cards = [
-            c for c in model.list_unique_cards(limit=limit, offset=start)
+            c for c in model.list_unique_cards(limit=limit, offset=start, exclude_status="exchanged")
             if c.get("coord") and c["coord"][0] is not None and c["coord"][1] is not None
         ]
     else:
@@ -635,7 +635,7 @@ def gps():
         except ValueError:
             return jsonify({"error": "after_id doit être un entier"}), 400
         page_cards = model.list_unique_cards_with_coord(
-            after_id=after_id, limit=limit
+            after_id=after_id, limit=limit, exclude_status="exchanged"
         )
 
     cards = [
@@ -647,7 +647,7 @@ def gps():
     # la pagination, pour que "total" corresponde à ce qui peut
     # effectivement être renvoyé (auparavant ce total comptait aussi
     # les cartes marquées doublons, qui ne sortent jamais des pages).
-    total = model.count_unique_cards_with_coord()
+    total = model.count_unique_cards_with_coord(exclude_status="exchanged")
 
     next_after_id = None
     if len(cards) == limit:
@@ -843,7 +843,7 @@ def collections():
     names = current_app.config.get("COLLECTIONS", [])
 
     items = [
-        {"name": name, "count": model.count_unique_cards(collection=name)}
+        {"name": name, "count": model.count_unique_cards(collection=name, exclude_status="exchanged")}
         for name in names
     ]
 
@@ -926,7 +926,8 @@ def news():
     # gagnerait à un vrai limit/offset dans libpostcards.model, hors
     # scope de ce correctif.
     cards = model.list_recent_unique_cards(
-        days=days, fallback_count=fallback_count, collection=collection or None
+        days=days, fallback_count=fallback_count, collection=collection or None,
+        exclude_status="exchanged",
     )
     total = len(cards)
     page, per_page, explicit = _pagination_params()
@@ -997,12 +998,12 @@ def slideshow():
     model = current_app.model
     collection = _validated_collection(request.args.get("collection"))
 
-    total = model.count_unique_cards(collection=collection or None)
+    total = model.count_unique_cards(collection=collection or None, exclude_status="exchanged")
     page, per_page, explicit = _pagination_params()
     max_unpaginated = current_app.config["MOBILE_LIST_MAX_UNPAGINATED"]
 
     if not explicit and total <= max_unpaginated:
-        cards = model.list_unique_cards(collection=collection or None)
+        cards = model.list_unique_cards(collection=collection or None, exclude_status="exchanged")
         items = [_card_summary(c) for c in cards]
         return _no_cache(jsonify({
             "collection": collection or None,
@@ -1016,7 +1017,10 @@ def slideshow():
         page = pages
     offset = (page - 1) * per_page
 
-    cards = model.list_unique_cards(collection=collection or None, limit=per_page, offset=offset)
+    cards = model.list_unique_cards(
+        collection=collection or None, limit=per_page, offset=offset,
+        exclude_status="exchanged",
+    )
     items = [_card_summary(c) for c in cards]
 
     return _no_cache(jsonify({
@@ -1043,7 +1047,10 @@ def gallery():
     Paramètres de requête (tous optionnels) :
       collection : filtre sur une collection connue (ignoré si inconnue)
       q          : recherche texte (titre, description, adresse, POI, ...)
-      doubles    : "all" pour inclure les doublons (défaut : exclus)
+      doubles    : "all" pour inclure les doublons (défaut : exclus, ainsi
+                   que les cartes de statut "exchanged") ; "trade" ou
+                   "exchanged" pour ne renvoyer que les cartes ayant ce
+                   statut (y compris les doublons)
       page       : numéro de page, défaut 1
       per_page   : 12, 24 ou 48 (défaut 24) — toute autre valeur retombe sur 24
 
@@ -1066,7 +1073,10 @@ def gallery():
     model = current_app.model
     collection = _validated_collection(request.args.get("collection"))
     search = (request.args.get("q") or "").strip()
-    show_doubles = request.args.get("doubles") == "all"
+    doubles_mode = request.args.get("doubles") or ""
+    if doubles_mode not in ("", "all", "trade", "exchanged"):
+        doubles_mode = ""
+    show_doubles = doubles_mode == "all"
 
     try:
         per_page = int(request.args.get("per_page", DEFAULT_PER_PAGE))
@@ -1082,14 +1092,20 @@ def gallery():
     if page < 1:
         page = 1
 
-    if show_doubles:
+    if doubles_mode in ("trade", "exchanged"):
         count_cards = model.count_cards
         list_cards = model.list_cards
+        status_kwargs = {"status": doubles_mode}
+    elif show_doubles:
+        count_cards = model.count_cards
+        list_cards = model.list_cards
+        status_kwargs = {"exclude_status": "exchanged"}
     else:
         count_cards = model.count_unique_cards
         list_cards = model.list_unique_cards
+        status_kwargs = {"exclude_status": "exchanged"}
 
-    total = count_cards(collection=collection or None, search=search or None)
+    total = count_cards(collection=collection or None, search=search or None, **status_kwargs)
     pages = max(1, (total + per_page - 1) // per_page)
     if page > pages:
         page = pages
@@ -1100,6 +1116,7 @@ def gallery():
         search=search or None,
         limit=per_page,
         offset=offset,
+        **status_kwargs,
     )
 
     items = [_card_thumb(c) for c in cards]
@@ -1108,6 +1125,7 @@ def gallery():
         "collection": collection or None,
         "search": search or None,
         "show_doubles": show_doubles,
+        "doubles": doubles_mode,
         "page": page,
         "per_page": per_page,
         "pages": pages,

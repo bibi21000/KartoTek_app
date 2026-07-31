@@ -9,22 +9,27 @@
  * inverser pour un robot qui parse le HTML sans exécuter de JS). À la
  * place, chaque <span class="obfuscated-email" data-e="..."> porte
  * une charge utile : l'adresse inversée caractère par caractère puis
- * encodée en base64. Ce script, exécuté uniquement dans un vrai
- * navigateur, inverse l'opération et construit le lien <a href="mailto:...">
- * au moment du rendu de la page.
+ * encodée en base64, et un bouton "Afficher l'adresse email".
+ * L'adresse n'est reconstruite qu'au clic sur ce bouton -- jamais
+ * automatiquement au chargement de la page.
  *
- * Portée réelle de cette protection : elle bloque les moissonneurs qui
- * se contentent de télécharger le HTML brut (wget/curl, scrapers
- * basés sur une regex "texte@texte.tld"), qui sont l'immense majorité
- * des collecteurs d'adresses. Un robot qui exécute un moteur JS
- * complet (Puppeteer/Playwright headless, voire certains robots
- * d'indexation) et qui lit le DOM après exécution des scripts peut en
- * théorie retrouver l'adresse comme n'importe quel visiteur humain :
- * il n'existe aucune protection purement côté client qui résiste à ce
- * niveau d'automatisation, seulement des mécanismes qui augmentent le
- * coût pour l'attaquant (ex. captcha ou action utilisateur requise
- * avant révélation, non utilisés ici pour ne pas dégrader l'usage
- * normal d'une page de politique de confidentialité).
+ * Portée réelle de cette protection, par niveau de robot :
+ *  - Robot qui télécharge le HTML brut (wget/curl, scraper basé sur
+ *    une regex "texte@texte.tld") : ne voit jamais l'adresse, ni sous
+ *    forme claire ni sous forme décodable directement. C'est
+ *    l'immense majorité des collecteurs d'adresses.
+ *  - Robot qui exécute un moteur JS complet mais n'interagit pas avec
+ *    la page (la plupart des robots d'indexation, la plupart des
+ *    scrapers "headless" génériques) : le script s'exécute mais
+ *    n'attache qu'un gestionnaire de clic ; sans clic, rien n'est
+ *    révélé.
+ *  - Automatisation spécifiquement programmée pour cliquer ce bouton
+ *    précis (Puppeteer/Playwright ciblé) : verrait l'adresse, comme
+ *    n'importe quel visiteur humain. Aucun mécanisme purement côté
+ *    client ne peut empêcher ce dernier cas ; un captcha ou une
+ *    vérification serveur serait nécessaire pour aller plus loin,
+ *    au prix d'une dégradation de l'expérience pour les vrais
+ *    visiteurs.
  */
 (function () {
     "use strict";
@@ -38,8 +43,8 @@
         }
     }
 
-    function reveal(node) {
-        var payload = node.getAttribute("data-e");
+    function reveal(container) {
+        var payload = container.getAttribute("data-e");
         if (!payload) {
             return;
         }
@@ -50,15 +55,24 @@
         var link = document.createElement("a");
         link.href = "mailto:" + email;
         link.textContent = email;
-        node.textContent = "";
-        node.appendChild(link);
-        node.removeAttribute("data-e");
+        container.textContent = "";
+        container.appendChild(link);
+        container.removeAttribute("data-e");
     }
 
     document.addEventListener("DOMContentLoaded", function () {
-        var nodes = document.querySelectorAll(".obfuscated-email[data-e]");
-        for (var i = 0; i < nodes.length; i++) {
-            reveal(nodes[i]);
+        var containers = document.querySelectorAll(".obfuscated-email[data-e]");
+        for (var i = 0; i < containers.length; i++) {
+            (function (container) {
+                var button = container.querySelector(".obfuscated-email__reveal");
+                if (!button) {
+                    return;
+                }
+                button.addEventListener("click", function () {
+                    reveal(container);
+                });
+            })(containers[i]);
         }
     });
 })();
+
