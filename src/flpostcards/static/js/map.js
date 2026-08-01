@@ -36,6 +36,65 @@
         attribution: "&copy; OpenStreetMap"
     }).addTo(map);
 
+    // Conserve l'échelle (zoom) et la position (centre) courantes de la
+    // carte dans sessionStorage, mais uniquement au moment où l'on quitte
+    // la carte pour la fiche d'une carte (clic sur un marqueur) : le lien
+    // "back" de la fiche recharge entièrement la page carte, ce qui
+    // perdrait sinon le cadrage au profit d'un nouveau fitBounds. La
+    // valeur sauvegardée n'est utilisée qu'une seule fois (retirée de
+    // sessionStorage dès sa lecture), pour qu'un accès à la carte par un
+    // autre chemin (menu, etc.) reparte toujours sur le cadrage par
+    // défaut (fitAll).
+    var VIEW_STORAGE_KEY = "flpostcards_map_view";
+
+    function saveView() {
+        try {
+            var center = map.getCenter();
+            sessionStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify({
+                lat: center.lat,
+                lng: center.lng,
+                zoom: map.getZoom(),
+                collection: config.currentCollection || ""
+            }));
+        } catch (e) {
+            // sessionStorage indisponible (navigation privée, quota...) :
+            // on se contente de ne pas persister le cadrage.
+        }
+    }
+
+    function consumeSavedView() {
+        var raw;
+        try {
+            raw = sessionStorage.getItem(VIEW_STORAGE_KEY);
+            if (raw) {
+                sessionStorage.removeItem(VIEW_STORAGE_KEY);
+            }
+        } catch (e) {
+            return null;
+        }
+        if (!raw) {
+            return null;
+        }
+        var saved;
+        try {
+            saved = JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+        if (!saved || typeof saved.lat !== "number" || typeof saved.lng !== "number" ||
+            typeof saved.zoom !== "number") {
+            return null;
+        }
+        // Un cadrage sauvegardé pour une autre collection n'a pas de sens
+        // ici (bounds différentes) : on l'ignore et on repart sur fitAll().
+        if ((saved.collection || "") !== (config.currentCollection || "")) {
+            return null;
+        }
+        return saved;
+    }
+
+    var savedView = consumeSavedView();
+
     function imageUrl(relativePath) {
         return config.imageBaseUrl + relativePath;
     }
@@ -110,6 +169,7 @@
                     });
 
                     marker.on("click", function () {
+                        saveView();
                         window.location.href = cardDetailUrl(card.id);
                     });
                 });
@@ -238,6 +298,10 @@
         if (config.showPois) {
             poisLayer.addTo(map);
         }
-        fitAll();
+        if (savedView) {
+            map.setView([savedView.lat, savedView.lng], savedView.zoom);
+        } else {
+            fitAll();
+        }
     });
 })();

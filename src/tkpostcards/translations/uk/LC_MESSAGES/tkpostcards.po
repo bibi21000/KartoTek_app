@@ -656,6 +656,18 @@ msgstr "Без POI"
 msgid "nav_with_updates"
 msgstr "Оновлення"
 
+#: src/tkpostcards/tkmanager.py
+msgid "nav_missing_doubles"
+msgstr "Дублікати"
+
+#: src/tkpostcards/tkmanager.py
+msgid "nav_status_trade"
+msgstr "На обмін"
+
+#: src/tkpostcards/tkmanager.py
+msgid "nav_status_exchanged"
+msgstr "Обміняно"
+
 #: src/tkpostcards/tkmanager.py:2221
 msgid "nav_more"
 msgstr "Більше"
@@ -985,6 +997,62 @@ msgstr "Збережено ✓"
 #: src/tkpostcards/tkmanager.py:4328
 msgid "travel_delete_confirm"
 msgstr "Видалити подорож {id}?"
+
+#: src/tkpostcards/tkmanager.py:4344
+msgid "travel_map_btn"
+msgstr "Карта"
+
+#: src/tkpostcards/tkmanager.py:4520
+msgid "map_unavailable"
+msgstr "Інтерактивна карта недоступна (відсутній Pillow)."
+
+#: src/tkpostcards/tkmanager.py:4551
+msgid "map_title"
+msgstr "Карта — {id} — {title}"
+
+#: src/tkpostcards/tkmanager.py:4562
+msgid "map_provider_google"
+msgstr "Google Maps"
+
+#: src/tkpostcards/tkmanager.py:4565
+msgid "map_provider_osm"
+msgstr "OpenStreetMap"
+
+#: src/tkpostcards/tkmanager.py:4592
+msgid "map_fit"
+msgstr "Вписати"
+
+#: src/tkpostcards/tkmanager.py:4595
+msgid "map_refresh"
+msgstr "Оновити"
+
+#: src/tkpostcards/tkmanager.py:4603
+msgid "map_legend_postcard"
+msgstr "Листівка"
+
+#: src/tkpostcards/tkmanager.py:4603
+msgid "map_legend_poi"
+msgstr "Цікаве місце"
+
+#: src/tkpostcards/tkmanager.py:4618
+msgid "map_loading"
+msgstr "Завантаження карти…"
+
+#: src/tkpostcards/tkmanager.py:4700
+msgid "map_count"
+msgstr "{cards} листівок — {pois} цікавих місць у зоні"
+
+#: src/tkpostcards/tkmanager.py:4744
+msgid "map_drag_updated"
+msgstr "GPS-позицію листівки {id} оновлено (потрібно зберегти)"
+
+#: src/tkpostcards/tkmanager.py:4756
+msgid "map_copy_gps_confirm"
+msgstr "Скопіювати позицію ({point}) у буфер обміну?"
+
+#: src/tkpostcards/tkmanager.py:4761
+msgid "map_gps_copied"
+msgstr "Позицію скопійовано в буфер обміну"
 
 #: src/tkpostcards/tkmanager.py:4364
 msgid "auth_title"

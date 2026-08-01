@@ -40,6 +40,12 @@ except ImportError:
     TRAVEL_AVAILABLE = False
 
 try:
+    from .libs.mapview import SlippyMapCanvas, google_provider, osm_provider
+    MAP_AVAILABLE = True
+except ImportError:
+    MAP_AVAILABLE = False
+
+try:
     from PIL import Image, ImageTk
     PIL_AVAILABLE = True
 except ImportError:
@@ -1917,6 +1923,8 @@ class App(tk.Tk):
         self._nav_no_gps: bool = False
         self._nav_no_poi: bool = False
         self._nav_with_updates: bool = False
+        self._nav_doubles: bool = False
+        self._nav_status: str | None = None
 
         self._scan_ids()
 
@@ -2100,8 +2108,9 @@ class App(tk.Tk):
     # ── Scan ──────────────────────────────────────────────────────────────────
     def _scan_ids(self):
         collection = self._nav_collection if getattr(self, "_nav_collection", None) else None
+        status = getattr(self, "_nav_status", None) or None
         try:
-            cards = self.model.list_cards(collection=collection)
+            cards = self.model.list_cards(collection=collection, status=status)
 
             if getattr(self, "_nav_no_gps", False):
                 cards = [c for c in cards if not c.get("coord")]
@@ -2114,6 +2123,18 @@ class App(tk.Tk):
                     if e.get("card_id")
                 }
                 cards = [c for c in cards if str(c.get("id")) in update_ids]
+            if getattr(self, "_nav_doubles", False):
+                # Une carte est "en doublons" si elle référence elle-même
+                # d'autres cartes dans son champ doubles, ou si elle est
+                # référencée dans le champ doubles d'une autre carte.
+                referenced: set[str] = set()
+                for c in cards:
+                    for d in (c.get("doubles") or []):
+                        referenced.add(str(d))
+                cards = [
+                    c for c in cards
+                    if (c.get("doubles") or []) or str(c.get("id")) in referenced
+                ]
 
             ids = []
             for data in cards:
@@ -2121,7 +2142,43 @@ class App(tk.Tk):
                     ids.append(int(data.get("id")))
                 except (TypeError, ValueError):
                     pass
-            self._ids = sorted(ids)
+
+            if getattr(self, "_nav_doubles", False):
+                # Regroupe les cartes en doublons : les cartes d'un même
+                # groupe (reliées directement ou indirectement via le
+                # champ doubles) sont affichées à la suite les unes des
+                # autres, dans l'ordre croissant de leur id ; les
+                # groupes eux-mêmes sont ordonnés par id minimal.
+                by_id = {str(c.get("id")): c for c in cards}
+                adjacency: dict[str, set[str]] = {cid: set() for cid in by_id}
+                for c in cards:
+                    cid = str(c.get("id"))
+                    for d in (c.get("doubles") or []):
+                        d = str(d)
+                        if d in by_id:
+                            adjacency[cid].add(d)
+                            adjacency[d].add(cid)
+
+                visited: set[str] = set()
+                grouped_ids: list[int] = []
+                for cid in sorted(by_id, key=lambda x: int(x)):
+                    if cid in visited:
+                        continue
+                    group = []
+                    stack = [cid]
+                    visited.add(cid)
+                    while stack:
+                        cur = stack.pop()
+                        group.append(cur)
+                        for nxt in adjacency[cur]:
+                            if nxt not in visited:
+                                visited.add(nxt)
+                                stack.append(nxt)
+                    group.sort(key=lambda x: int(x))
+                    grouped_ids.extend(int(x) for x in group)
+                self._ids = grouped_ids
+            else:
+                self._ids = sorted(ids)
         except Exception:
             ids = []
             for f in self.cards_dir.glob("*.json"):
@@ -2236,7 +2293,10 @@ class App(tk.Tk):
         tk.Label(missing_filt_frm, text=_("nav_missing_filter_label"), bg=BG_CARD,
                  fg=FG_LABEL, font=FONT_LABEL).pack(side=tk.LEFT, padx=(0, 4))
         self._nav_missing_var = tk.StringVar(value=_("tsearch_all"))
-        missing_choices = [_("tsearch_all"), _("nav_no_gps"), _("nav_no_poi"), _("nav_with_updates")]
+        missing_choices = [
+            _("tsearch_all"), _("nav_no_gps"), _("nav_no_poi"), _("nav_with_updates"),
+            _("nav_missing_doubles"), _("nav_status_trade"), _("nav_status_exchanged"),
+        ]
         self._nav_missing_menu = ttk.Combobox(missing_filt_frm,
                                               textvariable=self._nav_missing_var,
                                               values=missing_choices, width=14,
@@ -2634,6 +2694,12 @@ class App(tk.Tk):
                 self._nav_missing_var.set(_("nav_no_poi"))
             elif self._nav_with_updates:
                 self._nav_missing_var.set(_("nav_with_updates"))
+            elif self._nav_doubles:
+                self._nav_missing_var.set(_("nav_missing_doubles"))
+            elif self._nav_status == "trade":
+                self._nav_missing_var.set(_("nav_status_trade"))
+            elif self._nav_status == "exchanged":
+                self._nav_missing_var.set(_("nav_status_exchanged"))
             else:
                 self._nav_missing_var.set(all_label)
             return
@@ -2645,6 +2711,13 @@ class App(tk.Tk):
         self._nav_no_gps = (missing_choice == _("nav_no_gps"))
         self._nav_no_poi = (missing_choice == _("nav_no_poi"))
         self._nav_with_updates = (missing_choice == _("nav_with_updates"))
+        self._nav_doubles = (missing_choice == _("nav_missing_doubles"))
+        if missing_choice == _("nav_status_trade"):
+            self._nav_status = "trade"
+        elif missing_choice == _("nav_status_exchanged"):
+            self._nav_status = "exchanged"
+        else:
+            self._nav_status = None
         self._scan_ids()
 
         if not self._ids:
@@ -2654,6 +2727,8 @@ class App(tk.Tk):
             self._nav_no_gps = False
             self._nav_no_poi = False
             self._nav_with_updates = False
+            self._nav_doubles = False
+            self._nav_status = None
             self._nav_filter_var.set(all_label)
             self._nav_missing_var.set(all_label)
             self._scan_ids()
@@ -4266,6 +4341,11 @@ class TravelManagerView(tk.Toplevel):
         tk.Button(actions, text=_("travel_delete"), command=self._delete,
                   bg="#5a1a1a", fg=FG_TEXT, font=FONT_LABEL,
                   relief=tk.FLAT, padx=10, cursor="hand2").pack(side=tk.LEFT)
+        self._btn_map = tk.Button(actions, text=_("travel_map_btn"), command=self._open_map,
+                                  bg=BG_FIELD, fg=FG_LINK, font=FONT_LABEL,
+                                  relief=tk.FLAT, padx=10, cursor="hand2",
+                                  state=tk.DISABLED)
+        self._btn_map.pack(side=tk.RIGHT)
 
         self._status = tk.StringVar(value="")
         tk.Label(self, textvariable=self._status, bg=BG_CARD, fg=FG_LABEL,
@@ -4307,6 +4387,7 @@ class TravelManagerView(tk.Toplevel):
         start = t.get("start") or []
         self._start_coord = list(start) if len(start) >= 2 else []
         self._refresh_start()
+        self._btn_map.config(state=tk.NORMAL if MAP_AVAILABLE else tk.DISABLED)
 
     def _new(self):
         self._is_new = True
@@ -4319,6 +4400,7 @@ class TravelManagerView(tk.Toplevel):
         self._coll_var.set("")
         self._start_coord = []
         self._refresh_start()
+        self._btn_map.config(state=tk.DISABLED)
         self._id_entry.focus_set()
         self._status.set("")
 
@@ -4334,6 +4416,20 @@ class TravelManagerView(tk.Toplevel):
             self._start_coord = c
             self._refresh_start()
         CoordDialog(self, list(self._start_coord), on_save, self._t)
+
+    def _open_map(self):
+        if self._is_new or not self._selected:
+            return
+        if not MAP_AVAILABLE:
+            messagebox.showerror(_("error_title"), _("map_unavailable"), parent=self)
+            return
+        travel = self._travels.get(self._selected)
+        if not travel:
+            return
+        win = getattr(self, "_map_win", None)
+        if win is not None and win.winfo_exists():
+            win._on_close()
+        self._map_win = TravelMapWindow(self, self._app, self._t, self._selected, travel)
 
     # ── Save / Delete ─────────────────────────────────────────────────────────
     def _save(self):
@@ -4387,6 +4483,380 @@ class TravelManagerView(tk.Toplevel):
             self._lb.selection_clear(0, tk.END)
             self._lb.selection_set(i)
             self._lb.see(i)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Carte interactive d'un travel (cartes postales + POI de la zone)
+# ─────────────────────────────────────────────────────────────────────────────
+class TravelMapWindow(tk.Toplevel):
+    """Carte interactive d'un travel.
+
+    Affiche, sur un fond OpenStreetMap (ou Google Maps si une clé
+    ``google_maps_api_key`` est présente dans la section [tkmanager] de
+    postcards.conf) :
+
+    - les cartes postales du travel (celles de sa collection, si définie,
+      sinon toutes les cartes géolocalisées) ;
+    - les points d'intérêt (POI) situés dans la zone géographique du
+      travel (boîte englobante des cartes + point de départ).
+
+    Interactions :
+    - clic sur une carte postale  -> l'ouvre dans la fenêtre principale ;
+    - glisser-déposer d'une carte postale -> l'ouvre dans la fenêtre
+      principale et met à jour sa position GPS (non enregistrée : c'est à
+      l'utilisateur de sauvegarder) ;
+    - clic sur un POI ou sur un point vide de la carte -> propose de
+      copier la position GPS dans le presse-papier.
+    """
+
+    _POSTCARD_COLOR = "#4fc3f7"
+    _POI_COLOR = "#f5a623"
+
+    def __init__(self, parent: tk.Widget, app: "App", t, travel_id: str, travel: dict):
+        super().__init__(parent)
+        self._app = app
+        self._t = t
+        self._travel_id = travel_id
+        self._travel = travel
+        self._card_by_id: dict[str, dict] = {}
+        self._poi_by_id: dict[str, dict] = {}
+        self._thumb_cache: dict[int, "ImageTk.PhotoImage"] = {}
+        self._tooltip: tk.Toplevel | None = None
+        self._tooltip_marker_id: str | None = None
+        self._tooltip_after_id: str | None = None
+
+        title = travel.get("title") or travel_id
+        self.title(_("map_title").format(id=travel_id, title=title))
+        self.configure(bg=BG_MAIN)
+        self.geometry("980x680")
+        self.minsize(640, 440)
+        self.resizable(True, True)
+
+        api_key = self._app.get_search_conf("tkmanager", "google_maps_api_key", "").strip()
+        if api_key:
+            provider = google_provider(api_key)
+            provider_label = _("map_provider_google")
+        else:
+            provider = osm_provider()
+            provider_label = _("map_provider_osm")
+
+        self._build_ui(title, provider_label)
+
+        self._map = SlippyMapCanvas(
+            self._map_holder, provider,
+            bg="#0f1626",
+            on_marker_click=self._on_marker_click,
+            on_marker_drop=self._on_marker_drop,
+            on_poi_click=self._on_poi_click,
+            on_empty_click=self._on_empty_click,
+            on_marker_hover=self._on_marker_hover,
+        )
+        self._map.pack(fill=tk.BOTH, expand=True)
+
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.after(80, self._load_data)
+
+    # ── Construction ─────────────────────────────────────────────────────────
+    def _build_ui(self, title: str, provider_label: str):
+        top = tk.Frame(self, bg=BG_CARD)
+        top.pack(fill=tk.X)
+        tk.Label(top, text=f"{_('map_title').format(id=self._travel_id, title=title)}",
+                 bg=BG_CARD, fg=FG_ACCENT, font=FONT_TITLE).pack(side=tk.LEFT, padx=10, pady=8)
+        tk.Label(top, text=provider_label, bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_SMALL).pack(side=tk.RIGHT, padx=10)
+
+        toolbar = tk.Frame(self, bg=BG_CARD)
+        toolbar.pack(fill=tk.X)
+        tk.Button(toolbar, text="+", command=lambda: self._map.zoom_in(),
+                  bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL, relief=tk.FLAT,
+                  width=3, cursor="hand2").pack(side=tk.LEFT, padx=(8, 2), pady=4)
+        tk.Button(toolbar, text="\u2212", command=lambda: self._map.zoom_out(),
+                  bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL, relief=tk.FLAT,
+                  width=3, cursor="hand2").pack(side=tk.LEFT, padx=2, pady=4)
+        tk.Button(toolbar, text=_("map_fit"), command=self._fit,
+                  bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL, relief=tk.FLAT,
+                  padx=8, cursor="hand2").pack(side=tk.LEFT, padx=6)
+        tk.Button(toolbar, text=_("map_refresh"), command=self._load_data,
+                  bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL, relief=tk.FLAT,
+                  padx=8, cursor="hand2").pack(side=tk.LEFT, padx=2)
+
+        legend = tk.Frame(toolbar, bg=BG_CARD)
+        legend.pack(side=tk.RIGHT, padx=10)
+        for color, key in ((self._POSTCARD_COLOR, "map_legend_postcard"),
+                           (self._POI_COLOR, "map_legend_poi")):
+            dot = tk.Canvas(legend, width=10, height=10, bg=BG_CARD, highlightthickness=0)
+            dot.create_oval(1, 1, 9, 9, fill=color, outline="")
+            dot.pack(side=tk.LEFT, padx=(8, 2))
+            tk.Label(legend, text=_(key), bg=BG_CARD, fg=FG_LABEL,
+                     font=FONT_SMALL).pack(side=tk.LEFT)
+
+        self._map_holder = tk.Frame(self, bg="#0f1626")
+        self._map_holder.pack(fill=tk.BOTH, expand=True)
+
+        self._status = tk.StringVar(value="")
+        tk.Label(self, textvariable=self._status, bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_SMALL, anchor=tk.W, padx=8).pack(fill=tk.X)
+
+    # ── Chargement des données ──────────────────────────────────────────────
+    def _load_data(self):
+        self._status.set(_("map_loading"))
+        self.update_idletasks()
+
+        model = self._app.model
+        collection = self._travel.get("collection")
+        try:
+            cards = model.list_unique_cards_with_coord(limit=5000, exclude_status="exchanged")
+        except Exception as e:
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            self._status.set("")
+            return
+
+        if collection:
+            cards = [c for c in cards if collection in (c.get("collections") or [])]
+
+        self._card_by_id = {str(c["id"]): c for c in cards}
+
+        markers = []
+        lats: list[float] = []
+        lons: list[float] = []
+        for c in cards:
+            coord = c.get("coord") or []
+            if len(coord) < 2:
+                continue
+            lat, lon = coord[0], coord[1]
+            lats.append(lat)
+            lons.append(lon)
+            markers.append({
+                "id": f"card:{c['id']}",
+                "lat": lat, "lon": lon,
+                "kind": "postcard",
+                "color": self._POSTCARD_COLOR,
+                "label": c.get("title") or str(c["id"]),
+            })
+
+        start = self._travel.get("start") or []
+        has_start = len(start) >= 2
+
+        if lats:
+            span_lat = max(lats) - min(lats)
+            span_lon = max(lons) - min(lons)
+            margin_lat = max(0.02, span_lat * 0.15)
+            margin_lon = max(0.02, span_lon * 0.15)
+            min_lat, max_lat = min(lats) - margin_lat, max(lats) + margin_lat
+            min_lon, max_lon = min(lons) - margin_lon, max(lons) + margin_lon
+            if has_start:
+                min_lat = min(min_lat, start[0])
+                max_lat = max(max_lat, start[0])
+                min_lon = min(min_lon, start[1])
+                max_lon = max(max_lon, start[1])
+        elif has_start:
+            margin = 0.08
+            min_lat, max_lat = start[0] - margin, start[0] + margin
+            min_lon, max_lon = start[1] - margin, start[1] + margin
+        else:
+            min_lat = max_lat = min_lon = max_lon = None
+
+        self._poi_by_id = {}
+        if min_lat is not None:
+            try:
+                pois = model.list_pois()
+            except Exception:
+                pois = []
+            for p in pois:
+                coord = p.get("coord") or []
+                if len(coord) < 2:
+                    continue
+                plat, plon = coord[0], coord[1]
+                if not (min_lat <= plat <= max_lat and min_lon <= plon <= max_lon):
+                    continue
+                pid = str(p.get("id"))
+                self._poi_by_id[pid] = p
+                markers.append({
+                    "id": f"poi:{pid}",
+                    "lat": plat, "lon": plon,
+                    "kind": "poi",
+                    "color": self._POI_COLOR,
+                    "label": (p.get("description") or "")[:24] or pid,
+                })
+
+        self._map.set_markers(markers)
+        if min_lat is not None:
+            self._map.fit_bounds(min_lat, min_lon, max_lat, max_lon)
+        else:
+            # Aucune coordonnée disponible : vue par défaut, centrée sur la
+            # zone couverte par les collections configurées à défaut de mieux.
+            self._map.set_view(46.7667, 4.8333, 5)
+
+        self._status.set(_("map_count").format(
+            cards=len(self._card_by_id), pois=len(self._poi_by_id)))
+
+    def _fit(self):
+        self._load_data()
+
+    # ── Callbacks de la carte ────────────────────────────────────────────────
+    def _on_marker_click(self, marker_id: str):
+        if marker_id.startswith("card:"):
+            self._open_card(marker_id[5:])
+
+    def _on_marker_drop(self, marker_id: str, lat: float, lon: float):
+        if marker_id.startswith("card:"):
+            self._open_card(marker_id[5:], new_coord=[lat, lon])
+
+    def _on_poi_click(self, marker_id: str):
+        if not marker_id.startswith("poi:"):
+            return
+        poi = self._poi_by_id.get(marker_id[4:])
+        if not poi:
+            return
+        coord = poi.get("coord") or [None, None]
+        self._propose_copy_gps(coord[0], coord[1], label=poi.get("description"))
+
+    def _on_empty_click(self, lat: float, lon: float):
+        self._propose_copy_gps(lat, lon)
+
+    def _on_marker_hover(self, marker_id: str | None, x_root: int, y_root: int):
+        if self._tooltip_after_id is not None:
+            self.after_cancel(self._tooltip_after_id)
+            self._tooltip_after_id = None
+
+        if marker_id is None:
+            self._hide_tooltip()
+            return
+
+        # Petit délai avant affichage, pour éviter que l'infobulle
+        # clignote quand le pointeur ne fait que passer sur un marqueur.
+        self._tooltip_after_id = self.after(
+            200, lambda: self._show_tooltip(marker_id, x_root, y_root))
+
+    # ── Infobulle (survol) ──────────────────────────────────────────────────
+    def _show_tooltip(self, marker_id: str, x_root: int, y_root: int):
+        self._tooltip_after_id = None
+        if not self.winfo_exists():
+            return
+        if marker_id.startswith("card:"):
+            cid = marker_id[5:]
+            card = self._card_by_id.get(cid)
+            if not card:
+                return
+            title = card.get("title") or cid
+            thumb = self._get_card_thumbnail(cid)
+            self._render_tooltip(marker_id, x_root, y_root, title, thumb)
+        elif marker_id.startswith("poi:"):
+            poi = self._poi_by_id.get(marker_id[4:])
+            if not poi:
+                return
+            text = poi.get("description") or marker_id[4:]
+            self._render_tooltip(marker_id, x_root, y_root, text, None)
+
+    def _get_card_thumbnail(self, cid: str) -> "ImageTk.PhotoImage | None":
+        if not PIL_AVAILABLE:
+            return None
+        try:
+            cid_int = int(cid)
+        except (TypeError, ValueError):
+            return None
+        if cid_int in self._thumb_cache:
+            return self._thumb_cache[cid_int]
+        path = self._app._find_gallery_image(cid_int, "R")
+        if path is None:
+            return None
+        try:
+            img = Image.open(path)
+            img.thumbnail((160, 160))
+            photo = ImageTk.PhotoImage(img)
+        except Exception:
+            return None
+        self._thumb_cache[cid_int] = photo
+        return photo
+
+    def _render_tooltip(self, marker_id: str, x_root: int, y_root: int,
+                        text: str, thumb) -> None:
+        self._hide_tooltip()
+
+        win = tk.Toplevel(self)
+        win.withdraw()          # caché tant que la position finale n'est pas connue
+        win.overrideredirect(True)
+        try:
+            win.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+
+        border = tk.Frame(win, bg=FG_ACCENT)
+        border.pack()
+        body = tk.Frame(border, bg=BG_CARD)
+        body.pack(padx=1, pady=1)
+        inner = tk.Frame(body, bg=BG_CARD)
+        inner.pack(padx=6, pady=6)
+        if thumb is not None:
+            tk.Label(inner, image=thumb, bg=BG_CARD).pack(pady=(0, 4))
+        tk.Label(inner, text=text, bg=BG_CARD, fg=FG_TEXT, font=FONT_LABEL,
+                 wraplength=220, justify=tk.LEFT).pack()
+
+        win.update_idletasks()
+        w, h = win.winfo_width(), win.winfo_height()
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        x = x_root + 16
+        y = y_root + 16
+        if x + w > sw:
+            x = x_root - w - 16
+        if y + h > sh:
+            y = y_root - h - 16
+        win.geometry(f"+{max(0, x)}+{max(0, y)}")
+        win.deiconify()         # position finale prête : on peut l'afficher
+
+        self._tooltip = win
+        self._tooltip_marker_id = marker_id
+
+    def _hide_tooltip(self) -> None:
+        if self._tooltip_after_id is not None:
+            self.after_cancel(self._tooltip_after_id)
+            self._tooltip_after_id = None
+        if self._tooltip is not None:
+            try:
+                self._tooltip.destroy()
+            except tk.TclError:
+                pass
+            self._tooltip = None
+        self._tooltip_marker_id = None
+
+    def _on_close(self) -> None:
+        self._hide_tooltip()
+        self.destroy()
+
+    # ── Actions ──────────────────────────────────────────────────────────────
+    def _open_card(self, cid: str, new_coord: list | None = None):
+        try:
+            cid_int = int(cid)
+        except (TypeError, ValueError):
+            return
+        if cid_int not in self._app._ids:
+            messagebox.showwarning(_("info_title"),
+                                   _("goto_not_found").format(id=cid_int), parent=self)
+            return
+        if not self._app._ask_save_if_dirty():
+            return
+        self._app._load_card(self._app._ids.index(cid_int))
+        if new_coord is not None:
+            self._app._coord = list(new_coord)
+            self._app._data["coord"] = list(new_coord)
+            self._app._refresh_coord()
+            self._app._mark_dirty()
+            self._status.set(_("map_drag_updated").format(id=cid_int))
+        self._app.deiconify()
+        self._app.lift()
+        self._app.focus_force()
+
+    def _propose_copy_gps(self, lat, lon, label: str | None = None):
+        if lat is None or lon is None:
+            return
+        point = f"lat {lat:.6f} / lon {lon:.6f}"
+        text = f"{label} — {point}" if label else point
+        if messagebox.askyesno(_("info_title"),
+                               _("map_copy_gps_confirm").format(point=text),
+                               parent=self):
+            self.clipboard_clear()
+            self.clipboard_append(f"{lat:.6f}, {lon:.6f}")
+            self._status.set(_("map_gps_copied"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

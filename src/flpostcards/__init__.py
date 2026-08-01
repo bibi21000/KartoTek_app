@@ -362,14 +362,15 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
     @app.template_filter("format_date")
     def format_date_filter(timestamp):
         """Formate un timestamp UNIX (mdate, cdate, ...) en date localisée
-        courte (ex : "27 juil. 2026"), ou chaîne vide si absent."""
+        avec le mois en toutes lettres (ex : "27 juillet 2026"), ou chaîne
+        vide si absent."""
         if not timestamp:
             return ""
         from datetime import datetime, timezone
         from flask_babel import format_date
 
         dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
-        return format_date(dt, format="medium")
+        return format_date(dt, format="long")
 
     @app.template_filter("obfuscate_email")
     def obfuscate_email_filter(email):

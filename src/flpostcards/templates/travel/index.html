@@ -29,10 +29,14 @@
                     {{ _("%(distance)s km", distance=("%.2f" | format(travel.distance_km))) }}
                     &middot;
                     {{ _("%(count)d cartes", count=travel.count) }}
+                    {% if travel.duration %}
+                    &middot;
+                    {{ travel.duration }}
+                    {% endif %}
                 </p>
                 {% if travel.mdate %}
                 <p class="travel-card-updated">
-                    {{ _("Mis à jour le %(date)s", date=(travel.mdate | format_date)) }}
+                    {{ _("Mise à jour le %(date)s", date=(travel.mdate | format_date)) }}
                 </p>
                 {% endif %}
             </div>

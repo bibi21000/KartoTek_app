@@ -12,12 +12,35 @@ from flpostcards.images import SIZE_MAIN, SIZE_SMALL, card_images, image_dimensi
 
 bp = Blueprint("travel", __name__, template_folder="../../templates")
 
+# Temps d'affichage de chaque carte dans le diaporama (cf. intervalSeconds
+# dans templates/travel/detail.html et static/js/travel-slideshow.js) :
+# sert de base pour estimer la durée de la balade *virtuelle* (diaporama),
+# et non un temps de marche réel.
+_SLIDE_SECONDS = 8
+
+
+def _format_duration(count: int) -> str:
+    """Estime la durée du diaporama d'un parcours (nombre de cartes ×
+    temps d'affichage de chaque carte) et la formate en heures/minutes
+    localisées (ex : "1 h 15 min")."""
+    if not count:
+        return ""
+    total_minutes = round(count * _SLIDE_SECONDS / 60)
+    hours, minutes = divmod(total_minutes, 60)
+    if hours and minutes:
+        return gettext("%(h)d h %(m)d min", h=hours, m=minutes)
+    if hours:
+        return gettext("%(h)d h", h=hours)
+    return gettext("%(m)d min", m=minutes)
+
 
 @bp.route("/travel/")
 def index():
     """Liste des parcours disponibles."""
     model = current_app.model
     travels = model.list_travels()
+    for travel in travels:
+        travel["duration"] = _format_duration(travel.get("count"))
 
     page_title = gettext("Balades dans le temps au fil des cartes postales")
 

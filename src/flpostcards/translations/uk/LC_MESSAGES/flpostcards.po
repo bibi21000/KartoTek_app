@@ -679,9 +679,24 @@ msgstr "Продовжити"
 msgid "%(distance)s km"
 msgstr "%(distance)s км"
 
+#: blueprints/travel/__init__.py
+#, python-format
+msgid "%(h)d h %(m)d min"
+msgstr "%(h)d год %(m)d хв"
+
+#: blueprints/travel/__init__.py
+#, python-format
+msgid "%(h)d h"
+msgstr "%(h)d год"
+
+#: blueprints/travel/__init__.py
+#, python-format
+msgid "%(m)d min"
+msgstr "%(m)d хв"
+
 #: templates/travel/index.html:35
 #, python-format
-msgid "Mis à jour le %(date)s"
+msgid "Mise à jour le %(date)s"
 msgstr "Оновлено %(date)s"
 
 #: templates/travel/index.html:43
