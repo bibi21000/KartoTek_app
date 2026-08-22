@@ -5,6 +5,8 @@
 {% block content %}
 <div class="slideshow" id="slideshow">
 
+    <h1 class="sr-only">{{ page_title }}</h1>
+
     <div class="slide-layer" id="layer-a"></div>
     <div class="slide-layer" id="layer-b"></div>
 
@@ -49,6 +51,8 @@
         imageBaseUrl: "{{ url_for('home.images', filename='') }}",
         collection: {{ current_collection | tojson }},
         addedOnLabel: "{{ _("Ajoutée le") }}",
+        rectoAltLabel: "{{ _("Carte postale") }}",
+        versoAltLabel: "{{ _("Verso de la carte") }}",
         // Verso désactivé globalement ([DEFAULT] postcards_verso = false) :
         // slideshow.js n'affiche alors plus la vignette PiP du verso.
         showVerso: {{ config.POSTCARDS_VERSO | tojson }},

@@ -69,8 +69,9 @@ lock_timeout = 60.0
 # to "false" to disable the verso everywhere in the app: card detail
 # page loses the image and the toggle button; gallery keeps only the
 # recto view, the display-mode selector disappears.
-postcards_verso = true
+# postcards_verso = true
 
+# torch_device
 
 [flask]
 
@@ -286,7 +287,13 @@ doubles_threshold = 90
 # (tesseract-style language codes, e.g. "fra", "fra+eng"). "fra" by
 # default.
 ocr_langs = fra
-
+# Detection parameters
+detect_lang = fr
+model_name = Salesforce/blip-image-captioning-large
+objects_model_name = facebook/detr-resnet-101
+objects_threshold = 0.92
+max_objects = 10
+excluded_objects = cravate
 
 [sync_default]
 # Remote publishing target (tkpostcards/libs/remotesync.py), used by

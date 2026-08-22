@@ -186,9 +186,16 @@ msgid "Cliquer pour agrandir"
 msgstr "Натисніть, щоб збільшити"
 
 #: templates/card/detail.html:19 templates/gallery/index.html:94
+#: src/flpostcards/blueprints/home/__init__.py:384
 #, python-format
 msgid "Recto de la carte %(id)s"
 msgstr "Лицьова сторона листівки %(id)s"
+
+#: src/flpostcards/blueprints/home/__init__.py:380
+#: src/flpostcards/templates/gallery/index.html:102
+#, python-format
+msgid "Recto de la carte %(id)s : %(content)s"
+msgstr "Лицьова сторона листівки %(id)s: %(content)s"
 
 #: templates/card/detail.html:23 templates/gallery/index.html:100
 #, python-format
@@ -396,6 +403,12 @@ msgstr "Зворотна сторона листівки"
 #: templates/home/index.html:49
 msgid "Ajoutée le"
 msgstr "Додано"
+
+#: src/flpostcards/templates/home/index.html:55
+#: src/flpostcards/templates/slideshow/index.html:44
+#: src/flpostcards/templates/travel/detail.html:49
+msgid "Carte postale"
+msgstr "Листівка"
 
 #: templates/map/index.html:38
 msgid "Points d'intérêt"

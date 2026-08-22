@@ -64,6 +64,14 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
         "DEFAULT", "postcards_verso", fallback=True
     )
 
+    # Torch device utilisé pour la recherche de similarité (voir
+    # [DEFAULT] torch_device dans postcards.conf, et "tktools devices"
+    # pour la liste des devices disponibles). None => laisse
+    # PostcardSearcher choisir son propre défaut (cuda si disponible,
+    # sinon cpu).
+    torch_device = parser.get("DEFAULT", "torch_device", fallback="").strip()
+    app.config["TORCH_DEVICE"] = torch_device or None
+
     # Liste des collections connues, et sous-ensemble proposé comme
     # filtre sur la carte publique (/map/) : ne vivent plus dans
     # postcards.conf, mais dans <datadir>/collections.json (voir

@@ -78,6 +78,16 @@ DEFAULT_CONFIG = {
     "white_threshold": "240",
     "language": "",
     "ocr_langs": "fra",
+    "detect_lang": "fr",
+    "model_name": "Salesforce/blip-image-captioning-large",
+    "objects_model_name": "facebook/detr-resnet-101",
+    "objects_threshold": "0.92",
+    "max_objects": "10",
+    # Libellés (anglais, insensibles à la casse) toujours écartés des
+    # objets détectés (DETR) -- ex : "tie", faux positif classique de ce
+    # modèle sur des motifs de cartes postales anciennes. Séparés par
+    # des virgules.
+    "excluded_objects": "tie",
     "remove_after_add": "false",
     "editor_linux": "",
     "editor_macos": "",
@@ -843,9 +853,36 @@ class PostcardImportApp(tk.Tk):
             self.after(0, self._on_add_progress, i, total, added)
 
         ocr_langs = self.cfg["tkimport"].get("ocr_langs", "fra") or "fra"
+        torch_device = self.cfg["DEFAULT"].get("torch_device", "").strip() or None
+
+        # Détection de contenu (BLIP + DETR sur le recto, voir
+        # tkpostcards.libs.detection) : mêmes réglages que "tktools
+        # detect", lus dans la section [tkimport] du fichier de
+        # configuration. add_pairs() se contente d'ignorer la détection
+        # (comme l'OCR) si transformers/torch ne sont pas installés.
+        detect_lang = self.cfg["tkimport"].get("detect_lang", "fr") or "fr"
+        model_name = self.cfg["tkimport"].get(
+            "model_name", "Salesforce/blip-image-captioning-large") or None
+        objects_model_name = self.cfg["tkimport"].get(
+            "objects_model_name", "facebook/detr-resnet-101") or None
+        try:
+            objects_threshold = self.cfg["tkimport"].getfloat("objects_threshold")
+        except (ValueError, TypeError):
+            objects_threshold = None
+        try:
+            max_objects = self.cfg["tkimport"].getint("max_objects")
+        except (ValueError, TypeError):
+            max_objects = None
+        excluded_objects = self.cfg["tkimport"].get("excluded_objects", "tie") or ""
+        excluded_objects = [o.strip() for o in excluded_objects.split(",") if o.strip()]
+
         try:
             add_pairs(str(self.datadir), self.importdir, ids, on_progress=_progress,
-                      ocr_lang=ocr_langs)
+                      ocr_lang=ocr_langs, torch_device=torch_device,
+                      detect_lang=detect_lang, model_name=model_name,
+                      objects_model_name=objects_model_name,
+                      objects_threshold=objects_threshold, max_objects=max_objects,
+                      excluded_objects=excluded_objects)
             self.after(0, self._on_add_done, None)
         except Exception as exc:
             self.after(0, self._on_add_done, str(exc))

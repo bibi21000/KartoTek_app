@@ -121,10 +121,21 @@
         }
     }
 
+    function buildAltText(card) {
+        return card.title || card.detected_content ||
+            ((config.rectoAltLabel || "") + " " + card.id);
+    }
+
     function showCard(card) {
         var rectoUrl = imageUrl(card.recto);
         var showVerso = config.showVerso !== false && pip && pipImg;
         var versoUrl = showVerso ? imageUrl(card.verso_small) : null;
+        // Texte alternatif du recto (titre, à défaut légende détectée
+        // automatiquement -- voir tkpostcards.libs.detection --, à défaut
+        // texte générique avec l'id) : exposé en aria-label/role="img" sur
+        // le calque affiché, celui-ci étant un fond CSS (background-image)
+        // et non une balise <img>, qui ne supporte donc pas alt="".
+        var altText = buildAltText(card);
 
         var preloads = showVerso ? [preload(rectoUrl), preload(versoUrl)] : [preload(rectoUrl)];
 
@@ -135,6 +146,10 @@
             var currentLayer = layers[activeIndex];
 
             nextLayer.style.backgroundImage = "url('" + rectoUrl + "')";
+            nextLayer.setAttribute("role", "img");
+            nextLayer.setAttribute("aria-label", altText);
+            currentLayer.removeAttribute("role");
+            currentLayer.removeAttribute("aria-label");
 
             requestAnimationFrame(function () {
                 nextLayer.classList.add("visible");
@@ -149,14 +164,17 @@
             // Absente si [DEFAULT] postcards_verso = false (élément #pip non
             // rendu dans le template) ou si désactivée via config.showVerso.
             if (showVerso) {
+                var versoAlt = (config.versoAltLabel || "") + " " + card.id;
                 if (pip.classList.contains("visible")) {
                     pipImg.classList.add("fading");
                     setTimeout(function () {
                         pipImg.src = versoUrl;
+                        pipImg.alt = versoAlt;
                         pipImg.classList.remove("fading");
                     }, 300);
                 } else {
                     pipImg.src = versoUrl;
+                    pipImg.alt = versoAlt;
                     pip.classList.add("visible");
                 }
             }

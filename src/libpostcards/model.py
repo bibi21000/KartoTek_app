@@ -105,6 +105,8 @@ CREATE TABLE IF NOT EXISTS cards (
     description TEXT,
     recto_ocr   TEXT,
     verso_ocr   TEXT,
+    detected_content TEXT,
+    detected_objects TEXT,
     date        TEXT,
     cdate       INTEGER,
     mdate       INTEGER,
@@ -207,6 +209,8 @@ _CARD_DEFAULTS: dict[str, Any] = {
     "description": None,
     "recto_ocr": None,
     "verso_ocr": None,
+    "detected_content": None,
+    "detected_objects": None,
     "date": None,
     "cdate": None,
     "mdate": None,
@@ -235,6 +239,8 @@ def _card_to_row(card: dict) -> dict:
         "description": card.get("description"),
         "recto_ocr": card.get("recto_ocr"),
         "verso_ocr": card.get("verso_ocr"),
+        "detected_content": card.get("detected_content"),
+        "detected_objects": card.get("detected_objects"),
         "date": card.get("date"),
         "cdate": card.get("cdate"),
         "mdate": card.get("mdate"),
@@ -471,6 +477,17 @@ class Model:
                 self._conn.commit()
             except sqlite3.OperationalError:
                 pass  # colonne déjà présente
+
+            # Ajout défensif de cards.detected_content / detected_objects sur
+            # une base existante créée avant leur introduction (CREATE TABLE
+            # IF NOT EXISTS, ci-dessus, ne modifie pas une table déjà
+            # présente sans ces colonnes).
+            for _col in ("detected_content", "detected_objects"):
+                try:
+                    self._conn.execute(f"ALTER TABLE cards ADD COLUMN {_col} TEXT")
+                    self._conn.commit()
+                except sqlite3.OperationalError:
+                    pass  # colonne déjà présente
 
             # Fonction SQL personnalisée pour les recherches insensibles
             # aux accents et à la casse (ex: "dodanes", "dôdanes" et
@@ -886,9 +903,15 @@ class Model:
                 " OR unaccent_lower(verso_text) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(recto_text) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(address) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(poi) LIKE unaccent_lower(?))"
+                " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
+                # Contenu détecté automatiquement (BLIP + DETR sur le
+                # recto, voir tkpostcards.libs.detection) : inclus dans
+                # la recherche textuelle au même titre que les champs
+                # saisis/OCR'isés manuellement.
+                " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"
+                " OR unaccent_lower(detected_objects) LIKE unaccent_lower(?))"
             )
-            params.extend([like] * 7)
+            params.extend([like] * 9)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         limit_clause = f"LIMIT {int(limit)}" if limit is not None else ""
@@ -933,9 +956,15 @@ class Model:
                 " OR unaccent_lower(verso_text) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(recto_text) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(address) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(poi) LIKE unaccent_lower(?))"
+                " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
+                # Contenu détecté automatiquement (BLIP + DETR sur le
+                # recto, voir tkpostcards.libs.detection) : inclus dans
+                # la recherche textuelle au même titre que les champs
+                # saisis/OCR'isés manuellement.
+                " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"
+                " OR unaccent_lower(detected_objects) LIKE unaccent_lower(?))"
             )
-            params.extend([like] * 7)
+            params.extend([like] * 9)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         sql = f"SELECT COUNT(*) FROM cards {where}"
@@ -1092,9 +1121,15 @@ class Model:
                 " OR unaccent_lower(verso_text) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(recto_text) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(address) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(poi) LIKE unaccent_lower(?))"
+                " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
+                # Contenu détecté automatiquement (BLIP + DETR sur le
+                # recto, voir tkpostcards.libs.detection) : inclus dans
+                # la recherche textuelle au même titre que les champs
+                # saisis/OCR'isés manuellement.
+                " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"
+                " OR unaccent_lower(detected_objects) LIKE unaccent_lower(?))"
             )
-            params.extend([like] * 7)
+            params.extend([like] * 9)
 
         where = f"WHERE {' AND '.join(conditions)}"
         limit_clause = f"LIMIT {int(limit)}" if limit is not None else ""
@@ -1213,9 +1248,15 @@ class Model:
                 " OR unaccent_lower(verso_text) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(recto_text) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(address) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(poi) LIKE unaccent_lower(?))"
+                " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
+                # Contenu détecté automatiquement (BLIP + DETR sur le
+                # recto, voir tkpostcards.libs.detection) : inclus dans
+                # la recherche textuelle au même titre que les champs
+                # saisis/OCR'isés manuellement.
+                " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"
+                " OR unaccent_lower(detected_objects) LIKE unaccent_lower(?))"
             )
-            params.extend([like] * 7)
+            params.extend([like] * 9)
 
         where = f"WHERE {' AND '.join(conditions)}"
         sql = f"SELECT COUNT(*) FROM cards {where}"

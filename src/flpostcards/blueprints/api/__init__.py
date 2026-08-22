@@ -188,7 +188,10 @@ def _get_searcher():
     if cached is None or cached_mtime != mtime:
         from libpostcards.similar import PostcardSearcher
 
-        searcher = PostcardSearcher(datadir=current_app.config["DATADIR"])
+        searcher = PostcardSearcher(
+            datadir=current_app.config["DATADIR"],
+            device=current_app.config.get("TORCH_DEVICE"),
+        )
         if mtime is not None:
             searcher.load_index(pkl_path)
         current_app._similar_searcher = searcher

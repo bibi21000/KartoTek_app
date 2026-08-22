@@ -126,6 +126,7 @@ def cards_json(travel_id: str):
                 "verso": images["verso"],
                 "verso_small": images_small["verso"],
                 "coord": coord,
+                "detected_content": card.get("detected_content") if card else None,
             }
         )
 

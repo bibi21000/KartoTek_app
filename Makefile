@@ -19,7 +19,7 @@ venv: venv-min
 	./venv/bin/pip install -e .[similar]
 	./venv/bin/pip install -e .[ocr]
 	./venv/bin/pip install -e .[travel]
-	./venv/bin/pip install -e .[objdetect]
+	./venv/bin/pip install -e .[detection]
 
 venv-dev: venv
 	./venv/bin/pip install -e .[flask]

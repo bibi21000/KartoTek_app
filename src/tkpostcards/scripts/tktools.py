@@ -114,8 +114,18 @@ def prepare(common, prefix, white_threshold):
               help=_("OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"). "
                      "Defaults to the [tkimport] ocr_langs setting in the "
                      "configuration file."))
+@click.option('--detect-lang', default=None,
+              help=_("Target language for the translated caption (e.g. \"fr\"). "
+                     "Defaults to the [tkimport] detect_lang setting in the "
+                     "configuration file, or \"fr\" if unset."))
+@click.option('--excluded-objects', default=None,
+              help=_("Comma-separated list of object labels to always exclude "
+                     "from detected_objects (e.g. \"tie,person\", or their "
+                     "translation in --detect-lang, e.g. \"cravate,personne\"). "
+                     "Defaults to the [tkimport] excluded_objects setting in "
+                     "the configuration file."))
 @click.pass_obj
-def add(common, pcid, ocr_langs):
+def add(common, pcid, ocr_langs, detect_lang, excluded_objects):
     from ..libs.scan_add import add_pairs
 
     if pcid is None:
@@ -123,6 +133,21 @@ def add(common, pcid, ocr_langs):
 
     if not ocr_langs:
         ocr_langs = common.conf.get("tkimport", "ocr_langs", fallback="fra")
+    if not detect_lang:
+        detect_lang = common.conf.get("tkimport", "detect_lang", fallback="fr")
+    model_name = common.conf.get(
+        "tkimport", "model_name",
+        fallback="Salesforce/blip-image-captioning-large",
+    )
+    objects_model_name = common.conf.get(
+        "tkimport", "objects_model_name",
+        fallback="facebook/detr-resnet-101",
+    )
+    objects_threshold = common.conf.getfloat("tkimport", "objects_threshold", fallback=0.92)
+    max_objects = common.conf.getint("tkimport", "max_objects", fallback=10)
+    if excluded_objects is None:
+        excluded_objects = common.conf.get("tkimport", "excluded_objects", fallback="tie")
+    excluded_objects = [o.strip() for o in excluded_objects.split(",") if o.strip()]
 
     ids = split_ids(pcid)
     pbar = tqdm(total=len(ids), desc=_("Postcards"))
@@ -134,7 +159,11 @@ def add(common, pcid, ocr_langs):
 
     try:
         add_pairs(common.datadir, common.importdir, ids, on_progress=_on_progress,
-                  ocr_lang=ocr_langs)
+                  ocr_lang=ocr_langs, torch_device=common.torch_device,
+                  detect_lang=detect_lang, model_name=model_name,
+                  objects_model_name=objects_model_name,
+                  objects_threshold=objects_threshold, max_objects=max_objects,
+                  excluded_objects=excluded_objects)
     finally:
         pbar.close()
 
@@ -192,7 +221,7 @@ def index(common):
 
     index_file = Path(common.datadir) / "postcards.pkl"
 
-    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir)
+    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir, device=common.torch_device)
 
     searcher.load_index(
         index_file
@@ -223,7 +252,7 @@ def files(common, query_dir, threshold, max_results):
 
     index_file = Path(common.datadir) / "postcards.pkl"
 
-    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir)
+    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir, device=common.torch_device)
 
     searcher.load_index(
         index_file
@@ -264,7 +293,7 @@ def url(common, url, threshold, max_results):
 
     index_file = Path(common.datadir) / "postcards.pkl"
 
-    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir)
+    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir, device=common.torch_device)
 
     searcher.load_index(
         index_file
@@ -301,7 +330,7 @@ def clipboard(common, threshold, max_results):
 
     index_file = Path(common.datadir) / "postcards.pkl"
 
-    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir)
+    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir, device=common.torch_device)
 
     searcher.load_index(
         index_file
@@ -324,6 +353,31 @@ def clipboard(common, threshold, max_results):
             f"{item['path']}"
         )
 
+@cli.command(help=_("List torch devices available for similarity search"))
+@click.pass_obj
+def devices(common):
+    try:
+        import torch
+    except ImportError:
+        click.echo(_("torch is not installed"))
+        return
+
+    click.echo("cpu")
+
+    if torch.cuda.is_available():
+        for i in range(torch.cuda.device_count()):
+            click.echo(f"cuda:{i}  ({torch.cuda.get_device_name(i)})")
+
+    if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+        click.echo("mps")
+
+    click.echo()
+    if common.torch_device:
+        click.echo(_("Currently configured device: {device}").format(device=common.torch_device))
+    else:
+        click.echo(_("Currently configured device: (auto)"))
+
+
 @cli.command(help=_("Check for missing ids and replace cards wih last ones"))
 @click.option("--threshold", default=90, type=float)
 @click.option("--max-results", default=100, type=int)
@@ -336,7 +390,7 @@ def duplicates(common, threshold, max_results):
     )
 
     index_file = Path(common.datadir) / "postcards.pkl"
-    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir)
+    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir, device=common.torch_device)
 
     searcher.load_index(
         index_file
@@ -405,6 +459,88 @@ def ocr(common, pcid, ocr_langs):
             card = model.load_json(pci)
             card['recto_ocr'] = ocr.to_string(os.path.join(common.datadir, "cards", '%s_R.%s'%(pci, common.file_format)))
             card['verso_ocr'] = ocr.to_string(os.path.join(common.datadir, "cards", '%s_V.%s'%(pci, common.file_format)))
+            model.write_json(card)
+            pbar.update(1)
+    pbar.close()
+
+@cli.command(help=_("Redo content detection for postcards"))
+@click.argument('pcid', default=None, nargs=-1)
+@click.option('--detect-lang', default=None,
+              help=_("Target language for the translated caption (e.g. \"fr\"). "
+                     "Defaults to the [tkimport] detect_lang setting in the "
+                     "configuration file, or \"fr\" if unset."))
+@click.option('--model-name', default=None,
+              help=_("Name of the HuggingFace image captioning model to use. "
+                     "Defaults to the [tkimport] model_name setting in the "
+                     "configuration file, or \"Salesforce/blip-image-captioning-large\" "
+                     "if unset."))
+@click.option('--objects-model-name', default=None,
+              help=_("Name of the HuggingFace object detection model to use. "
+                     "Defaults to the [tkimport] objects_model_name setting in "
+                     "the configuration file, or \"facebook/detr-resnet-101\" "
+                     "if unset."))
+@click.option('--objects-threshold', default=None, type=float,
+              help=_("Minimum confidence score (0-1) for an object detection "
+                     "to be kept. Defaults to the [tkimport] objects_threshold "
+                     "setting in the configuration file, or 0.92 if unset "
+                     "(a high default is used on purpose, to favor quality "
+                     "over quantity)."))
+@click.option('--max-objects', default=None, type=int,
+              help=_("Maximum number of detected objects to keep, once sorted "
+                     "by confidence. Defaults to the [tkimport] max_objects "
+                     "setting in the configuration file, or 10 if unset."))
+@click.option('--excluded-objects', default=None,
+              help=_("Comma-separated list of object labels to always exclude "
+                     "from detected_objects (e.g. \"tie,person\", or their "
+                     "translation in --detect-lang, e.g. \"cravate,personne\"). "
+                     "Defaults to the [tkimport] excluded_objects setting in "
+                     "the configuration file."))
+@click.pass_obj
+def detect(common, pcid, detect_lang, model_name, objects_model_name, objects_threshold,
+           max_objects, excluded_objects):
+    from libpostcards.model import Model
+    from ..libs.detection import PostcardDetection
+    if pcid is None:
+        raise RuntimeError(_("Give me a name"))
+
+    if not detect_lang:
+        detect_lang = common.conf.get("tkimport", "detect_lang", fallback="fr")
+    if not model_name:
+        model_name = common.conf.get(
+            "tkimport", "model_name",
+            fallback="Salesforce/blip-image-captioning-large",
+        )
+    if not objects_model_name:
+        objects_model_name = common.conf.get(
+            "tkimport", "objects_model_name",
+            fallback="facebook/detr-resnet-101",
+        )
+    if objects_threshold is None:
+        objects_threshold = common.conf.getfloat("tkimport", "objects_threshold", fallback=0.92)
+    if max_objects is None:
+        max_objects = common.conf.getint("tkimport", "max_objects", fallback=10)
+    if excluded_objects is None:
+        excluded_objects = common.conf.get("tkimport", "excluded_objects", fallback="tie")
+    excluded_objects = [o.strip() for o in excluded_objects.split(",") if o.strip()]
+
+    detector = PostcardDetection(
+        model_name=model_name,
+        objects_model_name=objects_model_name,
+        lang=detect_lang,
+        device=common.torch_device,
+        objects_threshold=objects_threshold,
+        max_objects=max_objects,
+        excluded_objects=excluded_objects,
+    )
+    ids = split_ids(pcid)
+
+    pbar = tqdm(total=len(ids), desc=_("Postcards"))
+    with Model(common.datadir) as model:
+        for pci in ids:
+            card = model.load_json(pci)
+            recto = os.path.join(common.datadir, "cards", '%s_R.%s'%(pci, common.file_format))
+            card['detected_content'] = detector.to_string(recto)
+            card['detected_objects'] = detector.to_objects_string(recto)
             model.write_json(card)
             pbar.update(1)
     pbar.close()

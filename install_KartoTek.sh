@@ -93,7 +93,7 @@ declare -A MSG_FR=(
   [install_cancelled]="Installation annulée par l'utilisateur."
   [choose_variant]="Quelle version installer ?"
   [variant_light]="Légère (ktmanager, ktimport)"
-  [variant_full]="Complète (+ ocr, similar, travel)"
+  [variant_full]="Complète (+ ocr, similar, travel, detection)"
   [choose_prompt]="Votre choix [1/2] : "
   [creating_venv]="Création de l'environnement virtuel dans %s ..."
   [venv_exists]="Un venv existe déjà dans %s, il sera réutilisé."
@@ -126,7 +126,7 @@ declare -A MSG_FR=(
   [path_reminder]="Remarque : ajoutez %s à votre PATH si ce n'est pas déjà fait :"
   [done]="Installation terminée !"
   [summary_light]="Version installée : légère (ktmanager, ktimport)"
-  [summary_full]="Version installée : complète (ktmanager, ktimport, ocr, similar, travel)"
+  [summary_full]="Version installée : complète (ktmanager, ktimport, ocr, similar, travel, detection)"
   [summary_langs]="Langues Tesseract installées : %s"
   [summary_launch]="Vous pouvez lancer les outils avec : %s"
   [yes_no_hint]="(o = oui / n = non)"
@@ -172,7 +172,7 @@ declare -A MSG_EN=(
   [install_cancelled]="Installation cancelled by user."
   [choose_variant]="Which version do you want to install?"
   [variant_light]="Light (ktmanager, ktimport)"
-  [variant_full]="Full (+ ocr, similar, travel)"
+  [variant_full]="Full (+ ocr, similar, travel, detection)"
   [choose_prompt]="Your choice [1/2]: "
   [creating_venv]="Creating virtual environment in %s ..."
   [venv_exists]="A venv already exists in %s, it will be reused."
@@ -205,7 +205,7 @@ declare -A MSG_EN=(
   [path_reminder]="Note: add %s to your PATH if it isn't already:"
   [done]="Installation complete!"
   [summary_light]="Installed version: light (ktmanager, ktimport)"
-  [summary_full]="Installed version: full (ktmanager, ktimport, ocr, similar, travel)"
+  [summary_full]="Installed version: full (ktmanager, ktimport, ocr, similar, travel, detection)"
   [summary_langs]="Installed Tesseract languages: %s"
   [summary_launch]="You can launch the tools with: %s"
   [yes_no_hint]="(y = yes / n = no)"
@@ -458,7 +458,7 @@ python_venv_pkg() {
 pip_extra_for_variant() {
   case "$1" in
     light) echo "ktmanager,ktimport" ;;
-    full)  echo "ktmanager,ktimport,ocr,similar,travel" ;;
+    full)  echo "ktmanager,ktimport,ocr,similar,travel,detection" ;;
     *)     echo "ktmanager,ktimport" ;;
   esac
 }

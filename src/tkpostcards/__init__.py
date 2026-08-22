@@ -94,7 +94,8 @@ def config(confile=None):
     return config
 
 class Common(object):
-    def __init__(self, conffile=None, datadir=None, importdir=None, tmpdir=None, debug=None):
+    def __init__(self, conffile=None, datadir=None, importdir=None, tmpdir=None, debug=None,
+                 torch_device=None):
         self.conffile = conffile
         self.conf = config(self.conffile)
 
@@ -112,6 +113,15 @@ class Common(object):
 
         self.file_format = self.conf.get('DEFAULT', 'file_format', fallback='tiff')
 
+        # torch_device : --torch-device en ligne de commande prévaut ;
+        # sinon [DEFAULT] torch_device de postcards.conf ; sinon None,
+        # qui signifie "laisser torch choisir" (cuda si disponible,
+        # sinon cpu -- voir PostcardSearcher.__init__). Une chaîne vide
+        # (clé présente mais sans valeur) est traitée comme absente.
+        if torch_device is None:
+            torch_device = self.conf.get('DEFAULT', 'torch_device', fallback=None)
+        self.torch_device = (torch_device or '').strip() or None
+
         self.debug = debug
 
 @click.group()
@@ -120,7 +130,11 @@ class Common(object):
 @click.option('--importdir', default=None, help=_("Scanned image import directory"))
 @click.option('--tmpdir', default=None, help=_("Temporary directory"))
 @click.option('--debug/--no-debug', default=False, help=_("Enable/disable debug"))
+@click.option('--torch-device', default=None,
+              help=_("Torch device to use for similarity search (see \"tktools devices\"). "
+                     "Defaults to the [DEFAULT] torch_device setting in the configuration "
+                     "file, or torch's own default (cuda if available, else cpu) if unset."))
 @click.pass_context
-def cli(ctx, conffile, datadir, importdir, tmpdir, debug):
+def cli(ctx, conffile, datadir, importdir, tmpdir, debug, torch_device):
     """Command group."""
-    ctx.obj = Common(conffile, datadir, importdir, tmpdir, debug)
+    ctx.obj = Common(conffile, datadir, importdir, tmpdir, debug, torch_device)

@@ -181,6 +181,13 @@
         var nextCard = cards[(index + 1) % cards.length];
 
         var rectoUrl = imageUrl(card.recto);
+        // Texte alternatif du recto (titre, à défaut légende détectée
+        // automatiquement -- voir tkpostcards.libs.detection --, à défaut
+        // texte générique avec l'id) : exposé en aria-label/role="img" sur
+        // le calque affiché, celui-ci étant un fond CSS (background-image)
+        // et non une balise <img>, qui ne supporte donc pas alt="".
+        var altText = card.title || card.detected_content ||
+            ((config.rectoAltLabel || "") + " " + card.id);
 
         return preload(rectoUrl).then(function () {
             // -- Fondu croisé du recto ------------------------------------------------
@@ -189,6 +196,10 @@
             var currentLayer = layers[activeIndex];
 
             nextLayer.style.backgroundImage = "url('" + rectoUrl + "')";
+            nextLayer.setAttribute("role", "img");
+            nextLayer.setAttribute("aria-label", altText);
+            currentLayer.removeAttribute("role");
+            currentLayer.removeAttribute("aria-label");
 
             requestAnimationFrame(function () {
                 nextLayer.classList.add("visible");

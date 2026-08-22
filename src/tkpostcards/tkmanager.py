@@ -138,6 +138,8 @@ def _translatable_field_labels():  # pragma: no cover
         _("field_verso_ocr"),
         _("field_recto_text"),
         _("field_verso_text"),
+        _("field_detected_content"),
+        _("field_detected_objects"),
         # App.LIST_FIELDS
         _("field_address"),
         _("field_poi"),
@@ -1839,6 +1841,8 @@ class App(tk.Tk):
         ("verso_ocr",   "field_verso_ocr",   False, 4),
         ("recto_text",  "field_recto_text",  False, 2),
         ("verso_text",  "field_verso_text",  False, 2),
+        ("detected_content", "field_detected_content", False, 2),
+        ("detected_objects", "field_detected_objects", False, 2),
     ]
     # List fields: (key, label_key)
     LIST_FIELDS: list[tuple] = [
@@ -1867,6 +1871,13 @@ class App(tk.Tk):
         # section of postcards.conf if your remote credentials live under
         # a different RemoteSync section name.
         self.publish_section = section.get("publish_section", "sync_default")
+
+        # Torch device utilisé pour la recherche de similarité (voir
+        # [DEFAULT] torch_device dans postcards.conf, et "tktools
+        # devices" pour la liste des devices disponibles). Vide/absent
+        # => laisse PostcardSearcher choisir son propre défaut (cuda si
+        # disponible, sinon cpu).
+        self.torch_device = self.config_parser["DEFAULT"].get("torch_device", "").strip() or None
 
         self._t = setup_i18n()
 
@@ -2885,7 +2896,7 @@ class App(tk.Tk):
 
         def worker():
             try:
-                s = PostcardSearcher(datadir=self.datadir)
+                s = PostcardSearcher(datadir=self.datadir, device=self.torch_device)
                 s.load_index(str(index_path))
                 self.after(0, lambda: self._on_searcher_loaded(s))
             except Exception as e:

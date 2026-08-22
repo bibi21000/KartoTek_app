@@ -6,6 +6,7 @@ et fiche détaillée d'une carte postale.
 from __future__ import annotations
 
 import random
+from html import escape
 from pathlib import Path
 
 from flask import (
@@ -212,6 +213,7 @@ def api_recent_cards():
                 "verso": images["verso"],
                 "verso_small": images_small["verso"],
                 "cdate": card.get("cdate"),
+                "detected_content": card.get("detected_content"),
             }
         )
 
@@ -277,8 +279,12 @@ def sitemap():
 
     urls = []
 
-    def add(loc: str, lastmod: int | None = None, changefreq: str | None = None):
-        urls.append({"loc": loc, "lastmod": lastmod, "changefreq": changefreq})
+    def add(loc: str, lastmod: int | None = None, changefreq: str | None = None,
+            image_loc: str | None = None, image_caption: str | None = None):
+        urls.append({
+            "loc": loc, "lastmod": lastmod, "changefreq": changefreq,
+            "image_loc": image_loc, "image_caption": image_caption,
+        })
 
     all_cards = model.list_unique_cards(exclude_status="exchanged")
 
@@ -292,10 +298,24 @@ def sitemap():
     add(url_for("map.index", _external=True), lastmod=last_card_update, changefreq="weekly")
 
     for card in all_cards:
+        # Extension "image sitemap" (voir
+        # https://developers.google.com/search/docs/crawling-indexing/sitemaps/image-sitemaps) :
+        # le site étant essentiellement composé de scans de cartes
+        # postales, indiquer explicitement l'image de chaque fiche aide
+        # Google Images à découvrir et indexer le fonds, plutôt que de
+        # compter uniquement sur le crawl HTML classique. On ne référence
+        # que le recto (og:image), pas le verso.
+        recto_path = card_images(card["id"])["recto"]
+        image_loc = url_for("home.images", filename=recto_path, _external=True)
+        image_caption = (
+            card.get("title") or card.get("detected_content") or None
+        )
         add(
             url_for("home.card_detail", card_id=card["id"], _external=True),
             lastmod=card.get("mdate"),
             changefreq="monthly",
+            image_loc=image_loc,
+            image_caption=image_caption,
         )
 
     for travel in model.list_travels():
@@ -306,7 +326,10 @@ def sitemap():
         )
 
     xml_parts = ['<?xml version="1.0" encoding="UTF-8"?>']
-    xml_parts.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+    xml_parts.append(
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
+        ' xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">'
+    )
     for entry in urls:
         xml_parts.append("  <url>")
         xml_parts.append(f"    <loc>{entry['loc']}</loc>")
@@ -319,6 +342,14 @@ def sitemap():
             xml_parts.append(f"    <lastmod>{lastmod_str}</lastmod>")
         if entry["changefreq"]:
             xml_parts.append(f"    <changefreq>{entry['changefreq']}</changefreq>")
+        if entry["image_loc"]:
+            xml_parts.append("    <image:image>")
+            xml_parts.append(f"      <image:loc>{escape(entry['image_loc'])}</image:loc>")
+            if entry["image_caption"]:
+                xml_parts.append(
+                    f"      <image:caption>{escape(entry['image_caption'])}</image:caption>"
+                )
+            xml_parts.append("    </image:image>")
         xml_parts.append("  </url>")
     xml_parts.append("</urlset>")
 
@@ -339,7 +370,16 @@ def card_detail(card_id: str):
     images_small = card_images(card["id"], SIZE_SMALL)
 
     card_title = card.get("title") or gettext("Carte #%(id)s", id=card["id"])
-    og_description = card.get("description") or card.get("title2") or card_title
+    og_description = (
+        card.get("description")
+        or card.get("title2")
+        # Contenu détecté automatiquement (BLIP, voir tkpostcards.libs.detection)
+        # : à défaut de description/titre secondaire renseignés à la main,
+        # donne un texte unique et pertinent par carte plutôt que de
+        # retomber sur le titre générique "Carte #123".
+        or card.get("detected_content")
+        or card_title
+    )
 
     # Lien de retour contextuel (ex: vers la galerie, page/filtres conservés).
     # On n'accepte que des chemins locaux (commençant par '/' et pas '//'
@@ -361,6 +401,68 @@ def card_detail(card_id: str):
     dims = image_dimensions(current_app.config["DATADIR"], images["recto"])
     og_image_width, og_image_height = dims if dims else (None, None)
 
+    # Texte alternatif du recto, enrichi avec le contenu détecté
+    # automatiquement (BLIP, voir tkpostcards.libs.detection) quand il est
+    # disponible : un alt descriptif plutôt que générique aide à la fois
+    # l'accessibilité et le référencement (recherche d'images).
+    detected_content = card.get("detected_content")
+    if detected_content:
+        recto_alt = gettext(
+            "Recto de la carte %(id)s : %(content)s",
+            id=card["id"], content=detected_content,
+        )
+    else:
+        recto_alt = gettext("Recto de la carte %(id)s", id=card["id"])
+
+    # URL canonique sans le paramètre ?back= (état de navigation interne,
+    # pas une variation de contenu) : évite tout signal de contenu dupliqué
+    # entre les différentes façons d'arriver sur cette fiche.
+    canonical_url = url_for("home.card_detail", card_id=card["id"], _external=True)
+
+    # Données structurées schema.org (JSON-LD), pour les rich results
+    # Google (aperçu image, fil d'Ariane) - voir
+    # https://developers.google.com/search/docs/appearance/structured-data/image-license-metadata
+    # et .../breadcrumb.
+    from datetime import datetime, timezone
+
+    def _iso_date(ts):
+        return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d") if ts else None
+
+    structured_data = {
+        "@context": "https://schema.org",
+        "@type": "ImageObject",
+        "contentUrl": url_for("home.images", filename=images["recto"], _external=True),
+        "url": canonical_url,
+        "name": card_title,
+        "description": og_description,
+    }
+    if og_image_width and og_image_height:
+        structured_data["width"] = og_image_width
+        structured_data["height"] = og_image_height
+    upload_date = _iso_date(card.get("cdate"))
+    if upload_date:
+        structured_data["uploadDate"] = upload_date
+    modified_date = _iso_date(card.get("mdate"))
+    if modified_date:
+        structured_data["dateModified"] = modified_date
+
+    breadcrumb_data = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem", "position": 1,
+                "name": gettext("Accueil"),
+                "item": url_for("home.index", _external=True),
+            },
+            {
+                "@type": "ListItem", "position": 2,
+                "name": card_title,
+                "item": canonical_url,
+            },
+        ],
+    }
+
     return render_template(
         "card/detail.html",
         card=card,
@@ -368,10 +470,14 @@ def card_detail(card_id: str):
         images_small=images_small,
         back_url=back_url,
         back_label=back_label,
+        recto_alt=recto_alt,
+        canonical_url=canonical_url,
         og_title=card_title,
         og_description=og_description,
         og_image=url_for("home.images", filename=images["recto"], _external=True),
         og_image_width=og_image_width,
         og_image_height=og_image_height,
         og_type="article",
+        structured_data=structured_data,
+        breadcrumb_data=breadcrumb_data,
     )

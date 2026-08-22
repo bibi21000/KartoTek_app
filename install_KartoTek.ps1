@@ -138,7 +138,7 @@ $MsgFr = @{
     install_cancelled          = "Installation annulee par l'utilisateur."
     choose_variant             = "Quelle version installer ?"
     variant_light              = "Legere (ktmanager, ktimport)"
-    variant_full               = "Complete (+ ocr, similar, travel)"
+    variant_full               = "Complete (+ ocr, similar, travel, detection)"
     choose_prompt              = "Votre choix [1/2] : "
     creating_venv              = "Creation de l'environnement virtuel dans {0} ..."
     venv_exists                = "Un venv existe deja dans {0}, il sera reutilise."
@@ -161,7 +161,7 @@ $MsgFr = @{
     path_reminder              = "Remarque : {0} a ete ajoute a votre PATH utilisateur. Ouvrez une NOUVELLE fenetre PowerShell pour que ce changement soit pris en compte."
     done                       = "Installation terminee !"
     summary_light              = "Version installee : legere (ktmanager, ktimport)"
-    summary_full               = "Version installee : complete (ktmanager, ktimport, ocr, similar, travel)"
+    summary_full               = "Version installee : complete (ktmanager, ktimport, ocr, similar, travel, detection)"
     summary_langs              = "Langues Tesseract souhaitees : {0}"
     summary_launch             = "Vous pouvez lancer les outils avec : {0}"
     yes_no_hint                = "(o = oui / n = non)"
@@ -197,7 +197,7 @@ $MsgEn = @{
     install_cancelled          = "Installation cancelled by user."
     choose_variant             = "Which version do you want to install?"
     variant_light              = "Light (ktmanager, ktimport)"
-    variant_full               = "Full (+ ocr, similar, travel)"
+    variant_full               = "Full (+ ocr, similar, travel, detection)"
     choose_prompt              = "Your choice [1/2]: "
     creating_venv              = "Creating virtual environment in {0} ..."
     venv_exists                = "A venv already exists in {0}, it will be reused."
@@ -220,7 +220,7 @@ $MsgEn = @{
     path_reminder              = "Note: {0} was added to your user PATH. Open a NEW PowerShell window for this to take effect."
     done                       = "Installation complete!"
     summary_light              = "Installed version: light (ktmanager, ktimport)"
-    summary_full               = "Installed version: full (ktmanager, ktimport, ocr, similar, travel)"
+    summary_full               = "Installed version: full (ktmanager, ktimport, ocr, similar, travel, detection)"
     summary_langs              = "Requested Tesseract languages: {0}"
     summary_launch             = "You can launch the tools with: {0}"
     yes_no_hint                = "(y = yes / n = no)"
@@ -315,7 +315,7 @@ function Pip-InstallPkgFresh([string[]]$PyCmd, [string]$Spec) {
 }
 
 function Get-PipExtraForVariant([string]$Variant) {
-    if ($Variant -eq 'full') { return 'ktmanager,ktimport,ocr,similar,travel' }
+    if ($Variant -eq 'full') { return 'ktmanager,ktimport,ocr,similar,travel,detection' }
     return 'ktmanager,ktimport'
 }
 

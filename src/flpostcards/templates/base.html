@@ -11,11 +11,20 @@
     {% set og_title = og_title or _("Cartes postales") %}
     {% set og_description = og_description or _("Découvrez ma collection de cartes postales anciennes.") %}
     {% set og_type = og_type or "website" %}
+    {# canonical_url peut être surchargée par la vue (ex: fiche carte, pour
+       exclure le paramètre ?back= qui ne change pas le contenu) ; sinon on
+       retombe sur l'URL courante *sans* sa chaîne de requête (paramètres de
+       tracking, etc.) mais en conservant celle-ci pour les pages paginées,
+       gérées explicitement par leur vue via canonical_url. #}
+    {% set canonical_url = canonical_url or request.url %}
+
+    <meta name="description" content="{{ og_description }}">
+    <link rel="canonical" href="{{ canonical_url }}">
 
     <meta property="og:title" content="{{ og_title }}">
     <meta property="og:description" content="{{ og_description }}">
     <meta property="og:type" content="{{ og_type }}">
-    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:url" content="{{ canonical_url }}">
     {% if og_image %}
     <meta property="og:image" content="{{ og_image }}">
     <meta property="og:image:type" content="image/png">

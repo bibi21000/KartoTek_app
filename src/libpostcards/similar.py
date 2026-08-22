@@ -26,20 +26,34 @@ class PostcardSearcher:
         pretrained="laion2b_s32b_b82k",
         tqdm=list,
         datadir=None,
+        device=None,
     ):
 
         # torch n'est requis qu'à partir du moment où le modèle CLIP est
         # réellement chargé (_ensure_model) ou qu'un embedding est
         # manipulé (compute_embedding, embedding_similarity). Ici, on ne
-        # fait que déterminer le device par défaut : si torch n'est pas
-        # installé, on retombe sur "cpu" sans lever d'erreur — permet
-        # d'instancier PostcardSearcher() (ex : pour load_index() +
-        # search_hashes(), utilisé par flpostcards) sans torch installé.
-        try:
-            import torch
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        except ImportError:
-            self.device = "cpu"
+        # fait que déterminer le device à utiliser :
+        #
+        # - si ``device`` est fourni (ex : valeur de [DEFAULT]
+        #   torch_device dans postcards.conf, ou --torch-device en ligne
+        #   de commande), on l'utilise tel quel — c'est à l'appelant de
+        #   passer une valeur valide (voir "tktools devices" pour la
+        #   liste des devices disponibles) ;
+        # - sinon (``device`` non fourni ou vide, ex : torch_device non
+        #   défini/commenté dans postcards.conf), on retombe sur le
+        #   comportement historique : détection automatique (cuda si
+        #   disponible, sinon cpu). Si torch n'est pas installé, on
+        #   retombe sur "cpu" sans lever d'erreur — permet d'instancier
+        #   PostcardSearcher() (ex : pour load_index() + search_hashes(),
+        #   utilisé par flpostcards) sans torch installé.
+        if device:
+            self.device = device
+        else:
+            try:
+                import torch
+                self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            except ImportError:
+                self.device = "cpu"
 
         self._model_name = model_name
         self._pretrained = pretrained
@@ -825,4 +839,3 @@ class PostcardSearcher:
                 })
 
         return errors
-

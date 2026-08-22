@@ -115,6 +115,7 @@ def index():
                 "title2": card.get("title2"),
                 "recto": images["recto"],
                 "verso": images["verso"],
+                "detected_content": card.get("detected_content"),
             }
         )
 

@@ -4,6 +4,13 @@
 
 {% block title %}{{ card_title }} - {{ _("Cartes postales") }}{% endblock %}
 
+{% block head %}
+{# Données structurées schema.org : aident Google à comprendre le
+   contenu de la page (image + fil d'Ariane) en vue de rich results. #}
+<script type="application/ld+json">{{ structured_data | tojson }}</script>
+<script type="application/ld+json">{{ breadcrumb_data | tojson }}</script>
+{% endblock %}
+
 {% block content %}
 <div class="card-detail">
     {% if back_url %}
@@ -16,7 +23,7 @@
         <img id="img-recto"
              class="face-image"
              src="{{ url_for('home.images', filename=images.recto) }}"
-             alt="{{ _("Recto de la carte %(id)s", id=card.id) }}">
+             alt="{{ recto_alt }}">
         {% if config.POSTCARDS_VERSO %}
         <img id="img-verso"
              class="face-image hidden-face"
@@ -75,7 +82,8 @@
         </div>
         {% endif %}
 
-        {% set canonical_url = url_for('home.card_detail', card_id=card.id, _external=True) %}
+        {# canonical_url est désormais calculée côté vue (home.card_detail)
+           et passée directement au template, sans ?back=. #}
         {% set share_url = canonical_url | urlencode %}
         {% set share_text = card_title | urlencode %}
         {% set share_text_with_url = (card_title ~ " " ~ canonical_url) | urlencode %}

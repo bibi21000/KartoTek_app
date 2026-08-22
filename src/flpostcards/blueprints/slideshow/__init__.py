@@ -88,6 +88,7 @@ def api_slideshow_cards():
                 "verso": images["verso"],
                 "verso_small": images_small["verso"],
                 "cdate": card.get("cdate"),
+                "detected_content": card.get("detected_content"),
             }
         )
 
