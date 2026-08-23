@@ -822,7 +822,7 @@ msgstr "Помилка збереження {path}: {err}"
 
 #: src/tkpostcards/tkmanager.py:3010 src/tkpostcards/tkmanager.py:3128
 msgid "search_title"
-msgstr "Пошук"
+msgstr "Пошук схожих листівок"
 
 #: src/tkpostcards/tkmanager.py:3027 src/tkpostcards/tkmanager.py:3150
 #: src/tkpostcards/tkmanager.py:3502 src/tkpostcards/tkmanager.py:3591
@@ -855,7 +855,10 @@ msgstr "Макс. результатів"
 
 #: src/tkpostcards/tkmanager.py:3089 src/tkpostcards/tkmanager.py:3191
 msgid "search_btn"
-msgstr "Почати"
+msgstr "За URL-адресою"
+
+msgid "search_btn_clipboard"
+msgstr "З буфера обміну"
 
 #: src/tkpostcards/tkmanager.py:3095 src/tkpostcards/tkmanager.py:3549
 #: src/tkpostcards/tkmanager.py:4823
@@ -920,6 +923,14 @@ msgstr "Цікаві місця"
 msgid "poi_list_label"
 msgstr "Цікаві місця"
 
+#: src/tkpostcards/tkmanager.py:4102
+msgid "poi_filter_placeholder"
+msgstr "Фільтр (id або опис)…"
+
+#: src/tkpostcards/tkmanager.py:4229
+msgid "poi_count_filtered"
+msgstr "{n} / {total} точок інтересу"
+
 #: src/tkpostcards/tkmanager.py:3912
 msgid "poi_new"
 msgstr "Новий"
@@ -955,6 +966,23 @@ msgstr "POI {id} збережено"
 #: src/tkpostcards/tkmanager.py:4065
 msgid "poi_delete_confirm"
 msgstr "Підтвердіть видалення {id}"
+
+#: src/tkpostcards/tkmanager.py:4154
+msgid "poi_rename"
+msgstr "Перейменувати"
+
+#: src/tkpostcards/tkmanager.py:4303
+msgid "poi_rename_title"
+msgstr "Перейменувати POI"
+
+#: src/tkpostcards/tkmanager.py:4310
+msgid "poi_rename_hint"
+msgstr "Новий ідентифікатор для «{id}».\n"
+"Листівки, що посилаються на цей POI, будуть оновлені."
+
+#: src/tkpostcards/tkmanager.py:4285
+msgid "poi_renamed"
+msgstr "POI {old} перейменовано на {new} ({n} листівок(и) оновлено)"
 
 #: src/tkpostcards/tkmanager.py:4101
 msgid "travel_title"

@@ -13,6 +13,7 @@ import re
 import sys
 import textwrap
 import threading
+import unicodedata
 import webbrowser
 from datetime import date, datetime
 from pathlib import Path
@@ -229,6 +230,14 @@ def parse_date(raw: str) -> date | None:
         except ValueError:
             pass
     return None
+
+
+def _fold(text: str | None) -> str:
+    """Lowercase *text* and strip accents, for accent-insensitive filtering."""
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch)).lower()
 
 
 def context_menu(widget: tk.Widget):
@@ -3103,7 +3112,9 @@ class SearchView(tk.Toplevel):
 
     Top area : URL / threshold / max_results form + Search button
     Bottom area : Canvas results grid with percentage badges.
-                  Clicking a thumbnail opens an ImageViewer (full-size recto).
+                  Clicking the id/title header opens the postcard in the
+                  main window; clicking elsewhere on a tile opens an
+                  ImageViewer (full-size recto/verso).
     """
 
     # Result thumbnail dimensions
@@ -3119,6 +3130,7 @@ class SearchView(tk.Toplevel):
         self._t      = t
         self._tkimg: dict[tuple, "ImageTk.PhotoImage"] = {}
         self._hits: list[tuple] = []
+        self._header_hits: list[tuple] = []
         self._results: list[dict] = []
         self._searcher: "PostcardSearcher | None" = None
         self._last_cv_w = 0
@@ -3156,9 +3168,11 @@ class SearchView(tk.Toplevel):
         if not SEARCHER_AVAILABLE:
             self._status.set(_("search_unavailable"))
             self._btn_search.config(state=tk.DISABLED)
+            self._btn_clipboard.config(state=tk.DISABLED)
             return
         self._status.set(_("search_index_loading"))
         self._btn_search.config(state=tk.DISABLED)
+        self._btn_clipboard.config(state=tk.DISABLED)
         self._app.load_searcher_async(
             on_ready=self._on_index_loaded,
             on_error=self._on_index_error,
@@ -3170,6 +3184,7 @@ class SearchView(tk.Toplevel):
         self._searcher = searcher
         self._status.set(_("search_index_ready"))
         self._btn_search.config(state=tk.NORMAL)
+        self._btn_clipboard.config(state=tk.NORMAL)
 
     def _on_index_error(self, err: Exception):
         if not self.winfo_exists():
@@ -3222,6 +3237,17 @@ class SearchView(tk.Toplevel):
                                      relief=tk.FLAT, padx=14, pady=3, cursor="hand2")
         self._btn_search.pack(side=tk.LEFT, padx=(0, 8))
 
+        # Recherche depuis une image copiée dans le presse-papiers (voir
+        # PostcardSearcher.search_clipboard) : même principe que la
+        # recherche par URL, mais sans passer par un fichier/lien externe
+        # -- pratique pour une capture d'écran ou une image copiée
+        # depuis un site tiers.
+        self._btn_clipboard = tk.Button(row2, text=_("search_btn_clipboard"),
+                                        command=self._run_search_clipboard,
+                                        bg=FG_ACCENT, fg="#fff", font=FONT_NAV,
+                                        relief=tk.FLAT, padx=14, pady=3, cursor="hand2")
+        self._btn_clipboard.pack(side=tk.LEFT, padx=(0, 8))
+
         self._btn_clear = tk.Button(row2, text=_("search_clear"),
                                     command=self._clear_results,
                                     bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
@@ -3259,6 +3285,33 @@ class SearchView(tk.Toplevel):
                                    _("search_no_url"), parent=self)
             return
 
+        threshold, max_results = self._read_search_params()
+        if threshold is None:
+            return
+
+        self._execute_search(
+            self._btn_search,
+            lambda searcher, on_progress: searcher.search_url(
+                image_url=url, threshold=threshold, max_results=max_results,
+            ),
+        )
+
+    def _run_search_clipboard(self):
+        threshold, max_results = self._read_search_params()
+        if threshold is None:
+            return
+
+        self._execute_search(
+            self._btn_clipboard,
+            lambda searcher, on_progress: searcher.search_clipboard(
+                threshold=threshold, max_results=max_results,
+            ),
+        )
+
+    def _read_search_params(self):
+        """Valide et persiste threshold/max_results ; renvoie (None, None)
+        en cas d'erreur (message déjà affiché à l'utilisateur), ou
+        (threshold [0-1], max_results) sinon."""
         try:
             threshold_pct = float(self._thr_var.get())
             max_results   = int(self._max_var.get())
@@ -3268,20 +3321,35 @@ class SearchView(tk.Toplevel):
         except ValueError:
             messagebox.showerror(_("error_title"),
                                  _("search_param_error"), parent=self)
-            return
+            return None, None
 
         # Persist parameters
         self._app.save_search_conf("tkmanager",
                                    search_threshold=int(threshold_pct),
                                    search_max_results=max_results)
+        return threshold, max_results
 
+    def _execute_search(self, button: tk.Button, search_fn):
+        """Lance ``search_fn(searcher, on_progress)`` dans un thread, en
+        gérant l'état des boutons/statut et l'affichage des résultats --
+        factorisé entre la recherche par URL (_run_search) et depuis le
+        presse-papiers (_run_search_clipboard), qui ne diffèrent que par
+        la méthode de PostcardSearcher appelée."""
         if not SEARCHER_AVAILABLE or self._searcher is None:
             messagebox.showerror(_("error_title"),
                                  _("search_unavailable") if not SEARCHER_AVAILABLE
                                  else _("search_index_not_ready"), parent=self)
             return
 
-        self._btn_search.config(state=tk.DISABLED, text=_("search_running"))
+        # Désactive les deux boutons (URL + presse-papiers) le temps de la
+        # recherche : lancer les deux en même temps n'aurait pas de sens
+        # (un seul _searcher, un seul jeu de résultats affiché). Seul le
+        # bouton effectivement cliqué change de texte, pour indiquer
+        # clairement quelle recherche est en cours.
+        button.config(state=tk.DISABLED, text=_("search_running"))
+        for other in (self._btn_search, self._btn_clipboard):
+            if other is not button:
+                other.config(state=tk.DISABLED)
         self._status.set(_("search_running"))
         self._results = []
         self._draw()
@@ -3295,11 +3363,7 @@ class SearchView(tk.Toplevel):
             original_tqdm = self._searcher.tqdm
             self._searcher.tqdm = _ProgressIter(on_progress)
             try:
-                results = self._searcher.search_url(
-                    image_url=url,
-                    threshold=threshold,
-                    max_results=max_results,
-                )
+                results = search_fn(self._searcher, on_progress)
             except Exception as e:
                 results = []
                 if self.winfo_exists():
@@ -3319,6 +3383,7 @@ class SearchView(tk.Toplevel):
         n = len(results)
         self._status.set(_("search_done").format(n=n))
         self._btn_search.config(state=tk.NORMAL, text=_("search_btn"))
+        self._btn_clipboard.config(state=tk.NORMAL, text=_("search_btn_clipboard"))
         self._tkimg.clear()
         self._draw()
 
@@ -3331,6 +3396,7 @@ class SearchView(tk.Toplevel):
         self._status.set("")
         self._cv.delete("all")
         self._hits = []
+        self._header_hits = []
 
     # ── Canvas drawing ────────────────────────────────────────────────────────
     def _on_cv_configure(self, event):
@@ -3364,6 +3430,7 @@ class SearchView(tk.Toplevel):
 
         self._cv.delete("all")
         self._hits = []
+        self._header_hits = []
 
         if not self._results:
             self._cv.create_text(cv_w // 2, 60,
@@ -3397,7 +3464,9 @@ class SearchView(tk.Toplevel):
             self._cv.create_rectangle(x0, y0, x1, y1,
                                       fill=BG_CARD, outline=border, width=2)
 
-            # Header: id + title
+            # Header: id + title (clickable → opens the postcard in the
+            # main window, unlike the rest of the tile which opens the
+            # lightweight ImageViewer)
             self._cv.create_rectangle(x0, y0, x1, y0 + self.HDR_H,
                                       fill=BG_FIELD, outline="")
             title = self._card_title(cid) if cid is not None else ""
@@ -3405,7 +3474,9 @@ class SearchView(tk.Toplevel):
             hdr = id_str + (f"  {title[:26]}" if title else "")
             self._cv.create_text(x0 + 5, y0 + self.HDR_H // 2,
                                  text=hdr, anchor=tk.W,
-                                 fill=FG_ACCENT2, font=("Courier", 8, "bold"))
+                                 fill=FG_ACCENT2, font=("Courier", 8, "bold underline"))
+            if cid is not None:
+                self._header_hits.append((x0, y0, x1, y0 + self.HDR_H, cid))
 
             # Score badge
             by0 = y0 + self.HDR_H
@@ -3504,14 +3575,37 @@ class SearchView(tk.Toplevel):
             pass
         self.after(30, self._poll_img_queue)
 
-    # ── Click → ImageViewer ───────────────────────────────────────────────────
+    # ── Click → ImageViewer / main window ────────────────────────────────────
     def _on_click(self, event):
         cy = self._cv.canvasy(event.y)
         cx = self._cv.canvasx(event.x)
+
+        # Header (id + title) → open the postcard in the main window
+        for (x0, y0, x1, y1, cid) in self._header_hits:
+            if x0 <= cx <= x1 and y0 <= cy <= y1:
+                self._open_in_main(cid)
+                return
+
+        # Rest of the tile → lightweight ImageViewer
         for (x0, y0, x1, y1, cid, path) in self._hits:
             if x0 <= cx <= x1 and y0 <= cy <= y1:
                 self._open_viewer(cid, path)
                 return
+
+    def _open_in_main(self, cid: int | None):
+        """Ouvre la carte postale ``cid`` dans la fenêtre principale."""
+        if cid is None:
+            return
+        if cid not in self._app._ids:
+            messagebox.showwarning(_("info_title"),
+                                   _("goto_not_found").format(id=cid), parent=self)
+            return
+        if not self._app._ask_save_if_dirty():
+            return
+        self._app._load_card(self._app._ids.index(cid))
+        self._app.deiconify()
+        self._app.lift()
+        self._app.focus_force()
 
     def _open_viewer(self, cid: int | None, path: "Path | None"):
         if path is None:
@@ -4008,6 +4102,7 @@ class PoiManagerView(tk.Toplevel):
         self.resizable(True, True)
 
         self._pois: list[dict] = []
+        self._visible_pois: list[dict] = []
         self._selected_id: str | None = None
         self._coord: list | None = None
         self._is_new = False
@@ -4026,6 +4121,26 @@ class PoiManagerView(tk.Toplevel):
 
         tk.Label(left, text=_("poi_list_label"), bg=BG_CARD, fg=FG_ACCENT,
                  font=FONT_TITLE).pack(anchor=tk.W, padx=8, pady=(8, 4))
+
+        # Filter box (id or description)
+        filt_frm = tk.Frame(left, bg=BG_CARD)
+        filt_frm.pack(fill=tk.X, padx=8, pady=(0, 6))
+        self._filter_var = tk.StringVar()
+        self._filter_entry = tk.Entry(
+            filt_frm, textvariable=self._filter_var,
+            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+            font=FONT_INPUT, relief=tk.FLAT)
+        self._filter_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=2)
+        self._filter_entry.insert(0, _("poi_filter_placeholder"))
+        self._filter_entry.config(fg=FG_LABEL)
+        self._filter_entry.bind("<FocusIn>", self._filter_focus_in)
+        self._filter_entry.bind("<FocusOut>", self._filter_focus_out)
+        self._filter_entry.bind("<KeyRelease>", self._apply_filter)
+        context_menu(self._filter_entry)
+        tk.Button(filt_frm, text="✕", command=self._clear_filter,
+                  bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=6, cursor="hand2").pack(
+            side=tk.LEFT, padx=(4, 0))
 
         lb_frm = tk.Frame(left, bg=BG_CARD)
         lb_frm.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
@@ -4097,6 +4212,11 @@ class PoiManagerView(tk.Toplevel):
                   bg=FG_ACCENT, fg="#fff", font=FONT_LABEL,
                   relief=tk.FLAT, padx=10, cursor="hand2").pack(
             side=tk.LEFT, padx=(0, 6))
+        self._btn_rename = tk.Button(
+            actions, text=_("poi_rename"), command=self._rename,
+            bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
+            relief=tk.FLAT, padx=10, cursor="hand2", state=tk.DISABLED)
+        self._btn_rename.pack(side=tk.LEFT, padx=(0, 6))
         tk.Button(actions, text=_("poi_delete"), command=self._delete,
                   bg="#5a1a1a", fg=FG_TEXT, font=FONT_LABEL,
                   relief=tk.FLAT, padx=10, cursor="hand2").pack(side=tk.LEFT)
@@ -4112,20 +4232,60 @@ class PoiManagerView(tk.Toplevel):
         except Exception as e:
             self._status.set(str(e))
             self._pois = []
+        self._apply_filter()
+
+    def _current_filter_text(self) -> str:
+        """Return the filter text, or '' if only the placeholder is shown."""
+        if self._filter_var.get() == _("poi_filter_placeholder"):
+            return ""
+        return self._filter_var.get().strip()
+
+    def _apply_filter(self, _event=None):
+        query = _fold(self._current_filter_text())
+        if query:
+            self._visible_pois = [
+                p for p in self._pois
+                if query in _fold(p["id"]) or query in _fold(p.get("description"))
+            ]
+        else:
+            self._visible_pois = list(self._pois)
 
         self._lb.delete(0, tk.END)
-        for poi in self._pois:
+        for poi in self._visible_pois:
             desc = (poi.get("description") or "").strip()
             label = poi["id"] if not desc else f"{poi['id']}  —  {desc[:40]}"
             self._lb.insert(tk.END, label)
 
-        self._status.set(_("poi_count").format(n=len(self._pois)))
+        if query:
+            self._status.set(
+                _("poi_count_filtered").format(n=len(self._visible_pois), total=len(self._pois)))
+        else:
+            self._status.set(_("poi_count").format(n=len(self._pois)))
+
+        if self._selected_id:
+            self._select_in_list(self._selected_id)
+
+    def _filter_focus_in(self, _event=None):
+        if self._filter_var.get() == _("poi_filter_placeholder"):
+            self._filter_entry.delete(0, tk.END)
+            self._filter_entry.config(fg=FG_TEXT)
+
+    def _filter_focus_out(self, _event=None):
+        if not self._filter_var.get().strip():
+            self._filter_entry.insert(0, _("poi_filter_placeholder"))
+            self._filter_entry.config(fg=FG_LABEL)
+
+    def _clear_filter(self):
+        self._filter_entry.delete(0, tk.END)
+        self._filter_entry.config(fg=FG_TEXT)
+        self._apply_filter()
+        self._filter_entry.focus_set()
 
     def _on_select(self, _event=None):
         sel = self._lb.curselection()
         if not sel:
             return
-        poi = self._pois[sel[0]]
+        poi = self._visible_pois[sel[0]]
         self._load_poi(poi)
 
     def _load_poi(self, poi: dict):
@@ -4137,6 +4297,7 @@ class PoiManagerView(tk.Toplevel):
         self._desc_txt.insert("1.0", poi.get("description") or "")
         self._coord = poi.get("coord")
         self._refresh_coord()
+        self._btn_rename.config(state=tk.NORMAL)
 
     def _new(self):
         self._is_new = True
@@ -4148,6 +4309,7 @@ class PoiManagerView(tk.Toplevel):
         self._coord = None
         self._refresh_coord()
         self._id_entry.focus_set()
+        self._btn_rename.config(state=tk.DISABLED)
 
     def _refresh_coord(self):
         if self._coord and len(self._coord) >= 2:
@@ -4203,13 +4365,87 @@ class PoiManagerView(tk.Toplevel):
         self._new()
         self._reload()
 
+    def _rename(self):
+        if not self._selected_id:
+            return
+        old_id = self._selected_id
+
+        def on_confirm(new_id: str):
+            if new_id == old_id:
+                return
+            try:
+                n = self._app.model.rename_poi(old_id, new_id)
+            except ValueError as e:
+                messagebox.showerror(_("error_title"), str(e), parent=self)
+                return
+            self._reload()
+            self._select_in_list(new_id)
+            for poi in self._pois:
+                if poi["id"] == new_id:
+                    self._load_poi(poi)
+                    break
+            self._status.set(_("poi_renamed").format(old=old_id, new=new_id, n=n))
+
+        RenamePoiDialog(self, old_id, on_confirm, self._t)
+
     def _select_in_list(self, poi_id: str):
-        for i, poi in enumerate(self._pois):
+        for i, poi in enumerate(self._visible_pois):
             if poi["id"] == poi_id:
                 self._lb.selection_clear(0, tk.END)
                 self._lb.selection_set(i)
                 self._lb.see(i)
                 return
+
+
+class RenamePoiDialog(tk.Toplevel):
+    """Petite boîte de dialogue pour saisir le nouvel id d'un POI."""
+
+    def __init__(self, parent, old_id: str, on_confirm, t):
+        super().__init__(parent)
+        self.title(_("poi_rename_title"))
+        self.configure(bg=BG_MAIN)
+        self._on_confirm = on_confirm
+        self._t = t
+
+        pad = dict(padx=14, pady=7)
+
+        tk.Label(self, text=_("poi_rename_hint").format(id=old_id), bg=BG_MAIN,
+                 fg=FG_LABEL, font=FONT_LABEL, wraplength=320,
+                 justify=tk.LEFT).grid(row=0, column=0, padx=14, pady=(14, 6))
+
+        self._new_id_var = tk.StringVar(value=old_id)
+        e = tk.Entry(self, textvariable=self._new_id_var, width=32,
+                     bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                     font=FONT_INPUT, relief=tk.FLAT)
+        e.grid(row=1, column=0, **pad)
+        context_menu(e)
+        e.focus_set()
+        e.select_range(0, tk.END)
+        e.bind("<Return>", lambda _e: self._confirm())
+        e.bind("<Escape>", lambda _e: self.destroy())
+
+        btns = tk.Frame(self, bg=BG_MAIN)
+        btns.grid(row=2, column=0, pady=10)
+        tk.Button(btns, text=_("btn_save_close"), command=self._confirm,
+                  bg=FG_ACCENT, fg="#fff", font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10, cursor="hand2").pack(side=tk.LEFT, padx=5)
+        tk.Button(btns, text=_("btn_cancel"), command=self.destroy,
+                  bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10, cursor="hand2").pack(side=tk.LEFT, padx=5)
+
+        self.resizable(False, False)
+        self.update_idletasks()
+        self.minsize(self.winfo_reqwidth(), self.winfo_reqheight())
+        self.transient(parent)
+        self.grab_set()
+
+    def _confirm(self):
+        new_id = self._new_id_var.get().strip()
+        if not new_id:
+            messagebox.showwarning(_("info_title"), _("poi_id_required"), parent=self)
+            return
+        self.destroy()
+        self._on_confirm(new_id)
 
 
 

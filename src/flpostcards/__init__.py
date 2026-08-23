@@ -9,7 +9,7 @@ import logging
 import time
 from pathlib import Path
 
-from flask import Flask, g, request
+from flask import Flask, g, render_template, request
 from flask_babel import Babel
 from markupsafe import Markup
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -515,5 +515,46 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
             from flpostcards import metrics
             metrics.record(request.endpoint, response.status_code, time.perf_counter() - start)
         return response
+
+    # Pages d'erreur (404, 500) : sans gestionnaire personnalisé, Flask
+    # retombe sur sa page d'erreur Werkzeug par défaut, qui ne passe pas
+    # par base.html -- ni <meta name="description">, ni navigation, ni
+    # thème. Un audit SEO (Bing, etc.) qui tombe sur un lien cassé (id de
+    # carte inexistant, ancienne URL...) la crawle donc comme une page à
+    # part entière et signale l'absence de balise description dessus.
+    @app.errorhandler(404)
+    def _handle_404(error):
+        from flask_babel import gettext
+
+        return render_template(
+            "errors/error.html",
+            status_code=404,
+            heading=gettext("Page introuvable"),
+            message=gettext(
+                "Cette page n'existe pas ou plus. Elle a peut-être été "
+                "déplacée, ou le lien que vous avez suivi est incorrect."
+            ),
+            page_title=gettext("Page introuvable"),
+            og_description=gettext(
+                "La page demandée n'existe pas ou plus sur ce site de "
+                "cartes postales."
+            ),
+        ), 404
+
+    @app.errorhandler(500)
+    def _handle_500(error):
+        from flask_babel import gettext
+
+        return render_template(
+            "errors/error.html",
+            status_code=500,
+            heading=gettext("Erreur inattendue"),
+            message=gettext(
+                "Une erreur inattendue est survenue. Merci de réessayer "
+                "dans un instant."
+            ),
+            page_title=gettext("Erreur"),
+            og_description=gettext("Une erreur inattendue est survenue."),
+        ), 500
 
     return app

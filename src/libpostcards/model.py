@@ -1653,6 +1653,79 @@ class Model:
 
         return existed
 
+    def rename_poi(self, old_id: str, new_id: str) -> int:
+        """Renomme un POI et met à jour les cartes qui le référencent.
+
+        Le POI ``new_id`` est créé avec la même description et les mêmes
+        coordonnées que ``old_id``, qui est ensuite supprimé. Chaque carte
+        dont le champ ``poi`` contient ``old_id`` est réécrite (JSON +
+        base) pour référencer ``new_id`` à la place, via ``write_json``
+        (ce qui garde le fichier ``cards/<id>.json`` et la table
+        ``cards`` synchronisés, comme pour toute autre modification).
+
+        Lève ``ValueError`` si ``new_id`` est vide, si ``old_id`` n'existe
+        pas, ou si un POI ``new_id`` distinct existe déjà (pas de fusion
+        implicite : il faut d'abord supprimer/renommer la cible).
+
+        Retourne le nombre de cartes mises à jour.
+        """
+        old_id = str(old_id).strip()
+        new_id = str(new_id).strip()
+
+        if not new_id:
+            raise ValueError("L'identifiant du POI ne peut pas être vide.")
+        if new_id == old_id:
+            return 0
+
+        old_poi = self.get_poi(old_id)
+        if old_poi is None:
+            raise ValueError(f"POI introuvable : {old_id}")
+        if self.get_poi(new_id) is not None:
+            raise ValueError(f"Un POI avec l'identifiant « {new_id} » existe déjà.")
+
+        # Crée le POI sous le nouvel id (mêmes attributs), supprime l'ancien
+        self.write_poi({
+            "id": new_id,
+            "description": old_poi.get("description"),
+            "coord": old_poi.get("coord"),
+        })
+        self.delete_poi(old_id)
+
+        # Met à jour toutes les cartes postales référençant l'ancien id.
+        # Pré-filtrage SQL (LIKE) puis vérification exacte en Python, car
+        # ``poi`` est une liste JSON sérialisée (pas de colonne dédiée).
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT id, poi FROM cards WHERE poi LIKE ?",
+            (f'%"{old_id}"%',),
+        )
+        candidate_ids = [row["id"] for row in cur.fetchall()]
+
+        updated = 0
+        for card_id in candidate_ids:
+            card = self.load_json(card_id)
+            poi_list = [str(p) for p in (card.get("poi") or [])]
+            if old_id not in poi_list:
+                continue
+
+            new_list = []
+            seen = set()
+            for p in poi_list:
+                p = new_id if p == old_id else p
+                if p not in seen:
+                    seen.add(p)
+                    new_list.append(p)
+
+            card["poi"] = new_list
+            self.write_json(card)
+            updated += 1
+
+        logger.info(
+            "POI renommé : %s -> %s (%d carte(s) mise(s) à jour)",
+            old_id, new_id, updated,
+        )
+        return updated
+
     def sync_pois(self) -> int:
         """Synchronise pois.json → SQLite.
 

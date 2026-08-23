@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="privacy-page">
+  <header class="privacy-header">
+    <h1 class="page-title">{{ heading }}</h1>
+  </header>
+
+  <p>{{ message }}</p>
+
+  <p>
+    <a href="{{ url_for('home.index') }}">{{ _("Retour à l'accueil") }}</a>
+  </p>
+</div>
+{% endblock %}

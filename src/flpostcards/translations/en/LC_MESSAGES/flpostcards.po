@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-22 15:48+0200\n"
+"POT-Creation-Date: 2026-08-23 20:00+0200\n"
 "PO-Revision-Date: 2026-06-14 12:15+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -21,6 +21,38 @@ msgstr ""
 #: src/flpostcards/__init__.py:437
 msgid "Afficher l'adresse email"
 msgstr ""
+
+#: src/flpostcards/__init__.py:532 src/flpostcards/__init__.py:537
+msgid "Page introuvable"
+msgstr "Page not found"
+
+#: src/flpostcards/__init__.py:534
+msgid ""
+"Cette page n'existe pas ou plus. Elle a peut-être été déplacée, ou le "
+"lien que vous avez suivi est incorrect."
+msgstr ""
+"This page doesn't exist (anymore). It may have moved, or the link you "
+"followed may be incorrect."
+
+#: src/flpostcards/__init__.py:539
+msgid "La page demandée n'existe pas ou plus sur ce site de cartes postales."
+msgstr "The requested page doesn't exist (anymore) on this postcard site."
+
+#: src/flpostcards/__init__.py:551
+msgid "Erreur inattendue"
+msgstr "Unexpected error"
+
+#: src/flpostcards/__init__.py:553
+msgid "Une erreur inattendue est survenue. Merci de réessayer dans un instant."
+msgstr "An unexpected error occurred. Please try again in a moment."
+
+#: src/flpostcards/__init__.py:556
+msgid "Erreur"
+msgstr "Error"
+
+#: src/flpostcards/__init__.py:557
+msgid "Une erreur inattendue est survenue."
+msgstr "An unexpected error occurred."
 
 #: src/flpostcards/blueprints/contact/__init__.py:49
 msgid "Nouveau message depuis le site"
@@ -335,6 +367,10 @@ msgstr "Send"
 #: src/flpostcards/templates/contact/index.html:50
 msgid "Site propulsé et hébergé par"
 msgstr "Site powered and hosted by"
+
+#: src/flpostcards/templates/errors/error.html:14
+msgid "Retour à l'accueil"
+msgstr "Back to home"
 
 #: src/flpostcards/templates/gallery/index.html:12
 #, python-format

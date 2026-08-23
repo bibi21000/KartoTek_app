@@ -693,6 +693,7 @@ def bounds():
     if not count:
         return jsonify({"count": 0, "bounds": None})
 
+    config = current_app.config
     return jsonify({
         "count": count,
         "bounds": {

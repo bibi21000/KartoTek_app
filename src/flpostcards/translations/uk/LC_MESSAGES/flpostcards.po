@@ -716,6 +716,49 @@ msgstr "Оновлено %(date)s"
 msgid "Aucun parcours disponible."
 msgstr "Немає доступних подорожей."
 
+#: src/flpostcards/__init__.py:532
+#: src/flpostcards/__init__.py:537
+msgid "Page introuvable"
+msgstr "Сторінку не знайдено"
+
+#: src/flpostcards/__init__.py:533
+msgid ""
+"Cette page n'existe pas ou plus. Elle a peut-être été déplacée, ou le"
+" lien que vous avez suivi est incorrect."
+msgstr ""
+"Ця сторінка більше не існує. Можливо, вона була переміщена, або"
+" посилання, яким ви скористалися, є неправильним."
+
+#: src/flpostcards/__init__.py:538
+msgid ""
+"La page demandée n'existe pas ou plus sur ce site de cartes postales."
+msgstr ""
+"Запитувана сторінка більше не існує на цьому сайті листівок."
+
+#: src/flpostcards/__init__.py:551
+msgid "Erreur inattendue"
+msgstr "Неочікувана помилка"
+
+#: src/flpostcards/__init__.py:552
+msgid ""
+"Une erreur inattendue est survenue. Merci de réessayer dans un"
+" instant."
+msgstr ""
+"Сталася неочікувана помилка. Спробуйте, будь ласка, ще раз за"
+" хвилину."
+
+#: src/flpostcards/__init__.py:556
+msgid "Erreur"
+msgstr "Помилка"
+
+#: src/flpostcards/__init__.py:557
+msgid "Une erreur inattendue est survenue."
+msgstr "Сталася неочікувана помилка."
+
+#: src/flpostcards/templates/errors/error.html:14
+msgid "Retour à l'accueil"
+msgstr "На головну"
+
 #~ msgid "Position GPS de votre téléphone"
 #~ msgstr "GPS-положення вашого телефону"
 
