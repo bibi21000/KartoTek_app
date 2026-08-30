@@ -112,12 +112,26 @@ def cards_json():
             continue
 
         images = card_images(card["id"], SIZE_SMALL)
+        # Texte alternatif du recto : les informations disponibles
+        # (titre, titre secondaire, description, contenu détecté
+        # automatiquement par BLIP), une par ligne, sans libellé ni
+        # mention "Recto de la carte x" (voir card_detail() dans
+        # blueprints/home pour la même logique sur la fiche carte).
+        recto_alt_parts = [
+            part for part in (
+                card.get("title"),
+                card.get("title2"),
+                card.get("description"),
+                card.get("detected_content"),
+            ) if part
+        ]
         items.append(
             {
                 "id": card["id"],
                 "title": card.get("title"),
                 "coord": coord,
                 "recto": images["recto"],
+                "recto_alt": "\n".join(recto_alt_parts),
             }
         )
 
@@ -134,9 +148,9 @@ def pois_json():
     retournés (certains POIs référencés par des cartes peuvent encore
     être des squelettes sans coordonnées).
     """
-    model = current_app.model
+    from flpostcards import data_cache
 
-    pois = model.list_pois()
+    pois = data_cache.list_pois_cached()
 
     items = []
     for poi in pois:

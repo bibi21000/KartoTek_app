@@ -139,7 +139,8 @@ CREATE TABLE IF NOT EXISTS travels (
     end_lon     REAL,
     count       INTEGER,
     cards       TEXT,       -- JSON array sérialisé [{id, title}, ...]
-    mdate       INTEGER     -- timestamp UNIX de dernière modification de "cards"
+    mdate       INTEGER,    -- timestamp UNIX de dernière modification de "cards"
+    position    INTEGER NOT NULL DEFAULT 0  -- ordre d'affichage, voir travels.json
 );
 """
 
@@ -284,6 +285,7 @@ def _travel_to_row(travel: dict) -> dict:
         "count": travel.get("count"),
         "cards": json.dumps(travel.get("cards") or [], ensure_ascii=False),
         "mdate": travel.get("mdate"),
+        "position": travel.get("position") or 0,
     }
 
 
@@ -295,6 +297,41 @@ def _row_to_travel(row: sqlite3.Row) -> dict:
     raw_cards = d.get("cards")
     d["cards"] = json.loads(raw_cards) if raw_cards else []
     return d
+
+
+def _backfill_travel_positions(travels: dict) -> bool:
+    """
+    S'assure que chaque entrée de ``travels`` (dict ``travel_id ->
+    {...}``, format travels.json) a un champ ``position`` numérique.
+
+    Les entrées qui n'en ont pas encore (travels.json antérieur à
+    l'introduction de ce champ) reçoivent une position stable, à la
+    suite des positions déjà attribuées explicitement -- départagées
+    entre elles par id (ordre alphabétique, celui qu'affichait
+    tkmanager avant les boutons +/-), pas une position recalculée
+    séparément à chaque entrée au fil de l'eau : c'est justement ce
+    qui causait des sauts d'ordre incohérents en éditant un trajet
+    sans toucher à son rang (voir read_travels_json/write_travel_json).
+
+    Modifie ``travels`` EN PLACE. Retourne True si au moins une entrée
+    a été complétée (l'appelant sait alors qu'il doit persister le
+    résultat).
+    """
+    missing = sorted(
+        tid for tid, t in travels.items()
+        if not isinstance(t.get("position"), (int, float))
+    )
+    if not missing:
+        return False
+    existing_positions = [
+        t.get("position") for t in travels.values()
+        if isinstance(t.get("position"), (int, float))
+    ]
+    next_position = (max(existing_positions) + 1) if existing_positions else 0
+    for tid in missing:
+        travels[tid]["position"] = next_position
+        next_position += 1
+    return True
 
 
 def _poi_to_row(poi: dict) -> dict:
@@ -461,6 +498,20 @@ class Model:
             # ne modifie pas une table déjà présente sans cette colonne).
             try:
                 self._conn.execute("ALTER TABLE travels ADD COLUMN mdate INTEGER")
+                self._conn.commit()
+            except sqlite3.OperationalError:
+                pass  # colonne déjà présente
+
+            # Ajout défensif de travels.position (ordre d'affichage, voir
+            # travels.json / reorder_travels_json) sur une base existante
+            # créée avant son introduction. DEFAULT 0 : les trajets
+            # existants se retrouvent tous à la même position tant qu'ils
+            # n'ont pas été explicitement réordonnés (list_travels() les
+            # départage alors par id, voir plus bas).
+            try:
+                self._conn.execute(
+                    "ALTER TABLE travels ADD COLUMN position INTEGER NOT NULL DEFAULT 0"
+                )
                 self._conn.commit()
             except sqlite3.OperationalError:
                 pass  # colonne déjà présente
@@ -701,9 +752,14 @@ class Model:
         return _row_to_travel(row) if row else None
 
     def list_travels(self) -> list[dict]:
-        """Retourne la liste de tous les trajets."""
+        """Retourne la liste de tous les trajets, dans l'ordre d'affichage
+        (colonne ``position``, voir travels.json / reorder_travels_json —
+        c'est cet ordre que suit la page /travel/ de flpostcards). ``id``
+        en second critère pour départager les trajets à égalité de
+        position (ex : tous à la position par défaut 0, base migrée
+        avant l'introduction de ce champ, jamais réordonnée depuis)."""
         conn = self._get_conn()
-        cur = conn.execute("SELECT * FROM travels ORDER BY id")
+        cur = conn.execute("SELECT * FROM travels ORDER BY position, id")
         return [_row_to_travel(r) for r in cur.fetchall()]
 
     def write_travel(self, travel: dict) -> None:
@@ -741,6 +797,35 @@ class Model:
         """Supprime un trajet de la base."""
         conn = self._get_conn()
         conn.execute("DELETE FROM travels WHERE id = ?", (travel_id,))
+        conn.commit()
+
+    def reorder_travels(self, ordered_ids: list[str]) -> None:
+        """
+        Met à jour uniquement la colonne ``position`` de la table SQL
+        ``travels`` (contrairement à reorder_travels_json, qui met à
+        jour travels.json -- la source de vérité persistante).
+
+        À quoi ça sert : tkmanager (boutons +/- de TravelManagerView)
+        appelle les deux à la suite, pour que le nouvel ordre soit
+        visible sur /travel/ de flpostcards tout de suite, sans
+        attendre la prochaine régénération complète des trajets
+        (ParcoursCartes.travels(), qui recalcule aussi distance/cartes
+        via ortools -- coûteux, inutile pour un simple changement
+        d'ordre). Cette mise à jour SQL n'est cependant que le
+        raccourci immédiat : c'est bien travels.json (reorder_travels_json)
+        qui reste la source de vérité, reprise à la prochaine
+        régénération.
+
+        Les ids de ``ordered_ids`` absents de la table (trajet jamais
+        encore calculé) sont ignorés silencieusement (UPDATE ... WHERE
+        id = ? ne fait rien s'il ne matche aucune ligne) : leur
+        position sera reprise depuis travels.json à son premier calcul.
+        """
+        conn = self._get_conn()
+        conn.executemany(
+            "UPDATE travels SET position = ? WHERE id = ?",
+            [(position, travel_id) for position, travel_id in enumerate(ordered_ids)],
+        )
         conn.commit()
 
     # ------------------------------------------------------------------
@@ -1064,6 +1149,7 @@ class Model:
     def list_unique_cards(
         self,
         collection: str | None = None,
+        poi: str | None = None,
         search: str | None = None,
         limit: int | None = None,
         offset: int = 0,
@@ -1080,6 +1166,11 @@ class Model:
         ----------
         collection : str | None
             Filtre sur la collection (recherche dans le champ JSON ``collections``).
+        poi : str | None
+            Filtre sur le point d'intérêt (recherche dans le champ JSON
+            ``poi``) : ne retourne que les cartes référençant ce POI. Voir
+            flpostcards.blueprints.home.card_detail (section "Points
+            d'intérêt" de la fiche carte).
         search : str | None
             Recherche textuelle (insensible aux accents et à la casse)
             dans title, title2, description, verso_text, recto_text,
@@ -1106,6 +1197,15 @@ class Model:
                 ")"
             )
             params.append(collection)
+
+        if poi:
+            conditions.append(
+                "EXISTS ("
+                "  SELECT 1 FROM json_each(cards.poi)"
+                "  WHERE value = ?"
+                ")"
+            )
+            params.append(str(poi))
 
         status_cond, status_params = _status_condition(status, exclude_status)
         if status_cond:
@@ -2022,7 +2122,8 @@ class Model:
     #     "title": "La Seille de sa source à la Saône",
     #     "title2": null,
     #     "start": [46.697018, 5.657401],
-    #     "collection": "Seille"
+    #     "collection": "Seille",
+    #     "position": 0
     #   },
     #   ...
     # }
@@ -2033,21 +2134,41 @@ class Model:
         Accepts both the dict format ``{id: {...}}`` and the legacy list
         format ``[{...}, ...]`` (converting it automatically).
         Returns an empty dict if the file is absent or unreadable.
+
+        Comble aussi défensivement le champ ``position`` (ordre
+        d'affichage) des entrées qui n'en ont pas encore (travels.json
+        antérieur à l'introduction de ce champ) : elles reçoivent une
+        position stable, à la suite des positions déjà attribuées, en
+        les départageant par id -- sans ce comblement, chaque entrée
+        manquante recevait sa position au coup par coup, à la première
+        occasion (write_travel_json), ce qui la faisait sauter en
+        position 0 ou en doublon avec une autre au lieu de rester à sa
+        place, y compris en l'éditant simplement (sans vouloir changer
+        l'ordre). Persisté immédiatement si au moins une entrée a été
+        complétée, pour que ce comblement ne se reproduise qu'une fois.
         """
         if not self.travels_json.exists():
             return {}
         with self.travels_json.open(encoding="utf-8") as fh:
             data = json.load(fh)
         if isinstance(data, dict):
-            return data
-        if isinstance(data, list):
+            result = data
+        elif isinstance(data, list):
             # Convert list → dict, using the "id" field as key
             result = {}
             for entry in data:
                 if isinstance(entry, dict) and entry.get("id"):
                     result[str(entry["id"])] = entry
-            return result
-        return {}
+        else:
+            return {}
+
+        if _backfill_travel_positions(result):
+            self._write_travels_json(result)
+            logger.info(
+                "read_travels_json : position manquante complétée pour "
+                "un ou plusieurs trajets"
+            )
+        return result
 
     def _write_travels_json(self, travels: dict) -> None:
         """Atomically write {travel_id: {...}} to travels.json."""
@@ -2061,6 +2182,15 @@ class Model:
         """Insert or replace a travel model entry in travels.json.
 
         The ``id`` field is required. All other fields are optional.
+
+        ``position`` (ordre d'affichage sur la page /travel/ de
+        flpostcards, voir reorder_travels_json) est géré ici plutôt que
+        laissé à l'appelant : si ``travel`` n'en fournit pas (c'est le
+        cas du formulaire TravelManagerView dans tkmanager, qui n'édite
+        que title/title2/collection/start — la position ne se change
+        que via les boutons +/-, voir reorder_travels_json), la position
+        déjà en place est conservée pour une entrée existante, ou la
+        nouvelle entrée est placée en fin de liste.
         """
         travel_id = str(travel.get("id", "")).strip()
         if not travel_id:
@@ -2068,9 +2198,55 @@ class Model:
         travels = self.read_travels_json()
         entry = dict(travel)
         entry["id"] = travel_id
+        if entry.get("position") is None:
+            existing = travels.get(travel_id)
+            if existing is not None and existing.get("position") is not None:
+                entry["position"] = existing["position"]
+            else:
+                positions = [
+                    t.get("position") for t in travels.values()
+                    if isinstance(t.get("position"), (int, float))
+                ]
+                entry["position"] = (max(positions) + 1) if positions else 0
         travels[travel_id] = entry
         self._write_travels_json(travels)
         logger.info("write_travel_json : trajet %s enregistré", travel_id)
+
+    def reorder_travels_json(self, ordered_ids: list[str]) -> None:
+        """
+        Redéfinit l'ordre d'affichage (champ ``position``) des trajets
+        dans travels.json : ``ordered_ids`` doit contenir l'identifiant
+        de CHAQUE trajet existant, dans l'ordre d'affichage voulu (même
+        principe que get_collections/set_collections pour les
+        collections).
+
+        Utilisé par tkmanager pour les boutons +/- de réorganisation
+        (TravelManagerView) : après un échange local dans la liste
+        affichée, la liste complète des ids dans le nouvel ordre est
+        repassée ici en une fois.
+
+        Le nouvel ordre n'atteint la page /travel/ de flpostcards
+        qu'après la prochaine régénération des trajets (ParcoursCartes.
+        travels(), voir "tktools similar travels"/scheduled job — cette
+        méthode ne touche que travels.json, pas la table SQL "travels"
+        que list_travels() interroge).
+
+        Lève ValueError si ``ordered_ids`` ne correspond pas exactement
+        aux trajets existants.
+        """
+        travels = self.read_travels_json()
+        if set(ordered_ids) != set(travels.keys()):
+            raise ValueError(
+                "reorder_travels_json: ordered_ids ne correspond pas "
+                "exactement aux trajets existants"
+            )
+        for position, travel_id in enumerate(ordered_ids):
+            travels[travel_id]["position"] = position
+        self._write_travels_json(travels)
+        logger.info(
+            "reorder_travels_json : nouvel ordre enregistré (%d trajets)",
+            len(travels),
+        )
 
     def delete_travel_json(self, travel_id: str) -> bool:
         """Remove a travel model entry from travels.json.

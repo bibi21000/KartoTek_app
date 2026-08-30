@@ -20,7 +20,13 @@ from flask import (
     url_for,
 )
 
-from flpostcards.images import SIZE_SMALL, ALLOWED_SIZE_DIRS, card_images, image_dimensions
+from flpostcards.images import (
+    SIZE_SMALL,
+    SIZE_THUMB,
+    ALLOWED_SIZE_DIRS,
+    card_images,
+    image_dimensions,
+)
 from flpostcards.icon_generator import find_uploaded_icon, get_or_generate_icon
 
 bp = Blueprint("home", __name__, template_folder="../../templates")
@@ -318,7 +324,9 @@ def sitemap():
             image_caption=image_caption,
         )
 
-    for travel in model.list_travels():
+    from flpostcards import data_cache
+
+    for travel in data_cache.list_travels_cached():
         add(
             url_for("travel.detail", travel_id=travel["id"], _external=True),
             lastmod=travel.get("mdate") or last_card_update,
@@ -401,18 +409,21 @@ def card_detail(card_id: str):
     dims = image_dimensions(current_app.config["DATADIR"], images["recto"])
     og_image_width, og_image_height = dims if dims else (None, None)
 
-    # Texte alternatif du recto, enrichi avec le contenu détecté
-    # automatiquement (BLIP, voir tkpostcards.libs.detection) quand il est
-    # disponible : un alt descriptif plutôt que générique aide à la fois
+    # Texte alternatif du recto : on concatène, une par ligne, les
+    # informations disponibles (titre, titre secondaire, description,
+    # contenu détecté automatiquement par BLIP - voir
+    # tkpostcards.libs.detection), sans libellé ni mention "Recto de la
+    # carte x", pour un alt à la fois concis, descriptif, utile pour
     # l'accessibilité et le référencement (recherche d'images).
-    detected_content = card.get("detected_content")
-    if detected_content:
-        recto_alt = gettext(
-            "Recto de la carte %(id)s : %(content)s",
-            id=card["id"], content=detected_content,
-        )
-    else:
-        recto_alt = gettext("Recto de la carte %(id)s", id=card["id"])
+    recto_alt_parts = [
+        part for part in (
+            card.get("title"),
+            card.get("title2"),
+            card.get("description"),
+            card.get("detected_content"),
+        ) if part
+    ]
+    recto_alt = "\n".join(recto_alt_parts)
 
     # URL canonique sans le paramètre ?back= (état de navigation interne,
     # pas une variation de contenu) : évite tout signal de contenu dupliqué
@@ -463,6 +474,43 @@ def card_detail(card_id: str):
         ],
     }
 
+    # Section "Points d'intérêt" (bas de fiche) : pour chaque POI
+    # référencé par la carte (card["poi"], liste d'ids), son nom et les
+    # autres cartes uniques (hors doublons/échangées) qui référencent ce
+    # même POI -- la carte courante elle-même est exclue de cette liste,
+    # puisqu'elle est déjà affichée en haut de la page. Un POI sans autre
+    # carte associée n'est pas affiché : la section sert à naviguer vers
+    # d'autres cartes du même lieu, pas à lister les POIs pour eux-mêmes.
+    points_of_interest = []
+    for poi_id in card.get("poi") or []:
+        poi = model.get_poi(poi_id)
+        if poi is None:
+            continue
+
+        poi_name = poi.get("description") or gettext(
+            "Point d'intérêt #%(id)s", id=poi["id"]
+        )
+
+        poi_cards = model.list_unique_cards(poi=poi_id, exclude_status="exchanged")
+        related = []
+        for poi_card in poi_cards:
+            if poi_card["id"] == card["id"]:
+                continue
+            poi_card_images = card_images(poi_card["id"], SIZE_THUMB)
+            related.append(
+                {
+                    "id": poi_card["id"],
+                    "title": poi_card.get("title"),
+                    "title2": poi_card.get("title2"),
+                    "recto": poi_card_images["recto"],
+                }
+            )
+
+        if not related:
+            continue
+
+        points_of_interest.append({"id": poi["id"], "name": poi_name, "cards": related})
+
     return render_template(
         "card/detail.html",
         card=card,
@@ -472,6 +520,7 @@ def card_detail(card_id: str):
         back_label=back_label,
         recto_alt=recto_alt,
         canonical_url=canonical_url,
+        points_of_interest=points_of_interest,
         og_title=card_title,
         og_description=og_description,
         og_image=url_for("home.images", filename=images["recto"], _external=True),

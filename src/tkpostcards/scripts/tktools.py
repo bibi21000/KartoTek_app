@@ -36,6 +36,9 @@ def _travels(common):
         travel_data['id'] = travels[tt]['id']
         travel_data['title'] = travels[tt]['title']
         travel_data['title2'] = travels[tt]['title2']
+        # Voir le même commentaire dans ParcoursCartes.travels()
+        # (libs/travel.py) : source de vérité dans travels.json.
+        travel_data['position'] = travels[tt].get('position', 0)
 
         # model.write_travel() met à jour mdate lui-même, uniquement si
         # "cards" a réellement changé par rapport à la version déjà en
@@ -90,11 +93,29 @@ def scan():
 
 @scan.command(help=_("Prepare scanned postcards for import"))
 @click.option('--prefix', default='', help=_("Prefix of scanned files"))
-@click.option('--white-threshold', default=240, help=_("white threshold for background transpare"))
+@click.option('--profile', default=None,
+              help=_("Name of the import profile (\"modèle d'import\") controlling "
+                     "the scan correction (white threshold, crop margin, ...). "
+                     "Defaults to the [tkimport] scan_profile setting in the "
+                     "configuration file, or \"cpa\" if unset. See also "
+                     "\"tktools scan profiles\"."))
+@click.option('--white-threshold', default=None, type=int,
+              help=_("One-off override of the white threshold for background "
+                     "transparency, on top of --profile."))
 @click.pass_obj
-def prepare(common, prefix, white_threshold):
+def prepare(common, prefix, profile, white_threshold):
     from libpostcards.model import Model
     from ..libs.scan_prepare import prepare_pairs
+    from ..libs.scan_profiles import get_active_profile, load_profiles, DEFAULT_PROFILE_NAME
+
+    if profile:
+        profiles = load_profiles(common.conf)
+        if profile not in profiles:
+            raise RuntimeError(
+                _("Unknown import profile: {name}").format(name=profile))
+        scan_profile = profiles[profile]
+    else:
+        scan_profile = get_active_profile(common.conf)
 
     def _on_pair(pair):
         click.echo('%s -> %s' % (pair.recto_src.name, pair.recto_dst.name))
@@ -104,9 +125,28 @@ def prepare(common, prefix, white_threshold):
 
     prepare_pairs(
         common.importdir, next_id,
-        prefix=prefix, white_threshold=white_threshold,
+        prefix=prefix, profile=scan_profile, white_threshold=white_threshold,
         on_pair=_on_pair,
     )
+
+@scan.command(name="profiles", help=_("List available import profiles (\"modèles d'import\")"))
+@click.pass_obj
+def scan_profiles_cmd(common):
+    from ..libs.scan_profiles import load_profiles, get_active_profile_name
+
+    profiles = load_profiles(common.conf)
+    active = get_active_profile_name(common.conf)
+    for name, profile in profiles.items():
+        marker = '*' if name == active else ' '
+        kind = _("built-in") if profile.builtin else _("custom")
+        click.echo(
+            '%s %s (%s): white_threshold=%s white_ratio_threshold=%s '
+            'crop_margin=%s angle_range=%s transparency_white_threshold=%s' % (
+                marker, name, kind, profile.white_threshold,
+                profile.white_ratio_threshold, profile.crop_margin,
+                profile.angle_range, profile.effective_transparency_threshold,
+            )
+        )
 
 @scan.command(help=_("Add postcards"))
 @click.argument('pcid', default=None, nargs=-1)
@@ -547,10 +587,31 @@ def detect(common, pcid, detect_lang, model_name, objects_model_name, objects_th
 
 @cli.command(help=_("Redo transparent on postcards"))
 @click.argument('pcid', default=None, nargs=-1)
-@click.option('--white-threshold', default=240, help=_("white threshold for background transpare"))
+@click.option('--profile', default=None,
+              help=_("Name of the import profile (\"modèle d'import\") whose "
+                     "transparency threshold should be used. Defaults to the "
+                     "[tkimport] scan_profile setting in the configuration "
+                     "file, or \"cpa\" if unset. See also "
+                     "\"tktools scan profiles\"."))
+@click.option('--white-threshold', default=None, type=int,
+              help=_("One-off override of the white threshold for background "
+                     "transparency, on top of --profile."))
 @click.pass_obj
-def transparency(common, pcid, white_threshold):
+def transparency(common, pcid, profile, white_threshold):
     from ..libs.transparency import TiffBackgroundRemover
+    from ..libs.scan_profiles import get_active_profile, load_profiles
+
+    if profile:
+        profiles = load_profiles(common.conf)
+        if profile not in profiles:
+            raise RuntimeError(
+                _("Unknown import profile: {name}").format(name=profile))
+        scan_profile = profiles[profile]
+    else:
+        scan_profile = get_active_profile(common.conf)
+
+    if white_threshold is None:
+        white_threshold = scan_profile.effective_transparency_threshold
     bgtrans = TiffBackgroundRemover(white_threshold=white_threshold)
 
     ids = split_ids(pcid)

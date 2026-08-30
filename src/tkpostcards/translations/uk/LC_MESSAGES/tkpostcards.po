@@ -1004,6 +1004,14 @@ msgstr "Назва"
 msgid "travel_id"
 msgstr "Id"
 
+#: src/tkpostcards/tkmanager.py:4561
+msgid "travel_title_field"
+msgstr "Заголовок"
+
+#: src/tkpostcards/tkmanager.py:4570
+msgid "travel_title2_field"
+msgstr "Підзаголовок"
+
 #: src/tkpostcards/tkmanager.py:4196
 msgid "travel_collection"
 msgstr "Колекції"

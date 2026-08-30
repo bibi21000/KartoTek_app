@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import math
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from PIL import Image
@@ -65,7 +66,16 @@ def _lonlat_to_pixel(lon: float, lat: float, zoom: int) -> tuple[float, float]:
 
 
 def _fetch_tile(z: int, x: int, y: int) -> Image.Image | None:
-    """Télécharge une tuile OSM, ou None en cas d'échec (tuile hors limites, réseau...)."""
+    """Télécharge une tuile OSM, ou None en cas d'échec (tuile hors limites, réseau...).
+
+    Le timeout par tuile est volontairement court : les tuiles sont
+    téléchargées en parallèle (voir render_static_map), mais un worker
+    gunicorn a lui-même un timeout global sur la requête HTTP (souvent
+    30s) ; un timeout par tuile trop long peut donc faire dépasser ce
+    délai et faire tuer le worker en pleine connexion réseau (SIGABRT
+    -> SystemExit, qui n'est pas une Exception et n'est donc pas
+    rattrapé par le except ci-dessous).
+    """
     n = 2 ** z
     if x < 0 or y < 0 or x >= n or y >= n:
         return None
@@ -73,7 +83,7 @@ def _fetch_tile(z: int, x: int, y: int) -> Image.Image | None:
     url = TILE_URL_TEMPLATE.format(z=z, x=x, y=y)
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:
             from io import BytesIO
 
             return Image.open(BytesIO(resp.read())).convert("RGB")
@@ -106,9 +116,24 @@ def render_static_map(
 
     canvas = Image.new("RGB", (tiles_needed_x * TILE_SIZE, tiles_needed_y * TILE_SIZE), "#dddddd")
 
-    for ty in range(tiles_needed_y):
-        for tx in range(tiles_needed_x):
-            tile = _fetch_tile(zoom, first_tile_x + tx, first_tile_y + ty)
+    # Téléchargement des tuiles en parallèle : le temps total dépend de
+    # la tuile la plus lente plutôt que de la somme de toutes (une
+    # image 1200x630 nécessite ~24 tuiles ; en séquentiel, un simple
+    # ralentissement réseau peut faire dépasser le timeout d'un worker
+    # gunicorn et le faire tuer en cours de requête).
+    coords = [
+        (tx, ty)
+        for ty in range(tiles_needed_y)
+        for tx in range(tiles_needed_x)
+    ]
+    with ThreadPoolExecutor(max_workers=min(len(coords), 8)) as executor:
+        futures = {
+            executor.submit(_fetch_tile, zoom, first_tile_x + tx, first_tile_y + ty): (tx, ty)
+            for tx, ty in coords
+        }
+        for future in as_completed(futures):
+            tx, ty = futures[future]
+            tile = future.result()
             if tile is not None:
                 canvas.paste(tile, (tx * TILE_SIZE, ty * TILE_SIZE))
 

@@ -942,6 +942,11 @@ class GalleryView(tk.Toplevel):
 
         # Map of clickable areas  [(x0,y0,x1,y1, cid), …]
         self._hit_zones: list[tuple] = []
+        # Sous-ensemble de _hit_zones limité à la zone du titre (bandeau
+        # d'en-tête de chaque vignette) : un clic simple dessus ouvre
+        # directement la carte dans la fenêtre principale (voir _on_click),
+        # sans attendre le double-clic habituel sur le reste de la vignette.
+        self._title_hit_zones: list[tuple] = []
 
         self._loading      = False
         self._pending_draw: str | None = None
@@ -1061,6 +1066,23 @@ class GalleryView(tk.Toplevel):
                     self._queue.put((cid, side, img, i + 1, len(ids)))
         self._queue.put(None)
 
+    def _reload_single(self, cid: int):
+        """Recharge en tâche de fond le recto/verso d'une seule carte
+        (appelé par notify_card_changed après une modification/navigation
+        dans la fenêtre principale, une fois le cache d'images de cette
+        carte invalidé). Sans cet appel, la vignette resterait bloquée
+        sur son repli "—" jusqu'à un rafraîchissement complet (Actualiser),
+        faute de tout mécanisme relançant son chargement."""
+        threading.Thread(target=self._worker_single, args=(cid,), daemon=True).start()
+
+    def _worker_single(self, cid: int):
+        for side in ("R", "V"):
+            path = self._app._find_gallery_image(cid, side)
+            img  = load_pil(path, GALL_W, GALL_H) if path else None
+            # done/total à None : voir _poll_queue (ne met pas à jour la
+            # barre de statut du chargement en masse pour ce cas isolé).
+            self._queue.put((cid, side, img, None, None))
+
     def _poll_queue(self):
         import queue as qm
         import time
@@ -1076,8 +1098,14 @@ class GalleryView(tk.Toplevel):
                 else:
                     cid, side, img, done, total = item
                     self._pil[(cid, side)] = img
-                    self._status.set(
-                        _("gallery_loading").format(done=done, total=total))
+                    # done/total valent None pour un rechargement ponctuel
+                    # d'une seule carte (voir _reload_single, appelé par
+                    # notify_card_changed) : ce n'est pas un chargement en
+                    # masse, donc on ne touche pas à la barre de statut
+                    # (qui affiche la progression du chargement initial).
+                    if done is not None and total is not None:
+                        self._status.set(
+                            _("gallery_loading").format(done=done, total=total))
         except qm.Empty:
             pass
 
@@ -1146,6 +1174,7 @@ class GalleryView(tk.Toplevel):
         tile_h = self.HDR_H + self.BADGE_H + img_h + 2 * self.IMG_PAD + 4
 
         hit: list[tuple] = []
+        title_hit: list[tuple] = []
         self._cv.delete("all")
 
         for pos, cid in enumerate(self._app._ids):
@@ -1171,6 +1200,7 @@ class GalleryView(tk.Toplevel):
             self._cv.create_text(x0 + 5, y0 + self.HDR_H // 2,
                                  text=hdr_txt, anchor=tk.W,
                                  fill=FG_ACCENT2, font=("Courier", 8, "bold"))
+            title_hit.append((x0, y0, x1, y0 + self.HDR_H, cid))
 
             # Images
             img_y = y0 + self.HDR_H + self.IMG_PAD
@@ -1203,6 +1233,7 @@ class GalleryView(tk.Toplevel):
         self._cv.configure(scrollregion=(0, 0, cv_w, total_h))
 
         self._hit_zones = hit
+        self._title_hit_zones = title_hit
 
     def _draw_badge(self, x0: int, y0: int, x1: int, y1: int, side: str):
         bg = "#1a3a1a" if side == "R" else "#1a1a3a"
@@ -1266,7 +1297,24 @@ class GalleryView(tk.Toplevel):
                 return cid
         return None
 
+    def _hit_test_title(self, event) -> int | None:
+        """Return the cid whose title band (header) is under the cursor."""
+        cy = self._cv.canvasy(event.y)
+        cx = self._cv.canvasx(event.x)
+        for (x0, y0, x1, y1, cid) in self._title_hit_zones:
+            if x0 <= cx <= x1 and y0 <= cy <= y1:
+                return cid
+        return None
+
     def _on_click(self, event):
+        # Un clic sur le bandeau de titre ouvre directement la carte dans
+        # la fenêtre principale (comme un double-clic sur le reste de la
+        # vignette), sans attendre un second clic.
+        title_cid = self._hit_test_title(event)
+        if title_cid is not None:
+            self._open_card(title_cid)
+            return
+
         cid = self._hit_test(event)
         if cid is not None:
             self._sel_id = cid
@@ -1276,6 +1324,12 @@ class GalleryView(tk.Toplevel):
         cid = self._hit_test(event)
         if cid is None:
             return
+        self._open_card(cid)
+
+    def _open_card(self, cid: int):
+        """Charge la carte `cid` dans la fenêtre principale et lui rend
+        le focus (utilisé par le double-clic sur une vignette et par le
+        clic simple sur son titre, voir _on_click/_on_dbl)."""
         if not self._app._ask_save_if_dirty():
             return
         idx = self._app._ids.index(cid)
@@ -1318,6 +1372,11 @@ class GalleryView(tk.Toplevel):
             for key in [k for k in self._tkimg if k[0] == cid and k[1] == side]:
                 del self._tkimg[key]
         self._schedule_draw()
+        # Recharge les images de cette carte (potentiellement modifiées,
+        # ou simplement retirées du cache ci-dessus) : sans cela, la
+        # vignette resterait bloquée sur son repli "—" jusqu'au prochain
+        # "Actualiser" (voir _reload_single).
+        self._reload_single(cid)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -4492,6 +4551,24 @@ class TravelManagerView(tk.Toplevel):
 
         lb_frm = tk.Frame(left, bg=BG_CARD)
         lb_frm.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
+
+        # Boutons +/- : déplacent le trajet sélectionné d'un cran vers le
+        # haut/bas dans la liste (voir _move()), et persistent le
+        # nouvel ordre (Model.reorder_travels_json -- champ "position"
+        # de travels.json). C'est cet ordre que reprend
+        # ParcoursCartes.travels() à la prochaine régénération, avant
+        # d'être affiché tel quel sur la page /travel/ de flpostcards.
+        move_frm = tk.Frame(lb_frm, bg=BG_CARD)
+        move_frm.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 4))
+        self._btn_up = tk.Button(move_frm, text="+", command=lambda: self._move(-1),
+                                 bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
+                                 relief=tk.FLAT, width=2, cursor="hand2")
+        self._btn_up.pack(pady=(0, 2))
+        self._btn_down = tk.Button(move_frm, text="-", command=lambda: self._move(1),
+                                   bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
+                                   relief=tk.FLAT, width=2, cursor="hand2")
+        self._btn_down.pack()
+
         vsb = ttk.Scrollbar(lb_frm, orient=tk.VERTICAL)
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
         self._lb = tk.Listbox(lb_frm, bg=BG_INPUT, fg=FG_TEXT,
@@ -4547,14 +4624,20 @@ class TravelManagerView(tk.Toplevel):
                                                    font=FONT_INPUT, relief=tk.FLAT))
         context_menu(self._title_entry)
 
-        # Title2
-        self._title2_var = tk.StringVar()
-        self._title2_entry = row("travel_title2_field",
-                                 lambda p: tk.Entry(p, textvariable=self._title2_var,
-                                                    bg=BG_INPUT, fg=FG_TEXT,
-                                                    insertbackground=FG_TEXT,
-                                                    font=FONT_INPUT, relief=tk.FLAT))
-        context_menu(self._title2_entry)
+        # Title2 (zone de saisie agrandie, sur plusieurs lignes -- label
+        # au-dessus plutôt qu'à côté, même agencement que la description
+        # d'un POI ci-dessus : le sous-titre affiché sur la page /travel/
+        # de flpostcards peut être plus long qu'un simple titre court).
+        title2f = tk.Frame(right, bg=BG_CARD)
+        title2f.pack(fill=tk.X, **pad)
+        tk.Label(title2f, text=_("travel_title2_field"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, anchor=tk.W).pack(anchor=tk.W)
+        self._title2_txt = tk.Text(title2f, height=4, wrap=tk.WORD,
+                                   bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                                   font=FONT_INPUT, relief=tk.FLAT, padx=6, pady=4,
+                                   undo=True)
+        self._title2_txt.pack(fill=tk.X, pady=(2, 0))
+        context_menu(self._title2_txt)
 
         # Collection (combobox from config)
         cf = tk.Frame(right, bg=BG_CARD)
@@ -4599,6 +4682,15 @@ class TravelManagerView(tk.Toplevel):
                  font=FONT_SMALL, anchor=tk.W, padx=8).pack(fill=tk.X)
 
     # ── Data ──────────────────────────────────────────────────────────────────
+    def _sorted_travels(self):
+        """Trajets triés selon leur ordre d'affichage (champ "position"
+        de travels.json, id en second critère) -- c'est cet ordre qui
+        est listé ici et que font varier les boutons +/- (_move)."""
+        return sorted(
+            self._travels.items(),
+            key=lambda kv: (kv[1].get("position") or 0, kv[0]),
+        )
+
     def _reload(self):
         try:
             self._travels = self._app.model.read_travels_json()
@@ -4609,7 +4701,7 @@ class TravelManagerView(tk.Toplevel):
             return
 
         self._lb.delete(0, tk.END)
-        for tid, t in sorted(self._travels.items()):
+        for tid, t in self._sorted_travels():
             label = tid if not t.get("title") else f"{tid}  —  {t['title'][:40]}"
             self._lb.insert(tk.END, label)
 
@@ -4619,8 +4711,53 @@ class TravelManagerView(tk.Toplevel):
         sel = self._lb.curselection()
         if not sel:
             return
-        tid = sorted(self._travels.keys())[sel[0]]
+        tid = [tid for tid, _t in self._sorted_travels()][sel[0]]
         self._load_travel(tid)
+
+    def _move(self, direction: int):
+        """Déplace le trajet sélectionné d'un cran vers le haut
+        (direction=-1, bouton "+") ou le bas (direction=+1, bouton "-")
+        dans la liste, et persiste le nouvel ordre pour tous les
+        trajets (Model.reorder_travels_json) -- sans effet si aucun
+        trajet n'est sélectionné, ou déjà en haut/bas de la liste."""
+        if self._is_new or not self._selected:
+            return
+
+        ordered_ids = [tid for tid, _t in self._sorted_travels()]
+        try:
+            idx = ordered_ids.index(self._selected)
+        except ValueError:
+            return
+
+        new_idx = idx + direction
+        if new_idx < 0 or new_idx >= len(ordered_ids):
+            return  # déjà en haut/en bas de la liste
+
+        ordered_ids[idx], ordered_ids[new_idx] = ordered_ids[new_idx], ordered_ids[idx]
+
+        try:
+            self._app.model.reorder_travels_json(ordered_ids)
+        except Exception as e:
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            return
+
+        # Répercute aussi tout de suite dans la table SQL "travels" (celle
+        # que lit flpostcards) : travels.json (ci-dessus) reste la source
+        # de vérité persistante, mais sans ce second appel, le nouvel
+        # ordre n'apparaîtrait sur /travel/ qu'après la prochaine
+        # régénération complète des trajets (recalcul distance/cartes,
+        # bien plus coûteux qu'un simple changement d'ordre). Best-effort
+        # (silencieux) : si un trajet n'a encore jamais été calculé, il
+        # n'existe pas encore dans cette table, rien à mettre à jour pour
+        # lui -- pas une erreur.
+        try:
+            self._app.model.reorder_travels(ordered_ids)
+        except Exception:
+            pass
+
+        selected = self._selected
+        self._reload()
+        self._select_in_list(selected)
 
     def _load_travel(self, travel_id: str):
         self._is_new = False
@@ -4629,7 +4766,8 @@ class TravelManagerView(tk.Toplevel):
         self._id_var.set(t.get("id", travel_id))
         self._id_entry.config(state=tk.DISABLED)
         self._title_var.set(t.get("title") or "")
-        self._title2_var.set(t.get("title2") or "")
+        self._title2_txt.delete("1.0", tk.END)
+        self._title2_txt.insert("1.0", t.get("title2") or "")
         self._coll_var.set(t.get("collection") or "")
         start = t.get("start") or []
         self._start_coord = list(start) if len(start) >= 2 else []
@@ -4643,7 +4781,7 @@ class TravelManagerView(tk.Toplevel):
         self._id_var.set("")
         self._id_entry.config(state=tk.NORMAL)
         self._title_var.set("")
-        self._title2_var.set("")
+        self._title2_txt.delete("1.0", tk.END)
         self._coll_var.set("")
         self._start_coord = []
         self._refresh_start()
@@ -4690,7 +4828,7 @@ class TravelManagerView(tk.Toplevel):
         entry = {
             "id":         travel_id,
             "title":      self._title_var.get().strip() or None,
-            "title2":     self._title2_var.get().strip() or None,
+            "title2":     self._title2_txt.get("1.0", "end-1c").strip() or None,
             "collection": self._coll_var.get().strip() or None,
             "start":      start,
         }
@@ -4724,7 +4862,7 @@ class TravelManagerView(tk.Toplevel):
         self._reload()
 
     def _select_in_list(self, travel_id: str):
-        keys = sorted(self._travels.keys())
+        keys = [tid for tid, _t in self._sorted_travels()]
         if travel_id in keys:
             i = keys.index(travel_id)
             self._lb.selection_clear(0, tk.END)

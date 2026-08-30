@@ -365,7 +365,8 @@ html.bc-desk, body.bc-desk {
     border-color: var(--bc-gold) !important;
 }
 
-.card-share__label {
+.card-share__label,
+.card-gps__label {
     color: var(--bc-paper) !important;
     opacity: 0.75;
 }
@@ -388,12 +389,17 @@ html.bc-desk, body.bc-desk {
     opacity: 0.85;
 }
 
-.card-meta .collections span {
+.card-meta .collections span,
+.card-meta .collections a {
     background: var(--bc-paper) !important;
     color: var(--bc-ink) !important;
     border: 1px solid var(--bc-gold);
     font-family: var(--bc-font-type);
     box-shadow: 1px 1px 0 rgba(59, 42, 26, 0.25);
+}
+
+.card-meta .collections a:hover {
+    background: var(--bc-gold) !important;
 }
 
 /* -----------------------------------------------------------------

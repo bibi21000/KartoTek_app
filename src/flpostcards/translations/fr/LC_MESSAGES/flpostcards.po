@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-23 20:00+0200\n"
+"POT-Creation-Date: 2026-08-30 21:50+0200\n"
 "PO-Revision-Date: 2026-06-14 12:15+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -18,15 +18,15 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/flpostcards/__init__.py:437
+#: src/flpostcards/__init__.py:523
 msgid "Afficher l'adresse email"
 msgstr ""
 
-#: src/flpostcards/__init__.py:532 src/flpostcards/__init__.py:537
+#: src/flpostcards/__init__.py:646 src/flpostcards/__init__.py:651
 msgid "Page introuvable"
 msgstr "Page introuvable"
 
-#: src/flpostcards/__init__.py:534
+#: src/flpostcards/__init__.py:648
 msgid ""
 "Cette page n'existe pas ou plus. Elle a peut-être été déplacée, ou le "
 "lien que vous avez suivi est incorrect."
@@ -34,23 +34,23 @@ msgstr ""
 "Cette page n'existe pas ou plus. Elle a peut-être été déplacée, ou le "
 "lien que vous avez suivi est incorrect."
 
-#: src/flpostcards/__init__.py:539
+#: src/flpostcards/__init__.py:653
 msgid "La page demandée n'existe pas ou plus sur ce site de cartes postales."
 msgstr "La page demandée n'existe pas ou plus sur ce site de cartes postales."
 
-#: src/flpostcards/__init__.py:551
+#: src/flpostcards/__init__.py:665
 msgid "Erreur inattendue"
 msgstr "Erreur inattendue"
 
-#: src/flpostcards/__init__.py:553
+#: src/flpostcards/__init__.py:667
 msgid "Une erreur inattendue est survenue. Merci de réessayer dans un instant."
 msgstr "Une erreur inattendue est survenue. Merci de réessayer dans un instant."
 
-#: src/flpostcards/__init__.py:556
+#: src/flpostcards/__init__.py:670
 msgid "Erreur"
 msgstr "Erreur"
 
-#: src/flpostcards/__init__.py:557
+#: src/flpostcards/__init__.py:671
 msgid "Une erreur inattendue est survenue."
 msgstr "Une erreur inattendue est survenue."
 
@@ -92,73 +92,67 @@ msgstr "L'envoi du message a échoué. Réessayez plus tard."
 msgid "Contactez-moi à propos de ma collection de cartes postales."
 msgstr "Contactez-moi à propos de ma collection de cartes postales."
 
-#: src/flpostcards/blueprints/gallery/__init__.py:140
+#: src/flpostcards/blueprints/gallery/__init__.py:154
 #, python-format
 msgid "Toutes les cartes postales - %(collection)s"
 msgstr "Toutes les cartes postales - %(collection)s"
 
-#: src/flpostcards/blueprints/gallery/__init__.py:143
+#: src/flpostcards/blueprints/gallery/__init__.py:157
 msgid "Toutes les cartes postales"
 msgstr "Toutes les cartes postales"
 
-#: src/flpostcards/blueprints/gallery/__init__.py:164
+#: src/flpostcards/blueprints/gallery/__init__.py:178
 msgid "Parcourez ma collection de cartes postales anciennes."
 msgstr "Parcourez ma collection de cartes postales anciennes."
 
-#: src/flpostcards/blueprints/home/__init__.py:58
+#: src/flpostcards/blueprints/home/__init__.py:64
 #, python-format
 msgid "Ma collection de cartes postales - %(collection)s"
 msgstr "Ma collection de cartes postales - %(collection)s"
 
-#: src/flpostcards/blueprints/home/__init__.py:62
+#: src/flpostcards/blueprints/home/__init__.py:68
 msgid "Ma collection de cartes postales"
 msgstr "Ma collection de cartes postales"
 
-#: src/flpostcards/blueprints/home/__init__.py:92
+#: src/flpostcards/blueprints/home/__init__.py:98
 #: src/flpostcards/templates/base.html:12
 msgid "Découvrez ma collection de cartes postales anciennes."
 msgstr "Découvrez ma collection de cartes postales anciennes."
 
-#: src/flpostcards/blueprints/home/__init__.py:372
+#: src/flpostcards/blueprints/home/__init__.py:380
 #: src/flpostcards/templates/card/detail.html:3
+#: src/flpostcards/templates/card/detail.html:159
 #: src/flpostcards/templates/gallery/index.html:97
 #, python-format
 msgid "Carte #%(id)s"
 msgstr "Carte #%(id)s"
 
-#: src/flpostcards/blueprints/home/__init__.py:393
+#: src/flpostcards/blueprints/home/__init__.py:401
 msgid "Retour à la galerie"
 msgstr "Retour à la galerie"
 
-#: src/flpostcards/blueprints/home/__init__.py:395
+#: src/flpostcards/blueprints/home/__init__.py:403
 msgid "Retour à la balade"
 msgstr "Retour à la balade"
 
-#: src/flpostcards/blueprints/home/__init__.py:397
+#: src/flpostcards/blueprints/home/__init__.py:405
 msgid "Retour à la carte"
 msgstr "Retour à la carte"
 
-#: src/flpostcards/blueprints/home/__init__.py:399
+#: src/flpostcards/blueprints/home/__init__.py:407
 #: src/flpostcards/templates/card/detail.html:19
 msgid "Retour au diaporama"
 msgstr "Retour au diaporama"
 
-#: src/flpostcards/blueprints/home/__init__.py:411
-#: src/flpostcards/templates/gallery/index.html:102
-#, python-format
-msgid "Recto de la carte %(id)s : %(content)s"
-msgstr "Recto de la carte %(id)s : %(content)s"
-
-#: src/flpostcards/blueprints/home/__init__.py:415
-#: src/flpostcards/templates/gallery/index.html:102
-#, python-format
-msgid "Recto de la carte %(id)s"
-msgstr "Recto de la carte %(id)s"
-
-#: src/flpostcards/blueprints/home/__init__.py:455
+#: src/flpostcards/blueprints/home/__init__.py:466
 #: src/flpostcards/templates/base.html:68
 msgid "Accueil"
 msgstr "Accueil"
+
+#: src/flpostcards/blueprints/home/__init__.py:491
+#, python-format
+msgid "Point d'intérêt #%(id)s"
+msgstr "Point d'intérêt #%(id)s"
 
 #: src/flpostcards/blueprints/map/__init__.py:34
 #, python-format
@@ -265,78 +259,81 @@ msgstr "Afficher l'autre face"
 msgid "Aperçu de l'autre face"
 msgstr "Aperçu de l'autre face"
 
-#: src/flpostcards/templates/card/detail.html:70
+#: src/flpostcards/templates/card/detail.html:59
+msgid "Voir le diaporama de cette collection"
+msgstr "Voir le diaporama de cette collection"
+
+#: src/flpostcards/templates/card/detail.html:68
+msgid "Aujourd'hui"
+msgstr "Aujourd'hui"
+
+#: src/flpostcards/templates/card/detail.html:73
 msgid "OpenStreetMap"
 msgstr "OpenStreetMap"
 
-#: src/flpostcards/templates/card/detail.html:75
+#: src/flpostcards/templates/card/detail.html:78
 msgid "Google Maps"
 msgstr "Google Maps"
 
-#: src/flpostcards/templates/card/detail.html:80
+#: src/flpostcards/templates/card/detail.html:83
 msgid "Street View"
 msgstr "Street View"
 
-#: src/flpostcards/templates/card/detail.html:93
+#: src/flpostcards/templates/card/detail.html:97
 msgid "Partager"
 msgstr ""
 
-#: src/flpostcards/templates/card/detail.html:98
-#: src/flpostcards/templates/card/detail.html:166
-msgid "Partager…"
-msgstr ""
-
-#: src/flpostcards/templates/card/detail.html:103
+#: src/flpostcards/templates/card/detail.html:102
 msgid "Partager sur Facebook"
 msgstr ""
 
-#: src/flpostcards/templates/card/detail.html:109
+#: src/flpostcards/templates/card/detail.html:108
 msgid "Partager sur X"
 msgstr ""
 
-#: src/flpostcards/templates/card/detail.html:115
+#: src/flpostcards/templates/card/detail.html:114
 msgid "Partager sur Bluesky"
 msgstr ""
 
-#: src/flpostcards/templates/card/detail.html:123
+#: src/flpostcards/templates/card/detail.html:122
 msgid "Partager sur Mastodon"
 msgstr ""
 
-#: src/flpostcards/templates/card/detail.html:129
+#: src/flpostcards/templates/card/detail.html:128
 msgid "Partager sur WhatsApp"
 msgstr ""
 
-#: src/flpostcards/templates/card/detail.html:135
+#: src/flpostcards/templates/card/detail.html:134
 msgid "Épingler sur Pinterest"
 msgstr ""
 
-#: src/flpostcards/templates/card/detail.html:140
+#: src/flpostcards/templates/card/detail.html:139
 msgid "Partager par e-mail"
 msgstr ""
 
-#: src/flpostcards/templates/card/detail.html:141
+#: src/flpostcards/templates/card/detail.html:140
 msgid "E-mail"
 msgstr ""
 
+#: src/flpostcards/templates/card/detail.html:146
 #: src/flpostcards/templates/card/detail.html:147
-#: src/flpostcards/templates/card/detail.html:148
-#: src/flpostcards/templates/card/detail.html:164
+#: src/flpostcards/templates/card/detail.html:194
 msgid "Copier le lien"
 msgstr ""
 
-#: src/flpostcards/templates/card/detail.html:162
+#: src/flpostcards/templates/card/detail.html:192
 msgid "Aperçu du recto"
 msgstr "Aperçu du recto"
 
-#: src/flpostcards/templates/card/detail.html:163
+#: src/flpostcards/templates/card/detail.html:193
 msgid "Aperçu du verso"
 msgstr "Aperçu du verso"
 
-#: src/flpostcards/templates/card/detail.html:165
+#: src/flpostcards/templates/card/detail.html:195
 msgid "Lien copié !"
 msgstr ""
 
-#: src/flpostcards/templates/card/detail.html:168
+#: src/flpostcards/templates/card/detail.html:196
 msgid "Sur quelle instance Mastodon avez-vous un compte ? (ex. mastodon.social)"
 msgstr ""
 
@@ -780,4 +777,13 @@ msgstr "Aucun parcours disponible."
 
 #~ msgid "Toutes les balades"
 #~ msgstr "Toutes les balades"
+
+#~ msgid "Recto de la carte %(id)s : %(content)s"
+#~ msgstr "Recto de la carte %(id)s : %(content)s"
+
+#~ msgid "Recto de la carte %(id)s"
+#~ msgstr "Recto de la carte %(id)s"
+
+#~ msgid "Partager…"
+#~ msgstr ""
 

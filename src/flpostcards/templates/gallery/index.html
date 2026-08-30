@@ -99,7 +99,7 @@
                 {% if display in ("recto_verso", "recto") %}
                 <img class="gallery-img gallery-img-recto"
                      src="{{ url_for('home.images', filename=item.recto) }}"
-                     alt="{{ _("Recto de la carte %(id)s : %(content)s", id=item.id, content=item.detected_content) if item.detected_content else _("Recto de la carte %(id)s", id=item.id) }}"
+                     alt="{{ item.recto_alt }}"
                      loading="lazy">
                 {% endif %}
                 {% if display in ("recto_verso", "verso") %}

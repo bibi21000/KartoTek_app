@@ -55,7 +55,8 @@
         {% if card.collections %}
         <div class="collections">
             {% for c in card.collections %}
-            <span>{{ c }}</span>
+            <a href="{{ url_for('slideshow.index', collection=c) }}"
+               title="{{ _("Voir le diaporama de cette collection") }}">{{ c }}</a>
             {% endfor %}
         </div>
         {% endif %}
@@ -63,22 +64,25 @@
         {% if card.coord and card.coord[0] is not none and card.coord[1] is not none %}
         {% set lat = card.coord[0] %}
         {% set lon = card.coord[1] %}
-        <div class="card-gps-links">
-            <a class="gps-link"
-               href="https://www.openstreetmap.org/?mlat={{ lat }}&mlon={{ lon }}&zoom=15"
-               target="_blank" rel="noopener noreferrer">
-                {{ _("OpenStreetMap") }}
-            </a>
-            <a class="gps-link"
-               href="https://www.google.com/maps?q={{ lat }},{{ lon }}"
-               target="_blank" rel="noopener noreferrer">
-                {{ _("Google Maps") }}
-            </a>
-            <a class="gps-link"
-               href="https://www.google.com/maps?layer=c&cbll={{ lat }},{{ lon }}"
-               target="_blank" rel="noopener noreferrer">
-                {{ _("Street View") }}
-            </a>
+        <div class="card-gps">
+            <span class="card-gps__label">{{ _("Aujourd'hui") }}</span>
+            <div class="card-gps-links">
+                <a class="gps-link"
+                   href="https://www.openstreetmap.org/?mlat={{ lat }}&mlon={{ lon }}&zoom=15"
+                   target="_blank" rel="noopener noreferrer">
+                    {{ _("OpenStreetMap") }}
+                </a>
+                <a class="gps-link"
+                   href="https://www.google.com/maps?q={{ lat }},{{ lon }}"
+                   target="_blank" rel="noopener noreferrer">
+                    {{ _("Google Maps") }}
+                </a>
+                <a class="gps-link"
+                   href="https://www.google.com/maps?layer=c&cbll={{ lat }},{{ lon }}"
+                   target="_blank" rel="noopener noreferrer">
+                    {{ _("Street View") }}
+                </a>
+            </div>
         </div>
         {% endif %}
 
@@ -92,11 +96,6 @@
         <div class="card-share">
             <span class="card-share__label">{{ _("Partager") }}</span>
             <div class="card-share-links">
-                <button type="button"
-                        class="gps-link share-link share-link--native"
-                        id="share-native" hidden>
-                    {{ _("Partager…") }}
-                </button>
                 <a class="gps-link share-link share-link--facebook"
                    href="https://www.facebook.com/sharer/sharer.php?u={{ share_url }}"
                    target="_blank" rel="noopener noreferrer"
@@ -150,6 +149,37 @@
             </div>
         </div>
     </div>
+
+    {% if points_of_interest %}
+    <div class="poi-section">
+        {% for poi in points_of_interest %}
+        <h2 class="poi-name">{{ poi.name }}</h2>
+        <div class="poi-cards">
+            {% for poi_card in poi.cards %}
+            {% set poi_card_title = poi_card.title or _("Carte #%(id)s", id=poi_card.id) %}
+            <a class="poi-card" href="{{ url_for('home.card_detail', card_id=poi_card.id) }}"
+               title="{{ poi_card_title }}{% if poi_card.title2 %} - {{ poi_card.title2 }}{% endif %}">
+                <div class="poi-card-thumb">
+                    <img src="{{ url_for('home.images', filename=poi_card.recto) }}"
+                         alt="{{ poi_card_title }}"
+                         loading="lazy">
+                    {% if poi_card.title or poi_card.title2 %}
+                    <div class="poi-card-caption">
+                        {% if poi_card.title %}
+                        <span class="poi-card-title">{{ poi_card.title }}</span>
+                        {% endif %}
+                        {% if poi_card.title2 %}
+                        <span class="poi-card-title2">{{ poi_card.title2 }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -163,8 +193,6 @@
             versoPreview: "{{ _("Aperçu du verso") }}",
             copyLink: "{{ _("Copier le lien") }}",
             linkCopied: "{{ _("Lien copié !") }}",
-            share: "{{ _("Partager…") }}",
-            shareTitle: {{ card_title | tojson }},
             mastodonPrompt: "{{ _("Sur quelle instance Mastodon avez-vous un compte ? (ex. mastodon.social)") }}"
         };
 
@@ -228,22 +256,10 @@
             }
         });
 
-        // Partage natif (mobile principalement) : affiché seulement si l'API
-        // est disponible, en plus des liens réseaux sociaux classiques.
-        var nativeShareBtn = document.getElementById("share-native");
+        // Partage natif (mobile) retiré : les liens réseaux sociaux
+        // classiques ci-dessous couvrent déjà les usages courants, et
+        // le bouton "Partager…" (navigator.share) faisait doublon.
         var copyBtn = document.getElementById("share-copy");
-
-        if (nativeShareBtn && navigator.share) {
-            nativeShareBtn.hidden = false;
-            nativeShareBtn.addEventListener("click", function () {
-                navigator.share({
-                    title: i18n.shareTitle,
-                    url: copyBtn ? copyBtn.getAttribute("data-url") : window.location.href
-                }).catch(function () {
-                    // Annulation par l'utilisateur ou erreur : rien à faire.
-                });
-            });
-        }
 
         if (copyBtn) {
             copyBtn.addEventListener("click", function () {

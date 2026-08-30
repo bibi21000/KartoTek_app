@@ -55,6 +55,21 @@ class SyncConfig:
     lock_suffix: str = ".lck"      # suffixe du fichier verrou (fetch_locked)
     lock_poll_interval: float = 2.0  # secondes entre deux sondages du verrou
     lock_timeout: float = 60.0      # secondes avant LockTimeoutError
+    # URL de l'endpoint POST /api/v1/admin/restart du serveur flpostcards
+    # ciblé par cette publication, et jeton attendu par ce serveur (voir
+    # [flask] restart_token dans SA postcards.conf -- pas nécessairement
+    # le même fichier que celui-ci). Vide = pas d'appel (comportement
+    # par défaut).
+    restart_url: str = ""
+    restart_token: str = ""
+    # Alternative à restart_url : commande shell exécutée sur l'hôte
+    # distant via la connexion SSH déjà ouverte pour le transfert
+    # (protocole sftp uniquement -- ignorée pour ftp/ftps/ftptls).
+    # Prioritaire sur restart_url si les deux sont définis : pas besoin
+    # d'exposer POST /api/v1/admin/restart publiquement, la commande
+    # peut par exemple appeler l'API en local (127.0.0.1) ou redémarrer
+    # un service système directement. Vide = pas de commande (défaut).
+    restart_command: str = ""
 
     @classmethod
     def from_ini(cls, path: str | Path, section: str = "remotesync") -> "SyncConfig":
@@ -92,6 +107,9 @@ class SyncConfig:
             lock_suffix=s.get("lock_suffix", ".lck"),
             lock_poll_interval=float(s.get("lock_poll_interval", 2.0)),
             lock_timeout=float(s.get("lock_timeout", 60.0)),
+            restart_url=s.get("restart_url", ""),
+            restart_token=s.get("restart_token", ""),
+            restart_command=s.get("restart_command", ""),
         )
 
 
@@ -870,6 +888,26 @@ class _SFTPBackend(_BaseBackend):
     def delete_remote(self, remote_path: str) -> None:
         self._sftp.remove(remote_path)
 
+    def run_command(self, command: str, timeout: float = 10.0) -> tuple[int, str, str]:
+        """
+        Exécute ``command`` sur l'hôte distant, sur la connexion SSH déjà
+        ouverte (``self._ssh``, réutilisée depuis le transfert de
+        fichiers -- pas un nouvel aller-retour d'authentification).
+
+        Utilisé notamment par :meth:`RemoteSync.trigger_restart` pour
+        déclencher le redémarrage du serveur flpostcards distant sans
+        passer par un appel HTTP (donc sans avoir besoin d'exposer
+        POST /api/v1/admin/restart publiquement) -- voir
+        ``[sync_default] restart_command`` dans postcards.conf.
+
+        :returns: ``(exit_status, stdout, stderr)``.
+        """
+        stdin, stdout, stderr = self._ssh.exec_command(command, timeout=timeout)
+        exit_status = stdout.channel.recv_exit_status()
+        out = stdout.read().decode("utf-8", errors="replace")
+        err = stderr.read().decode("utf-8", errors="replace")
+        return exit_status, out, err
+
 
 # ---------------------------------------------------------------------------
 # Exceptions publiques
@@ -1495,6 +1533,120 @@ class RemoteSync:
             poll_interval=poll_interval if poll_interval is not None else self.config.lock_poll_interval,
             timeout=timeout if timeout is not None else self.config.lock_timeout,
         )
+
+    def trigger_restart(self, timeout: float = 10.0) -> bool:
+        """
+        Déclenche le redémarrage du serveur flpostcards ciblé par cette
+        publication, par l'une des deux voies suivantes (configurées
+        dans cette section [sync_default] ou équivalente) :
+
+        1. ``restart_command`` (protocole sftp uniquement) : commande
+           shell exécutée sur l'hôte distant via la connexion SSH déjà
+           utilisée pour le transfert (:meth:`_SFTPBackend.run_command`)
+           -- pas d'appel HTTP, donc pas besoin d'exposer
+           POST /api/v1/admin/restart publiquement. Prioritaire si
+           définie.
+        2. ``restart_url`` (+ ``restart_token`` optionnel) : appel HTTP
+           POST direct à cet endpoint, voir flpostcards ci-dessous.
+
+        No-op silencieux (retourne False, sans lever d'exception) si ni
+        l'un ni l'autre n'est configuré : une publication ne doit jamais
+        échouer à cause de ce mécanisme optionnel. Une erreur
+        réseau/SSH/HTTP est journalisée puis avalée de la même façon.
+
+        :returns: True si le redémarrage a bien été déclenché (commande
+            distante d'exit code 0, ou réponse HTTP 2xx), False sinon.
+        """
+        if self.config.restart_command and self.config.protocol == Protocol.SFTP:
+            return self._trigger_restart_ssh(timeout=timeout)
+        if self.config.restart_url:
+            return self._trigger_restart_http(timeout=timeout)
+        return False
+
+    def _trigger_restart_ssh(self, timeout: float = 10.0) -> bool:
+        """Exécute ``restart_command`` sur l'hôte distant via une nouvelle
+        connexion SSH (mêmes identifiants que le transfert -- voir
+        :meth:`_build_backend`), sans passer par HTTP."""
+        backend = self._build_backend()
+        try:
+            backend.connect()
+            exit_status, out, err = backend.run_command(
+                self.config.restart_command, timeout=timeout
+            )
+        except Exception as exc:
+            logger.warning(
+                "Redémarrage via SSH (%s) : échec de connexion/exécution (%s)",
+                self.config.restart_command, exc,
+            )
+            return False
+        finally:
+            try:
+                backend.disconnect()
+            except Exception:
+                pass
+
+        if exit_status == 0:
+            logger.info(
+                "Redémarrage déclenché via SSH (%s)", self.config.restart_command
+            )
+            return True
+
+        logger.warning(
+            "Redémarrage via SSH (%s) : code de sortie %d%s%s",
+            self.config.restart_command, exit_status,
+            f" -- stdout: {out.strip()}" if out.strip() else "",
+            f" -- stderr: {err.strip()}" if err.strip() else "",
+        )
+        return False
+
+    def _trigger_restart_http(self, timeout: float = 10.0) -> bool:
+        """
+        Appelle POST <restart_url> (avec le jeton ``restart_token``) sur
+        le serveur flpostcards ciblé, pour qu'il redémarre et relise
+        entièrement sa configuration, collections.json, etc. -- voir
+        POST /api/v1/admin/restart côté flpostcards.
+
+        Utilise ``urllib`` (bibliothèque standard) plutôt que
+        ``requests``, cette dernière n'étant pas une dépendance du
+        côté ``ktmanager`` (poste qui publie).
+
+        :returns: True si l'appel a reçu une réponse HTTP 2xx, False sinon.
+        """
+        import urllib.error
+        import urllib.request
+
+        headers = {}
+        if self.config.restart_token:
+            headers["X-Restart-Token"] = self.config.restart_token
+
+        req = urllib.request.Request(
+            self.config.restart_url, method="POST", headers=headers
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                ok = 200 <= resp.status < 300
+                if ok:
+                    logger.info(
+                        "Redémarrage déclenché sur %s (HTTP %d)",
+                        self.config.restart_url, resp.status,
+                    )
+                else:
+                    logger.warning(
+                        "Redémarrage sur %s : réponse HTTP %d inattendue",
+                        self.config.restart_url, resp.status,
+                    )
+                return ok
+        except urllib.error.HTTPError as exc:
+            logger.warning(
+                "Redémarrage sur %s : HTTP %d (%s)",
+                self.config.restart_url, exc.code, exc.reason,
+            )
+        except urllib.error.URLError as exc:
+            logger.warning(
+                "Redémarrage sur %s : échec de connexion (%s)",
+                self.config.restart_url, exc.reason,
+            )
+        return False
 
     # ------------------------------------------------------------------
     # Méthodes internes

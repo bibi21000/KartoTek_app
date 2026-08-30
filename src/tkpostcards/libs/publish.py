@@ -67,3 +67,9 @@ class PostcardPublish:
                 with open(localf, "w") as f:
                     json.dump(local_data, f, ensure_ascii=False, indent=2)
 
+        # Une fois la base, collections.json et updates.json synchronisés,
+        # demande au serveur distant de relire tout ça (voir
+        # RemoteSync.trigger_restart / POST /api/v1/admin/restart côté
+        # flpostcards). No-op silencieux si [config] restart_url n'est
+        # pas défini : ne doit jamais faire échouer une publication.
+        sync.trigger_restart()

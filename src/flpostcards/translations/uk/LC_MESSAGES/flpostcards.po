@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: flpostcards 3.4.2\n"
 "Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
-"POT-Creation-Date: 2026-07-31 01:15+0000\n"
+"POT-Creation-Date: 2026-08-30 09:26+0000\n"
 "PO-Revision-Date: 2026-07-22 11:56+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: uk\n"
@@ -20,52 +20,47 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: __init__.py:419
+#: __init__.py:523
 msgid "Afficher l'adresse email"
 msgstr ""
 
-#: blueprints/__init__.py:57 blueprints/home/__init__.py:57
-#, python-format
-msgid "Ma collection de cartes postales - %(collection)s"
-msgstr "Моя колекція листівок - %(collection)s"
+#: __init__.py:646 __init__.py:651
+msgid "Page introuvable"
+msgstr "Сторінку не знайдено"
 
-#: blueprints/__init__.py:61 blueprints/home/__init__.py:61
-msgid "Ma collection de cartes postales"
-msgstr "Моя колекція листівок"
+#: __init__.py:648
+msgid ""
+"Cette page n'existe pas ou plus. Elle a peut-être été déplacée, ou le "
+"lien que vous avez suivi est incorrect."
+msgstr ""
+"Ця сторінка більше не існує. Можливо, вона була переміщена, або "
+"посилання, яким ви скористалися, є неправильним."
 
-#: blueprints/__init__.py:91 blueprints/home/__init__.py:91
-#: templates/base.html:12
-msgid "Découvrez ma collection de cartes postales anciennes."
-msgstr "Відкрийте для себе мою колекцію старовинних листівок."
+#: __init__.py:653
+msgid "La page demandée n'existe pas ou plus sur ce site de cartes postales."
+msgstr "Запитувана сторінка більше не існує на цьому сайті листівок."
 
-#: blueprints/__init__.py:340 blueprints/home/__init__.py:340
-#: templates/card/detail.html:3 templates/gallery/index.html:89
-#, python-format
-msgid "Carte #%(id)s"
-msgstr "Листівка №%(id)s"
+#: __init__.py:665
+msgid "Erreur inattendue"
+msgstr "Неочікувана помилка"
 
-#: blueprints/__init__.py:352 blueprints/home/__init__.py:352
-msgid "Retour à la galerie"
-msgstr "Повернутися до галереї"
+#: __init__.py:667
+msgid "Une erreur inattendue est survenue. Merci de réessayer dans un instant."
+msgstr "Сталася неочікувана помилка. Спробуйте, будь ласка, ще раз за хвилину."
 
-#: blueprints/__init__.py:354 blueprints/home/__init__.py:354
-msgid "Retour à la balade"
-msgstr "Повернутися до подорожі"
+#: __init__.py:670
+msgid "Erreur"
+msgstr "Помилка"
 
-#: blueprints/__init__.py:356 blueprints/home/__init__.py:356
-msgid "Retour à la carte"
-msgstr "Повернутися до карти"
-
-#: blueprints/__init__.py:358 blueprints/home/__init__.py:358
-#: templates/card/detail.html:12
-msgid "Retour au diaporama"
-msgstr "Повернутися до слайд-шоу"
+#: __init__.py:671
+msgid "Une erreur inattendue est survenue."
+msgstr "Сталася неочікувана помилка."
 
 #: blueprints/contact/__init__.py:49
 msgid "Nouveau message depuis le site"
 msgstr "Нове повідомлення з сайту"
 
-#: blueprints/contact/__init__.py:85 templates/base.html:79
+#: blueprints/contact/__init__.py:85 templates/base.html:88
 msgid "Contact"
 msgstr "Контакти"
 
@@ -97,25 +92,69 @@ msgstr "Не вдалося надіслати повідомлення. Спр�
 msgid "Contactez-moi à propos de ma collection de cartes postales."
 msgstr "Зв'яжіться зі мною щодо моєї колекції листівок."
 
-#: blueprints/gallery/__init__.py:109
+#: blueprints/gallery/__init__.py:154
 #, python-format
 msgid "Toutes les cartes postales - %(collection)s"
 msgstr "Усі листівки - %(collection)s"
 
-#: blueprints/gallery/__init__.py:112
+#: blueprints/gallery/__init__.py:157
 msgid "Toutes les cartes postales"
 msgstr "Усі листівки"
 
-#: blueprints/gallery/__init__.py:132
+#: blueprints/gallery/__init__.py:178
 msgid "Parcourez ma collection de cartes postales anciennes."
 msgstr "Перегляньте мою колекцію старовинних листівок."
+
+#: blueprints/home/__init__.py:64
+#, python-format
+msgid "Ma collection de cartes postales - %(collection)s"
+msgstr "Моя колекція листівок - %(collection)s"
+
+#: blueprints/home/__init__.py:68
+msgid "Ma collection de cartes postales"
+msgstr "Моя колекція листівок"
+
+#: blueprints/home/__init__.py:98 templates/base.html:12
+msgid "Découvrez ma collection de cartes postales anciennes."
+msgstr "Відкрийте для себе мою колекцію старовинних листівок."
+
+#: blueprints/home/__init__.py:380 templates/card/detail.html:3
+#: templates/card/detail.html:162 templates/gallery/index.html:97
+#, python-format
+msgid "Carte #%(id)s"
+msgstr "Листівка №%(id)s"
+
+#: blueprints/home/__init__.py:401
+msgid "Retour à la galerie"
+msgstr "Повернутися до галереї"
+
+#: blueprints/home/__init__.py:403
+msgid "Retour à la balade"
+msgstr "Повернутися до подорожі"
+
+#: blueprints/home/__init__.py:405
+msgid "Retour à la carte"
+msgstr "Повернутися до карти"
+
+#: blueprints/home/__init__.py:407 templates/card/detail.html:19
+msgid "Retour au diaporama"
+msgstr "Повернутися до слайд-шоу"
+
+#: blueprints/home/__init__.py:466 templates/base.html:68
+msgid "Accueil"
+msgstr "Головна"
+
+#: blueprints/home/__init__.py:491
+#, python-format
+msgid "Point d'intérêt #%(id)s"
+msgstr "Цікаве місце №%(id)s"
 
 #: blueprints/map/__init__.py:34
 #, python-format
 msgid "Carte - %(collection)s"
 msgstr "Карта - %(collection)s"
 
-#: blueprints/map/__init__.py:36 templates/base.html:75
+#: blueprints/map/__init__.py:36 templates/base.html:84
 msgid "Carte"
 msgstr "Карта"
 
@@ -127,7 +166,7 @@ msgstr "Знайдіть мою колекцію листівок на карт�
 msgid "L'administrateur de ce site KartoTek"
 msgstr "Адміністратор цього сайту KartoTek"
 
-#: blueprints/privacy/__init__.py:72 templates/base.html:98
+#: blueprints/privacy/__init__.py:72 templates/base.html:107
 msgid "Politique de confidentialité"
 msgstr "Політика конфіденційності"
 
@@ -140,7 +179,7 @@ msgstr "Які дані збирає цей сайт KartoTek і навіщо."
 msgid "Diaporama - %(collection)s"
 msgstr "Слайд-шоу - %(collection)s"
 
-#: blueprints/slideshow/__init__.py:46 templates/base.html:63
+#: blueprints/slideshow/__init__.py:46 templates/base.html:72
 msgid "Diaporama"
 msgstr "Слайд-шоу"
 
@@ -148,15 +187,30 @@ msgstr "Слайд-шоу"
 msgid "Toutes mes cartes postales en diaporama."
 msgstr "Усі мої листівки у форматі слайд-шоу."
 
-#: blueprints/travel/__init__.py:22
+#: blueprints/travel/__init__.py:31
+#, python-format
+msgid "%(h)d h %(m)d min"
+msgstr "%(h)d год %(m)d хв"
+
+#: blueprints/travel/__init__.py:33
+#, python-format
+msgid "%(h)d h"
+msgstr "%(h)d год"
+
+#: blueprints/travel/__init__.py:34
+#, python-format
+msgid "%(m)d min"
+msgstr "%(m)d хв"
+
+#: blueprints/travel/__init__.py:45
 msgid "Balades dans le temps au fil des cartes postales"
 msgstr "Подорожі в часі крізь листівки"
 
-#: blueprints/travel/__init__.py:30 blueprints/travel/__init__.py:70
+#: blueprints/travel/__init__.py:53 blueprints/travel/__init__.py:93
 msgid "Suivez mes parcours à travers ma collection de cartes postales."
 msgstr "Слідкуйте за моїми подорожами через мою колекцію листівок."
 
-#: blueprints/travel/__init__.py:49
+#: blueprints/travel/__init__.py:72
 #, python-format
 msgid "Parcours #%(id)s"
 msgstr "Подорож №%(id)s"
@@ -165,121 +219,109 @@ msgstr "Подорож №%(id)s"
 msgid "Cartes postales"
 msgstr "Листівки"
 
-#: templates/base.html:59
-msgid "Accueil"
-msgstr "Головна"
-
-#: templates/base.html:67
+#: templates/base.html:76
 msgid "Galerie"
 msgstr "Галерея"
 
-#: templates/base.html:71
+#: templates/base.html:80
 msgid "Balades"
 msgstr "Подорожі"
 
-#: templates/card/detail.html:10
+#: templates/card/detail.html:17
 msgid "Retour"
 msgstr "Назад"
 
-#: templates/card/detail.html:15
+#: templates/card/detail.html:22
 msgid "Cliquer pour agrandir"
 msgstr "Натисніть, щоб збільшити"
 
-#: templates/card/detail.html:19 templates/gallery/index.html:94
-#: src/flpostcards/blueprints/home/__init__.py:384
-#, python-format
-msgid "Recto de la carte %(id)s"
-msgstr "Лицьова сторона листівки %(id)s"
-
-#: src/flpostcards/blueprints/home/__init__.py:380
-#: src/flpostcards/templates/gallery/index.html:102
-#, python-format
-msgid "Recto de la carte %(id)s : %(content)s"
-msgstr "Лицьова сторона листівки %(id)s: %(content)s"
-
-#: templates/card/detail.html:23 templates/gallery/index.html:100
+#: templates/card/detail.html:31 templates/gallery/index.html:108
 #, python-format
 msgid "Verso de la carte %(id)s"
 msgstr "Зворотна сторона листівки %(id)s"
 
-#: templates/card/detail.html:25
+#: templates/card/detail.html:33
 msgid "Afficher l'autre face"
 msgstr "Показати іншу сторону"
 
-#: templates/card/detail.html:28
+#: templates/card/detail.html:36
 msgid "Aperçu de l'autre face"
 msgstr "Попередній перегляд іншої сторони"
 
-#: templates/card/detail.html:61
+#: templates/card/detail.html:59
+msgid "Voir le diaporama de cette collection"
+msgstr "Переглянути слайд-шоу цієї колекції"
+
+#: templates/card/detail.html:68
+msgid "Aujourd'hui"
+msgstr "Сьогодні"
+
+#: templates/card/detail.html:73
 msgid "OpenStreetMap"
 msgstr "OpenStreetMap"
 
-#: templates/card/detail.html:66
+#: templates/card/detail.html:78
 msgid "Google Maps"
 msgstr "Google Maps"
 
-#: templates/card/detail.html:71
+#: templates/card/detail.html:83
 msgid "Street View"
 msgstr "Street View"
 
-#: templates/card/detail.html:83
+#: templates/card/detail.html:97
 msgid "Partager"
 msgstr "Поділитися"
 
-#: templates/card/detail.html:88 templates/card/detail.html:156
-msgid "Partager…"
-msgstr "Поділитися…"
-
-#: templates/card/detail.html:93
+#: templates/card/detail.html:102
 msgid "Partager sur Facebook"
 msgstr "Поділитися у Facebook"
 
-#: templates/card/detail.html:99
+#: templates/card/detail.html:108
 msgid "Partager sur X"
 msgstr "Поділитися у X"
 
-#: templates/card/detail.html:105
+#: templates/card/detail.html:114
 msgid "Partager sur Bluesky"
 msgstr "Поділитися у Bluesky"
 
-#: templates/card/detail.html:113
+#: templates/card/detail.html:122
 msgid "Partager sur Mastodon"
 msgstr "Поділитися у Mastodon"
 
-#: templates/card/detail.html:119
+#: templates/card/detail.html:128
 msgid "Partager sur WhatsApp"
 msgstr "Поділитися у WhatsApp"
 
-#: templates/card/detail.html:125
+#: templates/card/detail.html:134
 msgid "Épingler sur Pinterest"
 msgstr "Закріпити на Pinterest"
 
-#: templates/card/detail.html:130
+#: templates/card/detail.html:139
 msgid "Partager par e-mail"
 msgstr "Надіслати електронною поштою"
 
-#: templates/card/detail.html:131
+#: templates/card/detail.html:140
 msgid "E-mail"
 msgstr "Ел. пошта"
 
-#: templates/card/detail.html:137 templates/card/detail.html:138
-#: templates/card/detail.html:154
+#: templates/card/detail.html:146 templates/card/detail.html:147
+#: templates/card/detail.html:188
 msgid "Copier le lien"
 msgstr "Скопіювати посилання"
 
-#: templates/card/detail.html:152
+#: templates/card/detail.html:186
 msgid "Aperçu du recto"
 msgstr "Попередній перегляд лицьової сторони"
 
-#: templates/card/detail.html:153
+#: templates/card/detail.html:187
 msgid "Aperçu du verso"
 msgstr "Попередній перегляд зворотної сторони"
 
-#: templates/card/detail.html:155
+#: templates/card/detail.html:189
 msgid "Lien copié !"
 msgstr "Посилання скопійовано!"
 
-#: templates/card/detail.html:158
+#: templates/card/detail.html:190
 msgid "Sur quelle instance Mastodon avez-vous un compte ? (ex. mastodon.social)"
 msgstr "На якому інстансі Mastodon у вас є акаунт? (напр., mastodon.social)"
 
@@ -311,6 +353,10 @@ msgstr "Надіслати"
 msgid "Site propulsé et hébergé par"
 msgstr "Сайт створено та розміщено за допомогою"
 
+#: templates/errors/error.html:14
+msgid "Retour à l'accueil"
+msgstr "На головну"
+
 #: templates/gallery/index.html:12
 #, python-format
 msgid "%(count)d carte"
@@ -329,88 +375,88 @@ msgstr "Пошук"
 msgid "Rechercher..."
 msgstr "Пошук..."
 
-#: templates/gallery/index.html:31 templates/home/index.html:22
-#: templates/map/index.html:16 templates/slideshow/index.html:18
+#: templates/gallery/index.html:31 templates/home/index.html:26
+#: templates/map/index.html:17 templates/slideshow/index.html:22
 msgid "Collection"
 msgstr "Колекція"
 
-#: templates/gallery/index.html:34 templates/home/index.html:25
-#: templates/map/index.html:19 templates/slideshow/index.html:21
+#: templates/gallery/index.html:34 templates/home/index.html:29
+#: templates/map/index.html:20 templates/slideshow/index.html:25
 msgid "Toutes les collections"
 msgstr "Усі колекції"
 
-#: templates/gallery/index.html:46
+#: templates/gallery/index.html:47
 msgid "Affichage"
 msgstr "Відображення"
 
-#: templates/gallery/index.html:49
+#: templates/gallery/index.html:50
 msgid "Recto / verso"
 msgstr "Лицьова / зворотна сторона"
 
-#: templates/gallery/index.html:52
+#: templates/gallery/index.html:53
 msgid "Recto"
 msgstr "Лицьова сторона"
 
-#: templates/gallery/index.html:55
+#: templates/gallery/index.html:56
 msgid "Verso"
 msgstr "Зворотна сторона"
 
-#: templates/gallery/index.html:61
+#: templates/gallery/index.html:63
 msgid "Doublons"
 msgstr "Дублікати"
 
-#: templates/gallery/index.html:64
+#: templates/gallery/index.html:66
 msgid "Sans doublons"
 msgstr "Без дублікатів"
 
-#: templates/gallery/index.html:67
+#: templates/gallery/index.html:69
 msgid "Avec doublons"
 msgstr "З дублікатами"
 
-#: templates/gallery/index.html
+#: templates/gallery/index.html:72
 msgid "À échanger"
 msgstr "На обмін"
 
-#: templates/gallery/index.html
+#: templates/gallery/index.html:75
 msgid "Échangées"
 msgstr "Обміняно"
 
-#: templates/gallery/index.html:73
+#: templates/gallery/index.html:81
 msgid "Cartes par page"
 msgstr "Листівок на сторінку"
 
-#: templates/gallery/index.html:77
+#: templates/gallery/index.html:85
 #, python-format
 msgid "%(n)d par page"
 msgstr "%(n)d на сторінку"
 
-#: templates/gallery/index.html:116
+#: templates/gallery/index.html:124
 msgid "Première page"
 msgstr "Перша сторінка"
 
-#: templates/gallery/index.html:141
+#: templates/gallery/index.html:149
 msgid "Dernière page"
 msgstr "Остання сторінка"
 
-#: templates/gallery/index.html:152
+#: templates/gallery/index.html:160
 msgid "Aucune carte ne correspond à ces critères."
 msgstr "Жодна листівка не відповідає цим критеріям."
 
-#: templates/home/index.html:12 templates/slideshow/index.html:12
+#: templates/home/index.html:15 templates/home/index.html:55
+#: templates/slideshow/index.html:15 templates/slideshow/index.html:50
 msgid "Verso de la carte"
 msgstr "Зворотна сторона листівки"
 
-#: templates/home/index.html:49
+#: templates/home/index.html:53
 msgid "Ajoutée le"
 msgstr "Додано"
 
-#: src/flpostcards/templates/home/index.html:55
-#: src/flpostcards/templates/slideshow/index.html:44
-#: src/flpostcards/templates/travel/detail.html:49
+#: templates/home/index.html:54 templates/slideshow/index.html:49
+#: templates/travel/detail.html:49
 msgid "Carte postale"
 msgstr "Листівка"
 
-#: templates/map/index.html:38
+#: templates/map/index.html:39
 msgid "Points d'intérêt"
 msgstr "Цікаві місця"
 
@@ -671,19 +717,15 @@ msgstr ""
 "Цей сайт не продає й не передає ваші дані рекламодавцям чи брокерам "
 "даних. Він не показує жодної реклами."
 
-#: templates/travel/detail.html:23
-msgid "Toutes les balades"
-msgstr "Усі подорожі"
-
-#: templates/travel/detail.html:26 templates/travel/detail.html:50
+#: templates/travel/detail.html:23 templates/travel/detail.html:47
 msgid "Mettre en pause"
 msgstr "Призупинити"
 
-#: templates/travel/detail.html:49
+#: templates/travel/detail.html:46
 msgid "Suivant"
 msgstr "Наступний"
 
-#: templates/travel/detail.html:51
+#: templates/travel/detail.html:48
 msgid "Reprendre"
 msgstr "Продовжити"
 
@@ -692,73 +734,27 @@ msgstr "Продовжити"
 msgid "%(distance)s km"
 msgstr "%(distance)s км"
 
-#: blueprints/travel/__init__.py
-#, python-format
-msgid "%(h)d h %(m)d min"
-msgstr "%(h)d год %(m)d хв"
-
-#: blueprints/travel/__init__.py
-#, python-format
-msgid "%(h)d h"
-msgstr "%(h)d год"
-
-#: blueprints/travel/__init__.py
-#, python-format
-msgid "%(m)d min"
-msgstr "%(m)d хв"
-
-#: templates/travel/index.html:35
+#: templates/travel/index.html:39
 #, python-format
 msgid "Mise à jour le %(date)s"
 msgstr "Оновлено %(date)s"
 
-#: templates/travel/index.html:43
+#: templates/travel/index.html:47
 msgid "Aucun parcours disponible."
 msgstr "Немає доступних подорожей."
 
-#: src/flpostcards/__init__.py:532
-#: src/flpostcards/__init__.py:537
-msgid "Page introuvable"
-msgstr "Сторінку не знайдено"
-
-#: src/flpostcards/__init__.py:533
-msgid ""
-"Cette page n'existe pas ou plus. Elle a peut-être été déplacée, ou le"
-" lien que vous avez suivi est incorrect."
-msgstr ""
-"Ця сторінка більше не існує. Можливо, вона була переміщена, або"
-" посилання, яким ви скористалися, є неправильним."
-
-#: src/flpostcards/__init__.py:538
-msgid ""
-"La page demandée n'existe pas ou plus sur ce site de cartes postales."
-msgstr ""
-"Запитувана сторінка більше не існує на цьому сайті листівок."
-
-#: src/flpostcards/__init__.py:551
-msgid "Erreur inattendue"
-msgstr "Неочікувана помилка"
-
-#: src/flpostcards/__init__.py:552
-msgid ""
-"Une erreur inattendue est survenue. Merci de réessayer dans un"
-" instant."
-msgstr ""
-"Сталася неочікувана помилка. Спробуйте, будь ласка, ще раз за"
-" хвилину."
-
-#: src/flpostcards/__init__.py:556
-msgid "Erreur"
-msgstr "Помилка"
-
-#: src/flpostcards/__init__.py:557
-msgid "Une erreur inattendue est survenue."
-msgstr "Сталася неочікувана помилка."
-
-#: src/flpostcards/templates/errors/error.html:14
-msgid "Retour à l'accueil"
-msgstr "На головну"
-
 #~ msgid "Position GPS de votre téléphone"
 #~ msgstr "GPS-положення вашого телефону"
+
+#~ msgid "Recto de la carte %(id)s"
+#~ msgstr "Лицьова сторона листівки %(id)s"
+
+#~ msgid "Recto de la carte %(id)s : %(content)s"
+#~ msgstr "Лицьова сторона листівки %(id)s: %(content)s"
+
+#~ msgid "Toutes les balades"
+#~ msgstr "Усі подорожі"
+
+#~ msgid "Partager…"
+#~ msgstr "Поділитися…"
 

@@ -18,6 +18,9 @@ Routes :
   GET  /api/v1/reports       → liste les signalements (managers uniquement, auth JWT requise)
   POST /api/v1/reports/<id>/resolve → marque un signalement comme traité (managers uniquement)
   GET  /api/v1/metrics       → télémétrie légère (managers uniquement, auth JWT requise)
+  POST /api/v1/admin/restart → redémarre ce worker (rechargement complet : postcards.conf,
+                                collections.json, ...) — jeton partagé [flask] restart_token,
+                                pas d'auth JWT ; désactivé (404) si ce jeton n'est pas configuré
   # NB : /api/v1/push/register et /unregister vivent désormais sur le
   # master (kartotek.eu) — l'app mobile s'y inscrit une seule fois pour
   # tous les serveurs. Ce serveur appelle seulement le master en interne
@@ -54,13 +57,14 @@ import hashlib
 import importlib.resources as importlib_resources
 import json
 import math
+import secrets
 import time
 import uuid
 from pathlib import Path
 from typing import Any
 
 import requests
-from flask import Blueprint, current_app, jsonify, request, url_for
+from flask import Blueprint, abort, current_app, jsonify, request, url_for
 
 from flpostcards.auth import current_auth_email, issue_token_pair, require_auth
 from flpostcards.extensions import limiter
@@ -1940,3 +1944,99 @@ def metrics(auth_email: str):
     from flpostcards import metrics as metrics_module
 
     return jsonify(metrics_module.snapshot())
+
+
+# ---------------------------------------------------------------------------
+# Administration — redémarrage à distance
+# ---------------------------------------------------------------------------
+# Déclenché par tkpostcards/libs/publish.py (PostcardPublish.publish()) à la
+# fin d'une publication réussie, via [sync_default] restart_url dans la
+# postcards.conf du poste qui publie. But : forcer un rechargement complet
+# du worker qui répond (postcards.conf relu, app.config["COLLECTIONS"]
+# régénéré depuis collections.json, etc.).
+#
+# NB : la reconnexion à postcards.sqlite se fait déjà automatiquement, sans
+# redémarrage, dès qu'un changement de fichier (mtime/inode) est détecté --
+# voir libpostcards.model.Model._get_conn. Ce endpoint reste utile pour
+# tout le reste (collections.json, thème, config), lu seulement au
+# démarrage du worker.
+
+
+def _restart_token_key() -> str:
+    """Clé de rate limiting pour /api/v1/admin/restart : par IP, comme
+    /api/v1/report -- cet endpoint n'exige pas d'auth JWT (voir
+    docstring), seulement un jeton partagé, donc le seul frein aux
+    tentatives par force brute est le débit par adresse."""
+    return get_remote_address()
+
+
+def _schedule_restart(delay: float = 0.5) -> None:
+    """Envoie SIGTERM à CE processus après un court délai (laisser
+    partir la réponse HTTP en cours avant que le worker ne s'arrête).
+
+    N'implique pas de relancer le processus soi-même : sous gunicorn
+    (déploiement recommandé en production), l'arbiter relance
+    aussitôt un worker neuf à la place de celui qui vient de recevoir
+    SIGTERM -- exactement le même mécanisme que le recyclage
+    périodique des workers (option --max-requests). Sans superviseur
+    de processus (ex : `python run.py` lancé à la main), le processus
+    s'arrête et n'est PAS relancé automatiquement : prévoir un service
+    systemd, Docker (politique de redémarrage), ou équivalent en
+    production.
+    """
+    import signal
+    import threading
+
+    def _terminate() -> None:
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Timer(delay, _terminate).start()
+
+
+@bp.route("/api/v1/admin/restart", methods=["POST"])
+@limiter.limit("5 per minute", key_func=_restart_token_key)
+def admin_restart():
+    """
+    Redémarre le worker flpostcards courant, pour qu'il relise
+    entièrement postcards.conf et régénère tout ce qu'il n'a chargé
+    qu'à son démarrage (ex : le thème actif). Purge aussi immédiatement
+    le cache JSON (collections/pois/travels, voir
+    flpostcards.data_cache) : avec un backend Redis partagé entre
+    plusieurs workers, ce redémarrage à lui seul ne le viderait pas
+    (contrairement à COLLECTIONS/COLLECTIONS_MAP, qui ne vivent que
+    dans ce process et disparaissent avec lui).
+
+    Authentification : jeton partagé, à envoyer soit dans l'en-tête
+    ``X-Restart-Token``, soit dans le paramètre de requête ``token``
+    (pratique pour un simple appel curl depuis un script de
+    publication). Doit correspondre à [flask] restart_token dans
+    postcards.conf. Comparaison en temps constant (secrets.compare_digest).
+
+    Codes de retour :
+      202 { "status": "restarting" }  — redémarrage programmé
+      403 { "error": "invalid token" } — jeton absent ou incorrect
+      404                               — endpoint désactivé : pas de
+                                          [flask] restart_token configuré
+                                          sur ce serveur
+    """
+    expected = current_app.config.get("RESTART_TOKEN")
+    if not expected:
+        abort(404)
+
+    provided = request.headers.get("X-Restart-Token") or request.args.get("token") or ""
+    if not secrets.compare_digest(provided, expected):
+        current_app.logger.warning(
+            "POST /api/v1/admin/restart : jeton invalide (IP=%s)",
+            get_remote_address(),
+        )
+        return jsonify({"error": "invalid token"}), 403
+
+    current_app.logger.warning(
+        "POST /api/v1/admin/restart : redémarrage programmé (IP=%s)",
+        get_remote_address(),
+    )
+    from flpostcards import data_cache
+
+    data_cache.invalidate()
+    _schedule_restart()
+    return jsonify({"status": "restarting"}), 202

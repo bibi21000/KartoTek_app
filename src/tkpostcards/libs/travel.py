@@ -49,6 +49,12 @@ class ParcoursCartes:
             travel_data['id'] = travels[tt]['id']
             travel_data['title'] = travels[tt]['title']
             travel_data['title2'] = travels[tt]['title2']
+            # Ordre d'affichage sur la page /travel/ de flpostcards (voir
+            # Model.list_travels/reorder_travels_json) : source de vérité
+            # dans travels.json, propagé ici à chaque régénération comme
+            # title/title2 -- 0 par défaut si absent (ancien travels.json
+            # sans ce champ).
+            travel_data['position'] = travels[tt].get('position', 0)
 
             # model.write_travel() met à jour mdate lui-même, uniquement
             # si "cards" a réellement changé par rapport à la version déjà

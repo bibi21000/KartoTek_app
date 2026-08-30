@@ -9,13 +9,13 @@ import logging
 import time
 from pathlib import Path
 
-from flask import Flask, g, render_template, request
+from flask import Flask, current_app, g, render_template, request
 from flask_babel import Babel
 from markupsafe import Markup
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from libpostcards.model import Model
-from flpostcards.extensions import limiter
+from flpostcards.extensions import cache, limiter
 
 # Langues disponibles pour l'application Flask
 LANGUAGES = ["fr", "en", "uk"]
@@ -76,7 +76,12 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     # filtre sur la carte publique (/map/) : ne vivent plus dans
     # postcards.conf, mais dans <datadir>/collections.json (voir
     # libpostcards.model.Model.get_collections), pour pouvoir être
-    # modifiées depuis tkmanager sans redémarrer l'appli Flask.
+    # modifiées depuis tkmanager sans redémarrer l'appli Flask -- valeur
+    # initiale ici (utilisée pour les toutes premières requêtes, ou si
+    # le cache est indisponible) ; rafraîchie ensuite avant chaque
+    # requête depuis flpostcards.data_cache (TTL [flask]
+    # json_cache_ttl_s, 15 min par défaut), voir le before_request
+    # ci-dessous dans create_app().
     collections, collections_map = Model(app.config["DATADIR"]).get_collections()
     app.config["COLLECTIONS"] = collections
     app.config["COLLECTIONS_MAP"] = collections_map
@@ -93,6 +98,8 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["PORT"] = parser.getint("flask", "port")
             elif key == "secret_key":
                 app.config["SECRET_KEY"] = value
+            elif key == "restart_token":
+                app.config["RESTART_TOKEN"] = value or None
             elif key == "recent_days":
                 app.config["RECENT_DAYS"] = parser.getint("flask", "recent_days")
             elif key == "recent_fallback_count":
@@ -129,10 +136,10 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["TRUSTED_PROXIES"] = parser.getint(
                     "flask", "trusted_proxies"
                 )
-            elif key == "rate_limit_storage_uri":
-                app.config["RATELIMIT_STORAGE_URI"] = value
-            elif key == "rate_limit_key_prefix":
-                app.config["RATELIMIT_KEY_PREFIX"] = value
+            elif key == "json_cache_ttl_s":
+                app.config["CACHE_DEFAULT_TIMEOUT"] = parser.getint(
+                    "flask", "json_cache_ttl_s"
+                )
             elif key == "image_cache_max_age_s":
                 app.config["IMAGE_CACHE_MAX_AGE_S"] = parser.getint(
                     "flask", "image_cache_max_age_s"
@@ -193,23 +200,85 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     # compte dans des en-têtes potentiellement à plusieurs valeurs
     # comme X-Forwarded-Proto/X-Forwarded-For.
     app.config.setdefault("TRUSTED_PROXIES", 1)
+    # ------------------------------------------------------------------
+    # [redis] : serveur Redis mutualisé, optionnel, partagé par toutes
+    # les fonctionnalités qui en ont besoin (rate limiting, cache JSON
+    # -- potentiellement d'autres à l'avenir). Un seul serveur/URL à
+    # définir ici, plutôt qu'une URL Redis par fonctionnalité.
+    #
+    # - "prefix" (défaut "kartotek") : préfixe global, à changer si
+    #   plusieurs applications Flask (plusieurs sites KartoTek, ou une
+    #   application Flask totalement différente) partagent la même
+    #   instance Redis -- sans préfixe différent par application, leurs
+    #   clés se mélangeraient.
+    # - "ratelimit_prefix" / "cache_prefix" (défauts "ratelimit" /
+    #   "cache") : sous-préfixes ajoutés à "prefix" pour isoler les
+    #   compteurs de rate limiting des entrées du cache JSON au sein
+    #   d'une même application.
+    #
+    # Sans [redis] url défini : repli sur un stockage local à chaque
+    # worker (mémoire), pour le rate limiting comme pour le cache --
+    # voir les avertissements plus bas.
+    redis_url = ""
+    redis_prefix = "kartotek"
+    redis_ratelimit_prefix = "ratelimit"
+    redis_cache_prefix = "cache"
+    if parser.has_section("redis"):
+        redis_url = parser.get("redis", "url", fallback="").strip()
+        redis_prefix = parser.get("redis", "prefix", fallback=redis_prefix).strip()
+        redis_ratelimit_prefix = parser.get(
+            "redis", "ratelimit_prefix", fallback=redis_ratelimit_prefix
+        ).strip()
+        redis_cache_prefix = parser.get(
+            "redis", "cache_prefix", fallback=redis_cache_prefix
+        ).strip()
+
     # Backend de comptage pour le rate limiting (flpostcards/extensions.py) :
     # "memory://" (défaut) suffit en dev ou avec un seul worker, mais
     # chaque worker gunicorn a alors ses propres compteurs en mémoire
-    # -> la limite réelle est multipliée par le nombre de workers.
-    # En production avec plusieurs workers/instances, définir
-    # [flask] rate_limit_storage_uri = redis://host:6379/0 (nécessite
-    # le paquet Python "redis") pour un comptage partagé et fiable.
-    app.config.setdefault("RATELIMIT_STORAGE_URI", "memory://")
+    # -> la limite réelle est multipliée par le nombre de workers. En
+    # production avec plusieurs workers/instances, définir [redis] url
+    # (nécessite le paquet Python "redis") pour un comptage partagé.
+    app.config.setdefault(
+        "RATELIMIT_STORAGE_URI", redis_url or "memory://"
+    )
     # Préfixe des clés de rate limiting (flask-limiter, config
-    # RATELIMIT_KEY_PREFIX) : indispensable si plusieurs serveurs
-    # flpostcards distincts (plusieurs sites KartoTek) partagent la
-    # même instance Redis pour RATELIMIT_STORAGE_URI -- sans préfixe
-    # différent par serveur, leurs compteurs se mélangeraient (ex :
-    # un attaquant bloqué sur le serveur A épuiserait aussi le quota
-    # du serveur B). Définir [flask] rate_limit_key_prefix = <nom du
-    # site> pour chaque serveur.
-    app.config.setdefault("RATELIMIT_KEY_PREFIX", "")
+    # RATELIMIT_KEY_PREFIX) = [redis] prefix:ratelimit_prefix --
+    # indispensable si plusieurs serveurs flpostcards distincts
+    # (plusieurs sites KartoTek) partagent la même instance Redis :
+    # sans préfixe différent par serveur, leurs compteurs se
+    # mélangeraient (ex : un attaquant bloqué sur le serveur A
+    # épuiserait aussi le quota du serveur B).
+    app.config.setdefault(
+        "RATELIMIT_KEY_PREFIX",
+        f"{redis_prefix}:{redis_ratelimit_prefix}" if redis_url else "",
+    )
+
+    # Cache JSON (flpostcards/data_cache.py : collections, pois,
+    # travels) : Redis si [redis] url est défini (mêmes host/prefix
+    # global que le rate limiting, avec son propre sous-préfixe
+    # cache_prefix), sinon un cache mémoire local au worker
+    # (flask_caching.SimpleCache -- chaque worker recalcule/relit donc
+    # indépendamment, avec le même risque de "vue différente selon le
+    # worker répondant" que RATELIMIT_STORAGE_URI=memory://, mais sans
+    # gravité ici : ce ne sont que des données affichées, pas des
+    # compteurs de sécurité). Durée de vie par défaut 15 minutes, voir
+    # [flask] json_cache_ttl_s plus haut.
+    app.config.setdefault("CACHE_DEFAULT_TIMEOUT", 15 * 60)
+    if redis_url:
+        app.config.setdefault("CACHE_TYPE", "RedisCache")
+        app.config.setdefault("CACHE_REDIS_URL", redis_url)
+        app.config.setdefault(
+            "CACHE_KEY_PREFIX", f"{redis_prefix}:{redis_cache_prefix}:"
+        )
+    else:
+        app.config.setdefault("CACHE_TYPE", "SimpleCache")
+
+    # Jeton de redémarrage (voir POST /api/v1/admin/restart dans
+    # blueprints/api). None (clé absente ou vide) désactive l'endpoint
+    # (404) -- comportement par défaut tant que [flask] restart_token
+    # n'est pas explicitement défini.
+    app.config.setdefault("RESTART_TOKEN", None)
 
     # Notifications push — ce serveur ne fait plus qu'un relais vers le
     # master centralisé (voir flpostcards.push.notify_master et
@@ -297,6 +366,23 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
             "sécurité (32 caractères aléatoires minimum recommandés, ex. "
             "`python3 -c \"import secrets; print(secrets.token_urlsafe(32))\"`).",
             len(secret_key),
+        )
+
+    restart_token = app.config.get("RESTART_TOKEN")
+    if restart_token in ("change-me-please",):
+        app.logger.warning(
+            "postcards.conf [flask] restart_token vaut encore la valeur "
+            "d'exemple 'change-me-please' : n'importe qui connaissant ce "
+            "jeton peut redémarrer ce worker (POST /api/v1/admin/restart). "
+            "À changer avant toute mise en production."
+        )
+    elif restart_token and len(restart_token) < 16:
+        app.logger.warning(
+            "postcards.conf [flask] restart_token ne fait que %d "
+            "caractères : trop court pour résister à une devinette "
+            "(16 caractères aléatoires minimum recommandés, ex. "
+            "`python3 -c \"import secrets; print(secrets.token_urlsafe(32))\"`).",
+            len(restart_token),
         )
 
 
@@ -444,30 +530,58 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
         ).format(payload=payload, label=reveal_label, fallback=human_fallback)
 
     limiter.init_app(app)
+    cache.init_app(app)
 
     if app.config["RATELIMIT_STORAGE_URI"] == "memory://" and not app.debug:
         app.logger.warning(
             "rate limiting : stockage en mémoire (memory://) utilisé hors "
             "debug -- avec plusieurs workers gunicorn, les compteurs ne "
             "sont pas partagés entre processus, ce qui affaiblit la "
-            "limite réelle. Définir [flask] rate_limit_storage_uri "
-            "(ex : redis://host:6379/0) pour un déploiement multi-workers."
+            "limite réelle. Définir [redis] url (ex : redis://host:6379/0) "
+            "pour un déploiement multi-workers -- cache JSON "
+            "(flpostcards/data_cache.py) et rate limiting partagent alors "
+            "la même instance Redis."
         )
     elif (
         app.config["RATELIMIT_STORAGE_URI"].startswith("redis")
         and not app.config["RATELIMIT_KEY_PREFIX"]
     ):
         app.logger.warning(
-            "rate limiting : rate_limit_storage_uri pointe vers Redis mais "
-            "[flask] rate_limit_key_prefix n'est pas défini -- si cette "
-            "instance Redis est partagée entre plusieurs serveurs "
-            "flpostcards, leurs compteurs de rate limiting vont se "
-            "mélanger. Définir un préfixe distinct par serveur (ex : nom "
-            "du site) si c'est le cas."
+            "rate limiting : [redis] url pointe vers Redis mais le préfixe "
+            "de clé résolu est vide -- si cette instance Redis est "
+            "partagée entre plusieurs serveurs flpostcards (ou d'autres "
+            "applications Flask), leurs compteurs de rate limiting vont "
+            "se mélanger. Vérifier [redis] prefix / ratelimit_prefix."
+        )
+    if (
+        app.config["CACHE_TYPE"] == "SimpleCache"
+        and not app.debug
+    ):
+        app.logger.warning(
+            "cache JSON (flpostcards/data_cache.py) : stockage en mémoire "
+            "local au worker -- avec plusieurs workers gunicorn, chacun "
+            "relit indépendamment collections/pois/travels toutes les "
+            "[flask] json_cache_ttl_s secondes (pas de gravité, juste "
+            "moins d'effet de mutualisation). Définir [redis] url pour un "
+            "cache réellement partagé entre workers."
         )
 
     # Modèle partagé (lecture uniquement côté Flask)
     app.model = Model(app.config["DATADIR"])
+
+    # Rafraîchit COLLECTIONS/COLLECTIONS_MAP (voir plus haut) depuis le
+    # cache JSON (flpostcards.data_cache, TTL [flask] json_cache_ttl_s)
+    # avant chaque requête -- tous les lecteurs existants
+    # (current_app.config.get("COLLECTIONS"/"COLLECTIONS_MAP")) restent
+    # inchangés, ils voient juste une valeur périodiquement rafraîchie
+    # au lieu d'une valeur figée au démarrage du worker.
+    @app.before_request
+    def _refresh_collections_cache():
+        from flpostcards import data_cache
+
+        collections, collections_map = data_cache.get_collections_cached()
+        current_app.config["COLLECTIONS"] = collections
+        current_app.config["COLLECTIONS_MAP"] = collections_map
 
     from flpostcards.blueprints.home import bp as home_bp
     app.register_blueprint(home_bp)

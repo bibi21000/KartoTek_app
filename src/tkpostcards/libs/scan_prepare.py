@@ -9,6 +9,15 @@ white background transparent) that used to live only in
 call :func:`prepare_pairs` so the exact same correction is applied whatever
 the front-end.
 
+Every parameter controlling that correction (white threshold, crop
+margin, ...) is grouped in a named :class:`~.scan_profiles.ScanProfile`
+("modèle d'import" -- see :mod:`tkpostcards.libs.scan_profiles`) rather
+than passed around individually: :func:`make_corrector` /
+:func:`prepare_pairs` accept a ``profile`` (defaulting to the
+``cpa`` built-in profile), plus an optional ``white_threshold``
+kept for quick one-off overrides (CLI ``--white-threshold``, legacy
+config).
+
 The raw scans found in ``importdir`` are expected two-by-two (recto then
 verso) and are renamed/corrected into ``<id>_R.<ext>`` / ``<id>_V.<ext>``,
 *staying in importdir* until they are reviewed (tkimport step 2) and added
@@ -18,6 +27,7 @@ import os
 from pathlib import Path
 
 from .importdir import group_raw_scans
+from .scan_profiles import BUILTIN_PROFILES, DEFAULT_PROFILE_NAME
 
 
 class PreparedPair(object):
@@ -33,20 +43,40 @@ class PreparedPair(object):
         self.verso_dst = verso_dst
 
 
-def make_corrector(white_threshold=240, verbose=False):
+def make_corrector(profile=None, white_threshold=None, verbose=False):
     """Build the default ``correct(infile, outfile)`` callable.
 
     Uses ``libpostcards.scan_corrector.ScanCorrector`` (dewarp / crop) then
     :class:`tkpostcards.libs.transparency.TiffBackgroundRemover` to make the
     white background transparent, exactly like the historical
     ``tktools scan prepare`` command.
+
+    :param profile: :class:`~.scan_profiles.ScanProfile` ("modèle
+        d'import") controlling every correction parameter. Defaults to
+        the ``cpa`` built-in profile when omitted.
+    :param white_threshold: kept for quick one-off overrides (CLI
+        ``--white-threshold``, legacy config key): when given, it
+        overrides ``profile.white_threshold`` (and, unless the profile
+        itself sets ``transparency_white_threshold``, the transparency
+        threshold too).
     """
     import cv2
     from libpostcards.scan_corrector import ScanCorrector
     from .transparency import TiffBackgroundRemover
 
-    scanc = ScanCorrector(white_threshold=white_threshold, verbose=verbose)
-    bgtrans = TiffBackgroundRemover(white_threshold=white_threshold)
+    if profile is None:
+        profile = BUILTIN_PROFILES[DEFAULT_PROFILE_NAME]
+    if white_threshold is not None:
+        profile = profile.with_overrides(white_threshold=white_threshold)
+
+    scanc = ScanCorrector(
+        white_threshold=profile.white_threshold,
+        white_ratio_threshold=profile.white_ratio_threshold,
+        crop_margin=profile.crop_margin,
+        angle_range=profile.angle_range,
+        verbose=verbose,
+    )
+    bgtrans = TiffBackgroundRemover(white_threshold=profile.effective_transparency_threshold)
 
     def correct(infile, outfile):
         img = scanc.load_image(infile)
@@ -63,7 +93,7 @@ def make_corrector(white_threshold=240, verbose=False):
     return correct
 
 
-def prepare_pairs(importdir, next_id, prefix="", white_threshold=240,
+def prepare_pairs(importdir, next_id, prefix="", profile=None, white_threshold=None,
                    correct=None, on_pair=None):
     """Analyze and correct the raw scans found in *importdir*.
 
@@ -72,8 +102,11 @@ def prepare_pairs(importdir, next_id, prefix="", white_threshold=240,
     :param next_id: first postcard id to attribute (subsequent pairs get
         ``next_id + 1``, ``next_id + 2``, ...).
     :param prefix: only consider files whose name starts with *prefix*.
-    :param white_threshold: passed to the default corrector when *correct*
-        is not provided.
+    :param profile: :class:`~.scan_profiles.ScanProfile` ("modèle
+        d'import") passed to :func:`make_corrector` when *correct* is
+        not provided. Defaults to the ``cpa`` built-in profile.
+    :param white_threshold: one-off override passed to
+        :func:`make_corrector` together with *profile* (see there).
     :param correct: optional ``correct(infile, outfile)`` callable used
         instead of the default one (mostly useful for tests). Built with
         :func:`make_corrector` when omitted.
@@ -85,7 +118,7 @@ def prepare_pairs(importdir, next_id, prefix="", white_threshold=240,
     """
     importdir = Path(importdir)
     if correct is None:
-        correct = make_corrector(white_threshold=white_threshold)
+        correct = make_corrector(profile=profile, white_threshold=white_threshold)
 
     fl2 = group_raw_scans(importdir, prefix=prefix)
 

@@ -149,7 +149,7 @@
                     var popupHtml =
                         '<div class="map-popup">' +
                         '<img src="' + imageUrl(card.recto) + '" alt="' +
-                        (card.title ? card.title.replace(/"/g, "&quot;") : "") + '">' +
+                        (card.recto_alt ? card.recto_alt.replace(/"/g, "&quot;") : "") + '">' +
                         (card.title ? '<div class="map-popup-title">' + card.title + '</div>' : '') +
                         '</div>';
 

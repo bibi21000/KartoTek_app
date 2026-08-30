@@ -174,6 +174,13 @@ class PostcardSearcher:
         return {
             "path" : self.relative_path(image_path),
             "mpath" : image_path.stat().st_mtime,
+            # Hash du CONTENU du fichier (pas un hash perceptuel comme
+            # ahash/dhash/... ci-dessous) : utilisé par build_index()
+            # pour confirmer, avant de déclencher ce recalcul coûteux
+            # (CLIP + hashs perceptuels), qu'un fichier dont le mtime a
+            # changé a effectivement un contenu différent — voir
+            # _content_hash().
+            "chash" : self._content_hash(image_path),
             # Stockés en hexadécimal (str), pas en imagehash.ImageHash :
             # un pickle contenant des objets ImageHash nécessiterait
             # `imagehash` installé rien que pour être désérialisé (même
@@ -193,6 +200,32 @@ class PostcardSearcher:
             # embedding_similarity() quand un vrai calcul CLIP est fait.
             "embedding" : embedding.tolist(),
         }
+
+    # --------------------------------------------------
+
+    @staticmethod
+    def _content_hash(image_path) -> str:
+        """
+        Hash (sha256, lu par blocs) du CONTENU BRUT du fichier
+        ``image_path`` — pas un hash perceptuel de l'image décodée
+        comme ahash/dhash/phash/whash, un simple hash de fichier,
+        volontairement peu coûteux (une passe de lecture séquentielle,
+        pas de décodage image ni d'inférence CLIP).
+
+        Utilisé par build_index() : quand le mtime d'un fichier déjà
+        indexé a changé, ce hash permet de vérifier si le contenu a
+        réellement changé avant de déclencher le recalcul complet
+        (CLIP + hashs perceptuels) — utile par exemple après un
+        transfert (rsync/SFTP) qui a mis à jour le mtime sans changer
+        le contenu, ou un simple "touch".
+        """
+        import hashlib
+
+        h = hashlib.sha256()
+        with open(image_path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+        return h.hexdigest()
 
     # --------------------------------------------------
 
@@ -309,8 +342,38 @@ class PostcardSearcher:
         for file in self.tqdm(files):
 
             sfile = self.relative_path(file)
-            if sfile in self.index and file.stat().st_mtime <= self.index[sfile]['mpath']:
+            existing = self.index.get(sfile)
+            mtime = file.stat().st_mtime
+
+            if existing and mtime <= existing['mpath']:
+                # mtime inchangé (ou plus ancien) depuis le dernier
+                # calcul : comportement historique, on considère le
+                # contenu inchangé sans même lire le fichier.
                 continue
+
+            if existing:
+                # mtime plus récent que l'entrée existante : le fichier
+                # a pu être retouché sans que son contenu ait changé
+                # (ex : recopié par rsync/SFTP en préservant
+                # partiellement les attributs, ou juste "touché"). Un
+                # hash de contenu (une passe de lecture séquentielle)
+                # coûte bien moins cher qu'un recalcul complet (CLIP +
+                # hashs perceptuels) : on s'en sert pour confirmer avant
+                # de déclencher ce recalcul.
+                try:
+                    chash = self._content_hash(file)
+                except Exception as exc:
+                    print(file, exc)
+                    continue
+
+                if chash == existing.get("chash"):
+                    # Contenu identique : pas de recalcul, on se
+                    # contente de rafraîchir mpath pour que les
+                    # prochaines reconstructions retombent directement
+                    # sur le court-circuit ci-dessus (mtime seul, sans
+                    # même recalculer ce hash de contenu).
+                    existing["mpath"] = mtime
+                    continue
 
             try:
 

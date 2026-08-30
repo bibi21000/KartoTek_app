@@ -108,6 +108,19 @@ def index():
     items = []
     for card in cards:
         images = card_images(card["id"], SIZE_THUMB)
+        # Texte alternatif du recto : les informations disponibles
+        # (titre, titre secondaire, description, contenu détecté
+        # automatiquement par BLIP), une par ligne, sans libellé ni
+        # mention "Recto de la carte x" (voir card_detail() pour la
+        # même logique sur la fiche carte).
+        recto_alt_parts = [
+            part for part in (
+                card.get("title"),
+                card.get("title2"),
+                card.get("description"),
+                card.get("detected_content"),
+            ) if part
+        ]
         items.append(
             {
                 "id": card["id"],
@@ -116,6 +129,7 @@ def index():
                 "recto": images["recto"],
                 "verso": images["verso"],
                 "detected_content": card.get("detected_content"),
+                "recto_alt": "\n".join(recto_alt_parts),
             }
         )
 

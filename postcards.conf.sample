@@ -23,6 +23,9 @@
 #   [flask]        - flpostcards web app (any key not explicitly handled
 #                    in load_config() is still copied as-is, uppercased,
 #                    into app.config)
+#   [redis]        - single Redis server shared by [flask]'s rate limiting
+#                    and JSON cache (optional; both fall back to
+#                    local-to-worker storage without it)
 #   [push]         - flpostcards push notifications relay (optional)
 #   [app_version]  - flpostcards mobile client version governance (optional)
 #   [simpostcards] - simpostcards hash micro-service (optional; has its
@@ -91,6 +94,14 @@ port = 5000
 # random value, e.g.:
 #   python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 secret_key = change-me-please
+
+# Shared token protecting POST /api/v1/admin/restart, which makes this
+# worker restart (full reload: this config file, collections.json,
+# active theme, ...). Called automatically at the end of a publish via
+# [sync_default] restart_url/restart_token below (see
+# tkpostcards/libs/publish.py). Leave empty/commented to disable the
+# endpoint (404). Generate a random value the same way as secret_key.
+;restart_token = change-me-please
 
 # Public URL of THIS server. Stored both verbatim (as PUBLIC_URL, unused
 # elsewhere) and as SERVER_PUBLIC_URL, which is sent to the master in the
@@ -175,19 +186,21 @@ image_cache_max_age_s = 2592000
 # would let a client-forged X-Forwarded-* header be trusted.
 trusted_proxies = 1
 
-# Counter backend for rate limiting (flask-limiter). "memory://" by
-# default (fine for dev or a single worker -- each gunicorn worker then
-# has its own in-memory counters, effectively multiplying the real
-# limit by the worker count). In production with several
-# workers/instances, use Redis (requires the Python "redis" package):
-;rate_limit_storage_uri = redis://localhost:6379/0
-rate_limit_storage_uri = memory://
+# Rate limiting (flask-limiter) and the JSON cache (collections/pois/
+# travels, see json_cache_ttl_s below) both use the single Redis
+# server configured in [redis] below -- no per-feature URL here
+# anymore. Without [redis] url set, both fall back to local-to-worker
+# storage (memory:// / SimpleCache): fine for dev or a single worker,
+# but each gunicorn worker then keeps its own counters/cache -- see
+# the startup warnings if that applies in production.
 
-# Rate-limit key prefix: required if several distinct flpostcards
-# servers (several KartoTek sites) share the same Redis instance --
-# without a distinct prefix per server, their counters would mix (e.g.
-# an attacker blocked on server A would also exhaust server B's quota).
-;rate_limit_key_prefix = my-site
+# Duration (seconds) the JSON cache (flpostcards/data_cache.py) keeps
+# collections.json/pois.json/travels.json reads (actually SQLite reads
+# synced from those files, see libpostcards.model.Model) before
+# re-reading them. 15 minutes by default. Also refreshed immediately,
+# for every entry, by POST /api/v1/admin/restart (see restart_token
+# above).
+;json_cache_ttl_s = 900
 
 # --- Themes ------------------------------------------------------------
 
@@ -196,6 +209,31 @@ theme = my_theme
 # Optional, default "themes" (external folder, relative to the working
 # directory, same as postcards.conf).
 themesdir = themes
+
+
+[redis]
+# Single Redis server shared by every optional Redis-backed feature of
+# this flpostcards instance (currently: rate limiting and the JSON
+# cache -- see [flask] json_cache_ttl_s above; more may use it later).
+# One URL to define here instead of one per feature. Leave commented
+# to keep everything local-to-worker (memory:// rate limiting,
+# SimpleCache JSON cache) -- fine for dev/single-worker, see the
+# startup warnings otherwise. Requires the Python "redis" package.
+;url = redis://localhost:6379/0
+
+# Global prefix, prepended to every key this flpostcards instance
+# writes to the server above. Change it if several applications --
+# several KartoTek sites, or an unrelated Flask app -- share the same
+# Redis server: without a distinct prefix per application, their keys
+# would collide (e.g. an attacker blocked on site A would also exhaust
+# site B's rate-limit quota).
+;prefix = kartotek
+
+# Sub-prefixes, appended to "prefix" above, keeping rate-limit counters
+# and JSON-cache entries in their own namespace within this instance.
+# Rarely need changing.
+;ratelimit_prefix = ratelimit
+;cache_prefix = cache
 
 
 [push]
@@ -287,6 +325,14 @@ doubles_threshold = 90
 # (tesseract-style language codes, e.g. "fra", "fra+eng"). "fra" by
 # default.
 ocr_langs = fra
+
+# White-pixel threshold (0-255) used when correcting/cropping a scan
+# against the scanner background, both in the tkimport GUI ("White
+# threshold" spinbox on step 1, editable and saved back to this file)
+# and as the default for "tktools scan prepare" / "tktools
+# transparency" (each still overridable with --white-threshold).
+white_threshold = 240
+
 # Detection parameters
 detect_lang = fr
 model_name = Salesforce/blip-image-captioning-large
@@ -343,3 +389,32 @@ max_workers = 5
 ;lock_suffix = .lck
 ;lock_poll_interval = 2.0
 ;lock_timeout = 60.0
+
+# Called automatically once a publish to this target has finished
+# (PostcardPublish.publish(), see tkpostcards/libs/publish.py), to make
+# the remote flpostcards server reread its database, collections.json,
+# etc. Two mutually available mechanisms -- restart_command wins if
+# both are set:
+#
+# restart_command (protocol = sftp only): a shell command run on the
+# remote host over the SAME SSH connection already used for the file
+# transfer (no separate network hop, no need to expose anything on the
+# internet). It can call the API on localhost, e.g.:
+#   curl -fsS -X POST -H "X-Restart-Token: <token>" http://127.0.0.1:5000/api/v1/admin/restart
+# or restart a system service directly, e.g.:
+#   systemctl --user restart flpostcards
+# (whatever the account used for SFTP is allowed to run; a passwordless
+# sudo rule may be needed for a system-wide systemctl).
+;restart_command =
+#
+# restart_url (+ optional restart_token): a plain HTTP(S) POST request
+# to POST /api/v1/admin/restart -- see [flask] restart_token above
+# (NOTE: that key lives in the remote server's OWN postcards.conf, not
+# necessarily this file). Works for any protocol, but requires that
+# endpoint to be reachable from wherever this runs.
+;restart_url = https://your-server.example.com/api/v1/admin/restart
+;restart_token = change-me-please
+#
+# Leaving both empty (default) skips this step entirely; a
+# network/SSH/HTTP failure here only logs a warning, it never fails
+# the publish.
