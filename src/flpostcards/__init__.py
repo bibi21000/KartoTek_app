@@ -148,6 +148,14 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["THEME"] = value.strip()
             elif key == "themesdir":
                 app.config["THEMESDIR"] = value.strip()
+            elif key == "indexnow_watch_interval_s":
+                app.config["INDEXNOW_WATCH_INTERVAL_S"] = parser.getint(
+                    "flask", "indexnow_watch_interval_s"
+                )
+            elif key == "indexnow_http_timeout_s":
+                app.config["INDEXNOW_HTTP_TIMEOUT_S"] = parser.getfloat(
+                    "flask", "indexnow_http_timeout_s"
+                )
             else:
                 app.config[key.upper()] = value
 
@@ -350,6 +358,39 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     # master — pas utilisée pour l'authentification, qui repose sur
     # notify_secret). Ex : [flask] public_url = https://server1.kartotek.eu
     app.config.setdefault("SERVER_PUBLIC_URL", parser.get("flask", "public_url", fallback=""))
+
+    # IndexNow (https://www.bing.com/indexnow/getstarted) : soumission
+    # proactive des URLs nouvelles/modifiées aux moteurs de recherche
+    # participants (Bing, Yandex, Seznam.cz, Naver, ...) plutôt que
+    # d'attendre leur prochain crawl. Trois éléments :
+    #   - [flask] indexnow_key : secret identifiant ce site auprès de
+    #     l'API IndexNow -- généré une fois, ex. :
+    #     `python3 -c "import secrets; print(secrets.token_hex(32))"`
+    #     Exposé automatiquement (voir blueprints/home/__init__.py,
+    #     verification_file()) sur https://<host>/<indexnow_key>.txt,
+    #     comme l'exige l'API pour prouver le contrôle du site.
+    #   - flpostcards.indexnow.submit_urls() : appel HTTP réel vers
+    #     l'API IndexNow (no-op silencieux si indexnow_key n'est pas
+    #     défini).
+    #   - flpostcards/indexnow_watch.py : job de surveillance (même
+    #     principe que push_watch.py -- process indépendant, PAS un
+    #     thread démarré ici, pour éviter des soumissions en double si
+    #     plusieurs workers gunicorn tournent) qui détecte les
+    #     cartes/parcours nouveaux ou modifiés et appelle submit_urls()
+    #     automatiquement.
+    app.config.setdefault("INDEXNOW_KEY", None)
+    app.config.setdefault("INDEXNOW_WATCH_INTERVAL_S", 300)
+    app.config.setdefault("INDEXNOW_HTTP_TIMEOUT_S", 10.0)
+
+    indexnow_key = app.config.get("INDEXNOW_KEY")
+    if indexnow_key and len(indexnow_key) < 8:
+        app.logger.warning(
+            "postcards.conf [flask] indexnow_key ne fait que %d caractère(s) : "
+            "l'API IndexNow attend une clé de 8 à 128 caractères "
+            "alphanumériques/tirets. À régénérer, ex. "
+            "`python3 -c \"import secrets; print(secrets.token_hex(32))\"`.",
+            len(indexnow_key),
+        )
 
     secret_key = app.config.get("SECRET_KEY")
     if secret_key in (None, "", "secret"):

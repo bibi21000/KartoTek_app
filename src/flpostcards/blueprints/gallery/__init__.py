@@ -5,9 +5,10 @@ collection, recherche textuelle, et affichage recto / verso / recto+verso.
 
 from __future__ import annotations
 
-from flask import Blueprint, current_app, render_template, request, url_for
+from flask import Blueprint, Response, current_app, render_template, request, url_for
 from flask_babel import gettext
 
+from flpostcards.gallery_og_image import get_or_render_collage
 from flpostcards.images import SIZE_THUMB, card_images
 
 bp = Blueprint("gallery", __name__, template_folder="../../templates")
@@ -156,6 +157,18 @@ def index():
     else:
         page_title = gettext("Toutes les cartes postales")
 
+    # Image og:image : collage désordonné de plusieurs cartes tirées au
+    # hasard (voir flpostcards.gallery_og_image), mis en cache 60 minutes
+    # pour éviter de refaire le rendu à chaque requête sur cette page.
+    og_image_url = None
+    og_image_width = None
+    og_image_height = None
+    collage = get_or_render_collage(current_app.config["DATADIR"], model)
+    if collage is not None:
+        og_image_url = url_for("gallery.og_image", _external=True)
+        og_image_width = collage["width"]
+        og_image_height = collage["height"]
+
     return render_template(
         "gallery/index.html",
         page_title=page_title,
@@ -177,5 +190,24 @@ def index():
         og_description=gettext(
             "Parcourez ma collection de cartes postales anciennes."
         ),
+        og_image=og_image_url,
+        og_image_width=og_image_width,
+        og_image_height=og_image_height,
         og_type="website",
     )
+
+
+@bp.route("/gallery/og-image.png")
+def og_image():
+    """Sert le collage og:image de /gallery/ (généré et mis en cache 60 min,
+    voir flpostcards.gallery_og_image.get_or_render_collage)."""
+    from flask import abort
+
+    model = current_app.model
+    collage = get_or_render_collage(current_app.config["DATADIR"], model)
+    if collage is None:
+        abort(404)
+
+    response = Response(collage["bytes"], mimetype="image/png")
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response

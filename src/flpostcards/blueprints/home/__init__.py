@@ -249,7 +249,19 @@ def verification_file(filename: str):
     fichier du serveur n'est exposé.
     Usage : déposer le fichier fourni par le moteur de recherche dans
     htmldir/verification/ puis accéder à /<nom-du-fichier>.
+
+    Cas particulier : la clé IndexNow (https://www.bing.com/indexnow/getstarted,
+    [flask] indexnow_key dans postcards.conf) doit être servie telle
+    quelle sur /<clé>.txt pour que l'API puisse vérifier le contrôle du
+    site avant d'accepter des soumissions (voir flpostcards.indexnow) —
+    générée directement depuis la config, sans dépôt manuel de fichier.
     """
+    indexnow_key = current_app.config.get("INDEXNOW_KEY")
+    if indexnow_key and filename == f"{indexnow_key}.txt":
+        from flask import Response
+
+        return Response(indexnow_key, mimetype="text/plain")
+
     if not filename.endswith((".html", ".txt", ".xml")):
         abort(404)
     verification_dir = Path(current_app.config["DATADIR"]) / "verification"

@@ -5,12 +5,52 @@ forme de diaporama suivant l'ordre des cartes du trajet.
 
 from __future__ import annotations
 
+import random
+
 from flask import Blueprint, abort, current_app, jsonify, render_template, url_for
 from flask_babel import gettext
 
+from flpostcards.extensions import cache
 from flpostcards.images import SIZE_MAIN, SIZE_SMALL, card_images, image_dimensions
 
 bp = Blueprint("travel", __name__, template_folder="../../templates")
+
+# Clé + TTL du cache pour l'image Open Graph de /travel/ : on choisit une
+# image parmi les parcours listés sur la page (au hasard, comme pour
+# home.index), mais contrairement à la page d'accueil on ne veut pas la
+# reconstruire (choix aléatoire + url_for + lecture des dimensions sur
+# disque) à *chaque* requête sur cette page -- d'où un cache dédié, plus
+# long que le cache par défaut de data_cache.py (15 min), pour limiter le
+# renouvellement de l'image vedette à toutes les 30 minutes.
+_OG_IMAGE_CACHE_KEY = "travel_index_og_image"
+_OG_IMAGE_CACHE_TTL = 30 * 60
+
+
+def _pick_index_og_image(travels: list[dict]) -> dict | None:
+    """Choisit (et met en cache 30 min) l'image vedette Open Graph de
+    /travel/, à partir de la première carte d'un des parcours listés sur
+    la page."""
+    cached = cache.get(_OG_IMAGE_CACHE_KEY)
+    if cached is not None:
+        return cached
+
+    candidates = [t for t in travels if t.get("cards")]
+    if not candidates:
+        return None
+
+    travel = random.choice(candidates)
+    featured_recto = card_images(travel["cards"][0]["id"])["recto"]
+    og_image_url = url_for("home.images", filename=featured_recto, _external=True)
+    dims = image_dimensions(current_app.config["DATADIR"], featured_recto)
+    og_image_width, og_image_height = dims if dims else (None, None)
+
+    value = {
+        "url": og_image_url,
+        "width": og_image_width,
+        "height": og_image_height,
+    }
+    cache.set(_OG_IMAGE_CACHE_KEY, value, timeout=_OG_IMAGE_CACHE_TTL)
+    return value
 
 # Temps d'affichage de chaque carte dans le diaporama (cf. intervalSeconds
 # dans templates/travel/detail.html et static/js/travel-slideshow.js) :
@@ -44,6 +84,8 @@ def index():
 
     page_title = gettext("Balades dans le temps au fil des cartes postales")
 
+    og_image = _pick_index_og_image(travels)
+
     return render_template(
         "travel/index.html",
         page_title=page_title,
@@ -52,6 +94,9 @@ def index():
         og_description=gettext(
             "Suivez mes parcours à travers ma collection de cartes postales."
         ),
+        og_image=og_image["url"] if og_image else None,
+        og_image_width=og_image["width"] if og_image else None,
+        og_image_height=og_image["height"] if og_image else None,
         og_type="website",
     )
 
