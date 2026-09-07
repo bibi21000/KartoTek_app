@@ -1,8 +1,11 @@
 """
 Génération de l'image og:image de /gallery/ : un collage de plusieurs
 cartes postales tirées au hasard dans la collection, disposées de façon
-désordonnée (position et rotation aléatoires, se chevauchant légèrement),
-plutôt qu'une simple photo de carte isolée comme sur home/ ou travel/.
+désordonnée (position et rotation aléatoires) mais couvrant tout le
+cadre -- les cartes sont réparties sur une grille (avec un jitter
+aléatoire et un chevauchement volontaire) pour éviter les grands
+aplats de fond vides, plutôt qu'une simple photo de carte isolée comme
+sur home/ ou travel/.
 
 Contrairement à osm_static_map.py (cache disque permanent, invalidé
 seulement par un changement de configuration), cette image doit changer
@@ -27,13 +30,23 @@ from flpostcards.images import SIZE_SMALL, card_images
 OG_IMAGE_WIDTH = 1200
 OG_IMAGE_HEIGHT = 630
 
-# Nombre de cartes piochées pour composer le collage
-_CARD_COUNT = 9
+# Grille utilisée pour répartir les cartes sur tout le cadre (voir
+# render_collage) : plus de cellules que nécessaire pour être sûr de
+# couvrir les bords même avec le jitter et la rotation.
+_GRID_COLS = 5
+_GRID_ROWS = 3
+_CARD_COUNT = _GRID_COLS * _GRID_ROWS
 
-# Taille de base (avant rotation) de chaque vignette dans le collage
-_THUMB_WIDTH = 320
+# Facteur d'agrandissement de chaque vignette par rapport à sa cellule :
+# > 1 garantit un chevauchement volontaire qui masque le fond entre les
+# cellules (c'est ce chevauchement qui évite les zones blanches).
+_THUMB_SCALE = 1.65
 
-# Couleur de fond du collage
+# Amplitude du jitter aléatoire autour du centre de chaque cellule
+# (en fraction de la taille de la cellule)
+_JITTER_RATIO = 0.35
+
+# Couleur de fond (visible seulement dans d'éventuels interstices résiduels)
 _BACKGROUND_COLOR = "#e9e2d6"
 
 _CACHE_KEY = "gallery_og_image"
@@ -52,22 +65,28 @@ def _load_thumb(datadir: Path, card_id: str) -> Image.Image | None:
 
 
 def _pick_random_card_ids(model, count: int) -> list[str]:
-    """Tire jusqu'à ``count`` identifiants de cartes uniques au hasard.
+    """Tire jusqu'à ``count`` identifiants de cartes au hasard.
 
     Même principe que home.index() (offset aléatoire dans
     count_unique_cards/list_unique_cards), répété plusieurs fois pour
     obtenir un échantillon varié -- acceptable ici puisque le résultat
     est mis en cache 60 minutes, donc peu fréquent.
+
+    Si la collection contient moins de cartes que ``count`` (nécessaire
+    pour couvrir toute la grille), certaines cartes sont réutilisées
+    (avec une rotation/position différente à chaque tirage) plutôt que
+    de laisser des cellules de la grille vides.
     """
     total = model.count_unique_cards(exclude_status="exchanged")
     if not total:
         return []
 
+    unique_needed = min(count, total)
     seen_offsets: set[int] = set()
     card_ids: list[str] = []
     attempts = 0
-    max_attempts = count * 4
-    while len(card_ids) < min(count, total) and attempts < max_attempts:
+    max_attempts = unique_needed * 4
+    while len(card_ids) < unique_needed and attempts < max_attempts:
         attempts += 1
         offset = random.randint(0, total - 1)
         if offset in seen_offsets:
@@ -78,13 +97,21 @@ def _pick_random_card_ids(model, count: int) -> list[str]:
         )
         if featured:
             card_ids.append(featured[0]["id"])
+
+    # Complète en réutilisant des cartes déjà tirées si la collection
+    # est plus petite que la grille (rare, mais évite des trous).
+    if card_ids:
+        while len(card_ids) < count:
+            card_ids.append(random.choice(card_ids))
+
     return card_ids
 
 
 def render_collage(datadir: Path, model) -> Image.Image | None:
     """
-    Compose un collage désordonné (position et rotation aléatoires,
-    léger chevauchement) à partir de plusieurs cartes tirées au hasard.
+    Compose un collage désordonné (position et rotation aléatoires) à
+    partir de plusieurs cartes tirées au hasard, réparties sur une
+    grille agrandie et chevauchante pour couvrir tout le cadre.
 
     Retourne None si aucune carte n'est disponible.
     """
@@ -94,29 +121,42 @@ def render_collage(datadir: Path, model) -> Image.Image | None:
 
     canvas = Image.new("RGBA", (OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT), _BACKGROUND_COLOR)
 
-    for card_id in card_ids:
+    cell_width = OG_IMAGE_WIDTH / _GRID_COLS
+    cell_height = OG_IMAGE_HEIGHT / _GRID_ROWS
+
+    # Une cellule par carte, mais l'ordre de pose (calques) est mélangé
+    # indépendamment de la position, pour que ce ne soit pas toujours la
+    # carte en bas à droite de la grille qui recouvre ses voisines.
+    cells = [(col, row) for row in range(_GRID_ROWS) for col in range(_GRID_COLS)]
+    random.shuffle(cells)
+
+    for card_id, (col, row) in zip(card_ids, cells):
         thumb = _load_thumb(datadir, card_id)
         if thumb is None:
             continue
 
-        # Redimensionne à une largeur de base commune, en conservant le ratio
-        ratio = _THUMB_WIDTH / thumb.width
+        # Redimensionne pour dépasser largement la cellule (chevauchement
+        # volontaire avec les cellules voisines, cf. _THUMB_SCALE).
+        target_width = cell_width * _THUMB_SCALE
+        ratio = target_width / thumb.width
         thumb = thumb.resize(
             (max(1, int(thumb.width * ratio)), max(1, int(thumb.height * ratio))),
             Image.LANCZOS,
         )
 
-        # Rotation aléatoire "posée en vrac" (entre -30 et 30 degrés),
-        # expand=True pour ne pas rogner les coins de la carte tournée.
-        angle = random.uniform(-30, 30)
+        # Rotation aléatoire "posée en vrac"
+        angle = random.uniform(-25, 25)
         thumb = thumb.rotate(angle, expand=True, resample=Image.BICUBIC)
 
-        # Position aléatoire, en autorisant les cartes à déborder
-        # partiellement du cadre pour un rendu désordonné/naturel.
-        max_x = OG_IMAGE_WIDTH - thumb.width // 2
-        max_y = OG_IMAGE_HEIGHT - thumb.height // 2
-        x = random.randint(-thumb.width // 2, max_x)
-        y = random.randint(-thumb.height // 2, max_y)
+        # Centre de la cellule + jitter aléatoire, pour un placement
+        # désordonné qui reste réparti sur tout le cadre.
+        center_x = (col + 0.5) * cell_width
+        center_y = (row + 0.5) * cell_height
+        jitter_x = random.uniform(-_JITTER_RATIO, _JITTER_RATIO) * cell_width
+        jitter_y = random.uniform(-_JITTER_RATIO, _JITTER_RATIO) * cell_height
+
+        x = int(center_x + jitter_x - thumb.width / 2)
+        y = int(center_y + jitter_y - thumb.height / 2)
 
         canvas.alpha_composite(thumb, (x, y))
 

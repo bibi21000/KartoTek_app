@@ -7,12 +7,68 @@ chaque carte, qui peut répéter certaines cartes et en oublier d'autres).
 
 from __future__ import annotations
 
-from flask import Blueprint, current_app, jsonify, render_template, request
+import random
+
+from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 from flask_babel import gettext
 
-from flpostcards.images import SIZE_SMALL, card_images
+from flpostcards.extensions import cache
+from flpostcards.images import SIZE_SMALL, card_images, image_dimensions
 
 bp = Blueprint("slideshow", __name__, template_folder="../../templates")
+
+# Durée du cache (par collection) du choix de la carte utilisée comme
+# image Open Graph de /slideshow/ -- voir _pick_og_image.
+_OG_IMAGE_CACHE_TTL = 30 * 60
+
+
+def _og_image_cache_key(collection: str) -> str:
+    return f"slideshow_og_image:{collection}"
+
+
+def _pick_og_image(model, collection: str) -> dict | None:
+    """Choisit une carte au hasard dans la collection (ou dans toute la
+    collection si ``collection`` est vide) pour servir d'image Open
+    Graph à /slideshow/, et met ce choix en cache 30 minutes -- par
+    collection, puisque le tirage doit rester cohérent avec le filtre
+    ``?collection=`` -- pour éviter de refaire la recherche en base à
+    chaque requête."""
+    cache_key = _og_image_cache_key(collection)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    total = model.count_unique_cards(collection=collection or None, exclude_status="exchanged")
+    if not total:
+        return None
+
+    offset = random.randint(0, total - 1)
+    featured = model.list_unique_cards(
+        collection=collection or None, limit=1, offset=offset, exclude_status="exchanged"
+    )
+    if not featured:
+        return None
+
+    featured_recto = card_images(featured[0]["id"])["recto"]
+    og_image_url = url_for("home.images", filename=featured_recto, _external=True)
+    dims = image_dimensions(current_app.config["DATADIR"], featured_recto)
+    og_image_width, og_image_height = dims if dims else (None, None)
+
+    value = {
+        "url": og_image_url,
+        "width": og_image_width,
+        "height": og_image_height,
+    }
+    cache.set(cache_key, value, timeout=_OG_IMAGE_CACHE_TTL)
+    return value
+
+
+def invalidate() -> None:
+    """Purge le choix d'image Open Graph mis en cache pour toutes les
+    collections (dont "" = toutes les cartes). Voir data_cache.invalidate."""
+    collections = current_app.config.get("COLLECTIONS", [])
+    for collection in ["", *collections]:
+        cache.delete(_og_image_cache_key(collection))
 
 
 def _no_cache(response, status: int | None = None):
@@ -33,6 +89,8 @@ def _no_cache(response, status: int | None = None):
 @bp.route("/slideshow/")
 def index():
     """Page diaporama : toutes les cartes, ordre aléatoire sans répétition."""
+    model = current_app.model
+
     collections = current_app.config.get("COLLECTIONS", [])
     collection = request.args.get("collection") or ""
     if collection not in collections:
@@ -45,6 +103,8 @@ def index():
     else:
         page_title = gettext("Diaporama")
 
+    og_image = _pick_og_image(model, collection)
+
     return render_template(
         "slideshow/index.html",
         page_title=page_title,
@@ -54,6 +114,9 @@ def index():
         og_description=gettext(
             "Toutes mes cartes postales en diaporama."
         ),
+        og_image=og_image["url"] if og_image else None,
+        og_image_width=og_image["width"] if og_image else None,
+        og_image_height=og_image["height"] if og_image else None,
         og_type="website",
     )
 

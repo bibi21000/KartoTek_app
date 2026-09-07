@@ -85,15 +85,18 @@ def get_travel_cached(travel_id: str) -> dict | None:
 
 def invalidate() -> None:
     """Purge immédiatement les trois entrées (voir docstring du module),
-    ainsi que l'image Open Graph de /travel/ (flpostcards.blueprints.travel)
-    et le collage og:image de /gallery/ (flpostcards.gallery_og_image), qui
-    dérivent tous deux des données ci-dessus et deviendraient sinon
-    obsolètes jusqu'à expiration de leur propre TTL après une mise à jour."""
+    ainsi que l'image Open Graph de /travel/ (flpostcards.blueprints.travel),
+    le collage og:image de /gallery/ (flpostcards.gallery_og_image) et le
+    choix de carte og:image de /slideshow/ (flpostcards.blueprints.slideshow),
+    qui dérivent tous des données ci-dessus et deviendraient sinon obsolètes
+    jusqu'à expiration de leur propre TTL après une mise à jour."""
     cache.delete(_COLLECTIONS_KEY)
     cache.delete(_POIS_KEY)
     cache.delete(_TRAVELS_KEY)
     cache.delete("travel_index_og_image")
 
     from flpostcards.gallery_og_image import invalidate as invalidate_gallery_og_image
+    from flpostcards.blueprints.slideshow import invalidate as invalidate_slideshow_og_image
 
     invalidate_gallery_og_image()
+    invalidate_slideshow_og_image()
