@@ -182,7 +182,10 @@ def do_scan(scanner_name: str, resolution: int, fmt: str, dest_path: Path,
             tiff_compression: str = "deflate") -> Path:
     """Perform a scan and save to *dest_path*. Returns the saved path."""
     if sys.platform.startswith("win"):
-        return _scan_windows(scanner_name, resolution, fmt, dest_path)
+        return _scan_windows(scanner_name, resolution, fmt, dest_path,
+                              crop_border=crop_border,
+                              jpeg_quality=jpeg_quality, png_compress=png_compress,
+                              tiff_compression=tiff_compression)
     return _scan_scanimage(scanner_name, resolution, fmt, dest_path,
                             scan_area=scan_area, crop_border=crop_border,
                             jpeg_quality=jpeg_quality, png_compress=png_compress,
@@ -259,7 +262,10 @@ def _scan_scanimage(scanner_name: str, resolution: int, fmt: str, dest_path: Pat
             pass
 
 
-def _scan_windows(scanner_name: str, resolution: int, fmt: str, dest_path: Path) -> Path:
+def _scan_windows(scanner_name: str, resolution: int, fmt: str, dest_path: Path,
+                   crop_border: int = 0,
+                   jpeg_quality: int = 85, png_compress: int = 6,
+                   tiff_compression: str = "deflate") -> Path:
     try:
         import pythoncom  # type: ignore
         import win32com.client  # type: ignore
@@ -283,7 +289,11 @@ def _scan_windows(scanner_name: str, resolution: int, fmt: str, dest_path: Path)
             tmp = str(dest_path.with_suffix(".bmp"))
             image.SaveFile(tmp)
             img = Image.open(tmp)
-            _save_image(img, fmt, dest_path)
+            if crop_border > 0:
+                img = _crop_border(img, crop_border)
+            _save_image(img, fmt, dest_path,
+                        jpeg_quality=jpeg_quality, png_compress=png_compress,
+                        tiff_compression=tiff_compression)
             os.remove(tmp)
         finally:
             pythoncom.CoUninitialize()
@@ -326,6 +336,24 @@ def _crop_border(img: Image.Image, px: int) -> Image.Image:
     return cropped
 
 
+# Map the friendly names shown in the "TIFF compression" combobox (and
+# already saved in existing postcards.conf files) to the identifiers
+# Pillow's TIFF plugin actually recognizes (see
+# ``PIL.TiffImagePlugin.COMPRESSION_INFO``). This mapping matters: Pillow
+# does NOT raise an error for an unrecognized ``compression=`` value, it
+# silently falls back to uncompressed ("raw") -- so passing "deflate",
+# "lzw" or "none" straight through (as this module used to) looked like
+# it worked (no exception, valid TIFF written) while actually ignoring
+# the setting entirely except for "jpeg", the one name that happens to
+# already match Pillow's own keyword.
+_PIL_TIFF_COMPRESSION = {
+    "deflate": "tiff_deflate",
+    "lzw": "tiff_lzw",
+    "jpeg": "jpeg",
+    "none": "raw",
+}
+
+
 def _save_image(img: Image.Image, fmt: str, dest_path: Path,
                 jpeg_quality: int = 85, png_compress: int = 6,
                 tiff_compression: str = "deflate") -> None:
@@ -335,12 +363,15 @@ def _save_image(img: Image.Image, fmt: str, dest_path: Path,
     elif fmt_upper == "PNG":
         img.save(str(dest_path), format="PNG", compress_level=png_compress, optimize=True)
     elif fmt_upper == "TIFF":
-        img.save(str(dest_path), format="TIFF", compression=tiff_compression)
+        pil_compression = _PIL_TIFF_COMPRESSION.get(tiff_compression, tiff_compression)
+        img.save(str(dest_path), format="TIFF", compression=pil_compression)
     else:
         img.save(str(dest_path))
 
 
-def simulate_scan(dest_path: Path, fmt: str) -> Path:
+def simulate_scan(dest_path: Path, fmt: str,
+                   jpeg_quality: int = 85, png_compress: int = 6,
+                   tiff_compression: str = "deflate") -> Path:
     """Create a dummy coloured image when no scanner is available."""
     import random
     colours = ["#D4A5A5", "#A5D4A5", "#A5A5D4", "#D4D4A5", "#D4A5D4"]
@@ -354,7 +385,9 @@ def simulate_scan(dest_path: Path, fmt: str) -> Path:
     except Exception:
         font = ImageFont.load_default()
     draw.text((60, 560), text, fill="white", font=font)
-    _save_image(img, fmt, dest_path)
+    _save_image(img, fmt, dest_path,
+                jpeg_quality=jpeg_quality, png_compress=png_compress,
+                tiff_compression=tiff_compression)
     return dest_path
 
 
@@ -1222,7 +1255,10 @@ class PostcardScannerApp(tk.Tk):
                         png_compress=int(self._png_compress_var.get() or 6),
                         tiff_compression=self._tiff_compress_var.get() or "deflate")
             else:
-                simulate_scan(dest_path, fmt)
+                simulate_scan(dest_path, fmt,
+                               jpeg_quality=int(self._jpeg_quality_var.get() or 85),
+                               png_compress=int(self._png_compress_var.get() or 6),
+                               tiff_compression=self._tiff_compress_var.get() or "deflate")
                 self._safe_after(0, self._log, f"! {self._('Simulated scan (no scanner)')}: {dest_path.name}")
             self._safe_after(0, self._on_scan_success, dest_path)
         except Exception as exc:
@@ -1295,7 +1331,10 @@ class PostcardScannerApp(tk.Tk):
                         png_compress=int(self._png_compress_var.get() or 6),
                         tiff_compression=self._tiff_compress_var.get() or "deflate")
             else:
-                simulate_scan(tmp_path, fmt)
+                simulate_scan(tmp_path, fmt,
+                               jpeg_quality=int(self._jpeg_quality_var.get() or 85),
+                               png_compress=int(self._png_compress_var.get() or 6),
+                               tiff_compression=self._tiff_compress_var.get() or "deflate")
                 self._safe_after(0, self._log, f"! {self._('Simulated preview (no scanner)')}")
 
             # Load fully into memory so the temp file can be removed right away.

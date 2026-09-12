@@ -90,9 +90,19 @@ def group_raw_scans(importdir, prefix=""):
     matches, files are ordered as-is. Returns a sorted list of
     ``(index, filename)`` tuples, exactly as consumed by
     :func:`tkpostcards.libs.scan_prepare.prepare_pairs`.
+
+    Files already named ``<id>_R.<ext>`` / ``<id>_V.<ext>`` (see
+    :func:`is_pair_file`) are always excluded: they are *prepared*
+    output, never a raw scan to (re-)process, however loosely *prefix*
+    would otherwise match them. Without this, a re-run of
+    :func:`~tkpostcards.libs.scan_prepare.prepare_pairs` on a batch that
+    already has some prepared pairs (typically after cancelling one
+    side of one postcard to retry it with a different profile) would
+    pick up its own previous output as if it were a fresh raw scan.
     """
     importdir = Path(importdir)
-    fl1 = [f for f in os.listdir(importdir) if re.match(r"%s.*" % re.escape(prefix), f)]
+    fl1 = [f for f in os.listdir(importdir)
+           if re.match(r"%s.*" % re.escape(prefix), f) and not is_pair_file(f)]
     fl2 = []
     for f in fl1:
         s = re.search(r"%s \((.*)\)\..*" % re.escape(prefix), f)

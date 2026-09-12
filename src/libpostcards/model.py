@@ -1084,8 +1084,8 @@ class Model:
     #      plusieurs membres ont des GPS).
     #
     #  (B) La carte n'a pas de coordonnées GPS ET aucun membre du groupe
-    #      n'en a non plus ET elle n'est pas référencée comme doublon par
-    #      une autre carte (comportement historique : carte "principale").
+    #      n'en a non plus ET elle a l'id numérique le plus petit du
+    #      groupe (même départage que (A), sans la condition GPS).
     #
     # "Groupe" = la carte elle-même + les cartes qui la référencent dans
     # leur champ `doubles` + les cartes qu'elle référence dans le sien.
@@ -1093,6 +1093,15 @@ class Model:
     # Note : l'alias utilisé pour la carte courante doit être `cards`
     # (pas de sous-alias) car cette condition est injectée dans un WHERE
     # sur la table principale.
+    #
+    # (B) NE teste PAS "cette carte n'est référencée comme doublon par
+    # aucune autre" : write_json()/_add_double() assurent la réciprocité
+    # de `doubles` (voir plus haut), si bien que TOUT doublon référence
+    # forcément TOUT autre membre de son groupe en retour -- cette
+    # condition ne serait donc jamais vraie pour aucun des deux membres,
+    # et un groupe sans aucun GPS disparaîtrait entièrement de la
+    # galerie (aucune carte n'y satisferait ni (A) ni (B)). D'où le
+    # départage par id le plus petit, comme (A).
     _UNIQUE_CARD_CONDITION = (
         # Parenthèses extérieures OBLIGATOIRES : cette condition contient un OR
         # interne (cas A OR cas B). Sans elles, un AND ajouté par
@@ -1120,8 +1129,8 @@ class Model:
         "    )"
         "  )"
         "  OR"
-        # (B) carte sans GPS, aucun membre du groupe n'a de GPS,
-        #     et elle n'est pas référencée comme doublon par une autre
+        # (B) carte sans GPS, aucun membre du groupe n'a de GPS, et
+        #     c'est celle avec le plus petit id du groupe
         "  ("
         "    cards.coord_lat IS NULL"
         "    AND NOT EXISTS ("
@@ -1139,8 +1148,18 @@ class Model:
         "        )"
         "    )"
         "    AND NOT EXISTS ("
-        "      SELECT 1 FROM cards AS c2, json_each(c2.doubles)"
-        "      WHERE CAST(json_each.value AS TEXT) = cards.id"
+        "      SELECT 1 FROM cards AS cg"
+        "      WHERE CAST(cg.id AS INTEGER) < CAST(cards.id AS INTEGER)"
+        "        AND ("
+        "          EXISTS ("
+        "            SELECT 1 FROM json_each(cards.doubles)"
+        "            WHERE CAST(json_each.value AS TEXT) = cg.id"
+        "          )"
+        "          OR EXISTS ("
+        "            SELECT 1 FROM json_each(cg.doubles)"
+        "            WHERE CAST(json_each.value AS TEXT) = cards.id"
+        "          )"
+        "        )"
         "    )"
         "  )"
         ")"
@@ -1159,8 +1178,8 @@ class Model:
         """
         Liste les cartes uniques : pour chaque groupe de doublons, retourne
         la carte dont les coordonnées GPS sont renseignées en priorité.
-        Si aucun membre du groupe n'a de GPS, retourne la carte "principale"
-        (non référencée comme doublon par une autre carte).
+        Si aucun membre du groupe n'a de GPS, retourne celle ayant l'id
+        numérique le plus petit (voir ``_UNIQUE_CARD_CONDITION``).
 
         Paramètres
         ----------

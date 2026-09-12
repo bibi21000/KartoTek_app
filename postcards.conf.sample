@@ -210,6 +210,30 @@ theme = my_theme
 # directory, same as postcards.conf).
 themesdir = themes
 
+# IndexNow (https://www.bing.com/indexnow/getstarted): proactively tell
+# participating search engines (Bing, Yandex, Seznam.cz, Naver, ...)
+# about new/changed postcard pages instead of waiting for their next
+# crawl. Generate a random key once, e.g.:
+#   python3 -c "import secrets; print(secrets.token_hex(32))"
+# It is then served automatically (no file to upload) at
+# https://your-server.example.com/<indexnow_key>.txt, as required by
+# the API to prove you control the site -- see
+# flpostcards.blueprints.home.verification_file(). Leave commented out
+# to disable IndexNow entirely (flpostcards.indexnow.submit_urls()
+# becomes a silent no-op).
+;indexnow_key = change-me-generate-a-real-key
+# How often flpostcards/indexnow_watch.py polls for new/changed cards
+# and travels when run in continuous mode (see its docstring for the
+# "python -m flpostcards.indexnow_watch" usage -- run it as its own
+# process, not started from create_app()). 5 minutes by default.
+;indexnow_watch_interval_s = 300
+# HTTP timeout (seconds) for calls to the IndexNow API.
+;indexnow_http_timeout_s = 10
+# NOTE: indexnow_watch also requires "public_url" above to be set (it
+# runs outside of any real HTTP request, so it has no Host header to
+# build absolute URLs from) -- without it, each cycle is skipped with
+# a warning.
+
 
 [redis]
 # Single Redis server shared by every optional Redis-backed feature of

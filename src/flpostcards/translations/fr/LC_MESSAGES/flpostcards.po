@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-06 09:20+0200\n"
+"POT-Creation-Date: 2026-09-12 10:43+0200\n"
 "PO-Revision-Date: 2026-06-14 12:15+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -92,16 +92,16 @@ msgstr "L'envoi du message a échoué. Réessayez plus tard."
 msgid "Contactez-moi à propos de ma collection de cartes postales."
 msgstr "Contactez-moi à propos de ma collection de cartes postales."
 
-#: src/flpostcards/blueprints/gallery/__init__.py:154
+#: src/flpostcards/blueprints/gallery/__init__.py:155
 #, python-format
 msgid "Toutes les cartes postales - %(collection)s"
 msgstr "Toutes les cartes postales - %(collection)s"
 
-#: src/flpostcards/blueprints/gallery/__init__.py:157
+#: src/flpostcards/blueprints/gallery/__init__.py:158
 msgid "Toutes les cartes postales"
 msgstr "Toutes les cartes postales"
 
-#: src/flpostcards/blueprints/gallery/__init__.py:178
+#: src/flpostcards/blueprints/gallery/__init__.py:191
 msgid "Parcourez ma collection de cartes postales anciennes."
 msgstr "Parcourez ma collection de cartes postales anciennes."
 
@@ -181,45 +181,45 @@ msgstr "Politique de confidentialité"
 msgid "Quelles données ce site KartoTek collecte et pourquoi."
 msgstr "Quelles données ce site KartoTek collecte et pourquoi."
 
-#: src/flpostcards/blueprints/slideshow/__init__.py:43
+#: src/flpostcards/blueprints/slideshow/__init__.py:101
 #, python-format
 msgid "Diaporama - %(collection)s"
 msgstr "Diaporama - %(collection)s"
 
-#: src/flpostcards/blueprints/slideshow/__init__.py:46
+#: src/flpostcards/blueprints/slideshow/__init__.py:104
 #: src/flpostcards/templates/base.html:72
 msgid "Diaporama"
 msgstr "Diaporama"
 
-#: src/flpostcards/blueprints/slideshow/__init__.py:55
+#: src/flpostcards/blueprints/slideshow/__init__.py:115
 msgid "Toutes mes cartes postales en diaporama."
 msgstr "Toutes mes cartes postales en diaporama."
 
-#: src/flpostcards/blueprints/travel/__init__.py:31
+#: src/flpostcards/blueprints/travel/__init__.py:71
 #, python-format
 msgid "%(h)d h %(m)d min"
 msgstr "%(h)d h %(m)d min"
 
-#: src/flpostcards/blueprints/travel/__init__.py:33
+#: src/flpostcards/blueprints/travel/__init__.py:73
 #, python-format
 msgid "%(h)d h"
 msgstr "%(h)d h"
 
-#: src/flpostcards/blueprints/travel/__init__.py:34
+#: src/flpostcards/blueprints/travel/__init__.py:74
 #, python-format
 msgid "%(m)d min"
 msgstr "%(m)d min"
 
-#: src/flpostcards/blueprints/travel/__init__.py:45
+#: src/flpostcards/blueprints/travel/__init__.py:85
 msgid "Balades dans le temps au fil des cartes postales"
 msgstr "Balades dans le temps au fil des cartes postales"
 
-#: src/flpostcards/blueprints/travel/__init__.py:53
-#: src/flpostcards/blueprints/travel/__init__.py:93
+#: src/flpostcards/blueprints/travel/__init__.py:95
+#: src/flpostcards/blueprints/travel/__init__.py:138
 msgid "Suivez mes parcours à travers ma collection de cartes postales."
 msgstr "Suivez mes parcours à travers ma collection de cartes postales."
 
-#: src/flpostcards/blueprints/travel/__init__.py:72
+#: src/flpostcards/blueprints/travel/__init__.py:117
 #, python-format
 msgid "Parcours #%(id)s"
 msgstr "Parcours #%(id)s"

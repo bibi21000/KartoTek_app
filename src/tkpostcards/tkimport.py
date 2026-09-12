@@ -27,7 +27,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 from PIL import Image, ImageTk
 
 from . import cli
-from .libs.importdir import scan_importdir, complete_pairs, list_pairs
+from .libs.importdir import scan_importdir, list_pairs
 from .libs.scan_prepare import prepare_pairs
 from .libs.scan_add import add_pairs
 from .libs.scan_editor import (
@@ -86,7 +86,7 @@ def setup_i18n(lang: str | None = None) -> gettext.NullTranslations:
 # thanks to configparser (same convention as tkscan).
 DEFAULT_CONFIG = {
     "prefix": "",
-    # Nom du modèle d'import ("modèle" = ScanProfile, voir
+    # Nom du profil d'import ("profil" = ScanProfile, voir
     # libs.scan_profiles) actif par défaut : regroupe tous les
     # paramètres de correction de scan (seuil de blanc, marge de
     # rognage, ...). "white_threshold" (clé historique) n'est plus lu
@@ -123,7 +123,7 @@ def load_config() -> configparser.ConfigParser:
 
     # Migration : une ancienne configuration ("white_threshold" réglé
     # dans [tkimport], sans "scan_profile") voit sa valeur reportée sur
-    # le modèle "cpa" (celui utilisé jusque-là par tout le
+    # le profil "cpa" (celui utilisé jusque-là par tout le
     # monde), pour ne pas perdre un réglage déjà ajusté par la
     # personne. Ne s'applique qu'une fois : "white_threshold" est
     # ensuite retiré de [tkimport].
@@ -175,7 +175,8 @@ class ImageViewer(tk.Toplevel):
     """Full-size image viewer with a zoomable, scrollable canvas.
 
     Provides a toolbar with zoom in/out, "fit to window", "actual size"
-    (100 %) and rotation buttons, plus keyboard/mouse shortcuts:
+    (100 %), rotation buttons and, when *on_edit* is given, an "Edit…"
+    button, plus keyboard/mouse shortcuts:
       * ``+`` / ``-`` or ``Ctrl`` + mouse wheel  → zoom in / out
       * ``0``                                     → actual size
       * ``[`` / ``]``                             → rotate left / right
@@ -191,7 +192,7 @@ class ImageViewer(tk.Toplevel):
     MAX_ZOOM = 8.0
 
     def __init__(self, parent: tk.Widget, path: Path, title: str,
-                 gettext_func=None, on_rotate=None) -> None:
+                 gettext_func=None, on_rotate=None, on_edit=None) -> None:
         super().__init__(parent)
         self._ = gettext_func or (lambda s: s)
         self._path = path
@@ -199,6 +200,10 @@ class ImageViewer(tk.Toplevel):
         # rewriting the file on disk) and refreshes the caller's own UI
         # (thumbnail in the main window). Returns True on success.
         self._on_rotate = on_rotate
+        # on_edit() -> None: opens *path* in the user's preferred external
+        # image editor (typically PostcardRow._open_external). Omitted
+        # entirely from the toolbar if not provided.
+        self._on_edit = on_edit
         if not self._load_image():
             self.destroy()
             return
@@ -258,6 +263,10 @@ class ImageViewer(tk.Toplevel):
                    command=lambda: self._rotate(270)).pack(side=tk.LEFT, padx=(8, 2))
         ttk.Button(toolbar, text="⟳", width=3,
                    command=lambda: self._rotate(90)).pack(side=tk.LEFT, padx=2)
+
+        if self._on_edit is not None:
+            ttk.Button(toolbar, text=_("Edit…"),
+                       command=self._on_edit).pack(side=tk.LEFT, padx=(8, 2))
 
         ttk.Button(toolbar, text=_("Close"), command=self.destroy).pack(side=tk.RIGHT)
 
@@ -351,6 +360,26 @@ def _disable_recursive(widget) -> None:
         _disable_recursive(child)
 
 
+def _enable_recursive(widget) -> None:
+    """Recursively re-enable *widget* and all its children (mirror of
+    :func:`_disable_recursive`).
+
+    For ttk widgets this only clears the "disabled" state flag rather
+    than forcing "normal": a ``ttk.Combobox`` created with
+    ``state="readonly"`` (see the profile selector) correctly comes back
+    as "readonly", not freely editable.
+    """
+    try:
+        widget.state(["!disabled"])
+    except Exception:
+        try:
+            widget.configure(state=tk.NORMAL)
+        except Exception:
+            pass
+    for child in widget.winfo_children():
+        _enable_recursive(child)
+
+
 class ScrollableFrame(ttk.Frame):
     """A vertically-scrollable container. Add children to ``self.body``."""
 
@@ -436,10 +465,12 @@ class PairRow(ttk.Frame):
                        command=lambda s=side: self._rotate(s, 270)).pack(side=tk.LEFT)
             ttk.Button(btns, text="⟳", width=3,
                        command=lambda s=side: self._rotate(s, 90)).pack(side=tk.LEFT)
-            ttk.Button(btns, text=_("Open…"),
+            ttk.Button(btns, text=_("Edit…"),
                        command=lambda s=side: self._open_external(s)).pack(side=tk.LEFT, padx=(4, 0))
             ttk.Button(btns, text=_("Reload"),
                        command=lambda s=side: self._refresh_thumb(s)).pack(side=tk.LEFT, padx=(4, 0))
+            ttk.Button(btns, text=_("Cancel"),
+                       command=lambda s=side: self._cancel_side(s)).pack(side=tk.LEFT, padx=(4, 0))
 
             self._refresh_thumb(side)
 
@@ -486,7 +517,33 @@ class PairRow(ttk.Frame):
             return
         ImageViewer(self, path, f"#{self.pcid} - {side}",
                     gettext_func=self.app._,
-                    on_rotate=lambda degrees, s=side: self._rotate(s, degrees))
+                    on_rotate=lambda degrees, s=side: self._rotate(s, degrees),
+                    on_edit=lambda s=side: self._open_external(s))
+
+    def _cancel_side(self, side: str) -> None:
+        """Delete this side's prepared file so it can be regenerated with
+        a different profile (see :func:`~.scan_prepare.prepare_pairs`,
+        which only fills in missing destination files).
+
+        The original raw scan is untouched: only the corrected
+        ``<pcid>_R/_V.<ext>`` output is removed. Automatically disabled
+        (like every other control on this row) once the postcard has
+        been published, via :meth:`mark_added`/:meth:`set_inactive`.
+        """
+        path = self.paths.get(side)
+        if path is not None and path.exists():
+            try:
+                path.unlink()
+            except OSError as exc:
+                messagebox.showerror(self.app._("Error"), str(exc), parent=self)
+                return
+        self.paths[side] = None
+        self._refresh_thumb(side)
+        # An incomplete pair cannot be added (add_one() needs both
+        # sides): uncheck it so "Add validated postcards to collection"
+        # does not try and fail on it before it has been re-analyzed.
+        self.included_var.set(False)
+        self.app._on_side_cancelled(self.pcid, side)
 
     def mark_added(self) -> None:
         self.added = True
@@ -504,7 +561,7 @@ class PairRow(ttk.Frame):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Import profiles ("modèles d'import") management window
+# Import profiles ("profils d'import") management window
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Field name -> (label, kind, kwargs for the Spinbox/Entry).
@@ -512,16 +569,18 @@ class PairRow(ttk.Frame):
 _PROFILE_FIELDS = (
     ("white_threshold", "White threshold", "int", dict(from_=0, to=255)),
     ("white_ratio_threshold", "White ratio threshold", "float", dict(from_=0.0, to=1.0, increment=0.01)),
-    ("crop_margin", "Crop margin (px)", "int", dict(from_=0, to=500)),
+    ("crop_margin", "Initial crop margin (px)", "int", dict(from_=0, to=500)),
+    ("final_crop_margin", "Final crop margin (px)", "int", dict(from_=0, to=500)),
     ("angle_range", "Angle range (°)", "float", dict(from_=0.0, to=45.0, increment=0.5)),
 )
 
 
 class ImportProfilesWindow(tk.Toplevel):
     """Modal window to create, edit, duplicate, rename and delete import
-    profiles ("modèles d'import" -- see :mod:`tkpostcards.libs.scan_profiles`).
+    profiles ("profils d'import" -- see :mod:`tkpostcards.libs.scan_profiles`).
 
-    Built-in profiles (``cpa``, ``semim``, ``modern``) can be edited
+    Built-in profiles (``cpa``, ``semim``, ``jagg``, ``modern``, ``null``,
+    ``draft``) can be edited
     like any other profile (this records an override in the config
     file) but not renamed or deleted -- only reset to their hard-coded
     defaults. Custom profiles support the full set of operations.
@@ -587,23 +646,155 @@ class ImportProfilesWindow(tk.Toplevel):
         ttk.Label(right, textvariable=self._name_var, font=("", 10, "bold")
                   ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
 
+        # description: purely informative, no effect on processing --
+        # shown/edited here so every profile (built-in or custom) can
+        # carry a short reminder of what it's for.
+        ttk.Label(right, text=_("Description") + " :").grid(
+            row=1, column=0, sticky="w", pady=2)
+        self._description_var = tk.StringVar()
+        ttk.Entry(right, textvariable=self._description_var).grid(
+            row=1, column=1, sticky="we", pady=2)
+
+        # Widgets whose state (normal/disabled) is toggled by
+        # _update_processing_state() below, kept as plain lists rather
+        # than looked up dynamically: simplest way to grey out "this
+        # setting is currently unused" without duplicating the toggling
+        # logic at every single field.
+        self._processing_widgets: list[tk.Widget] = []
+        self._transparency_widgets: list[tk.Widget] = []
+
+        row = 2
+
+        # skip_processing: no crop, no deskew, no transparency at all --
+        # the raw file is copied as-is. See ScanProfile.skip_processing
+        # / the "null" built-in profile.
+        self._skip_processing_var = tk.BooleanVar()
+        self._skip_processing_var.trace_add(
+            "write", lambda *a: self._update_processing_state())
+        ttk.Checkbutton(
+            right, variable=self._skip_processing_var,
+            text=_("No processing at all\n"
+                    "(copy the raw file as-is: no crop, no rotation, no transparency)"),
+        ).grid(row=row, column=0, columnspan=2, sticky="w", pady=(6, 2))
+        row += 1
+
         self._field_vars: dict[str, tk.StringVar] = {}
-        row = 1
         for key, label, kind, kw in _PROFILE_FIELDS:
             ttk.Label(right, text=_(label) + " :").grid(row=row, column=0, sticky="w", pady=2)
             var = tk.StringVar()
             self._field_vars[key] = var
-            ttk.Spinbox(right, textvariable=var, width=10, **kw).grid(
-                row=row, column=1, sticky="w", pady=2)
+            spin = ttk.Spinbox(right, textvariable=var, width=10, **kw)
+            spin.grid(row=row, column=1, sticky="w", pady=2)
+            self._processing_widgets.append(spin)
             row += 1
+
+        # Keep the "Transparency white threshold" hint (see below) in sync
+        # live while "White threshold" is being edited, not just when the
+        # selected profile changes.
+        self._field_vars["white_threshold"].trace_add(
+            "write", lambda *a: self._update_transparency_label())
+
+        # skip_transparency: still crop/deskew, but leave the background
+        # opaque -- see ScanProfile.skip_transparency / the "draft"
+        # built-in profile.
+        self._skip_transparency_var = tk.BooleanVar()
+        self._skip_transparency_var.trace_add(
+            "write", lambda *a: self._update_processing_state())
+        skip_transp_chk = ttk.Checkbutton(
+            right, variable=self._skip_transparency_var,
+            text=_("Skip background transparency\n"
+                    "(keep the background opaque; crop/deskew still apply)"),
+        )
+        skip_transp_chk.grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 2))
+        self._processing_widgets.append(skip_transp_chk)
+        row += 1
 
         # transparency_white_threshold: distinct field, optional (blank =
         # "same as white_threshold" -- see ScanProfile.effective_transparency_threshold).
-        ttk.Label(right, text=_("Transparency white threshold\n(blank = same as above)")
+        # The label text is rebuilt in _on_select() to name the "White
+        # threshold" field explicitly (not just "above", ambiguous once
+        # fields get reordered) and show its current resolved value.
+        self._transparency_label_var = tk.StringVar()
+        ttk.Label(right, textvariable=self._transparency_label_var
                   ).grid(row=row, column=0, sticky="w", pady=(10, 2))
         self._transparency_var = tk.StringVar()
-        ttk.Spinbox(right, textvariable=self._transparency_var, width=10,
-                    from_=0, to=255).grid(row=row, column=1, sticky="w", pady=(10, 2))
+        transparency_spin = ttk.Spinbox(right, textvariable=self._transparency_var, width=10,
+                                         from_=0, to=255)
+        transparency_spin.grid(row=row, column=1, sticky="w", pady=(10, 2))
+        self._transparency_widgets.append(transparency_spin)
+        row += 1
+
+        # transparency_band: distinct field, optional (blank = no restriction --
+        # see the "band" parameter of TiffBackgroundRemover.make_border_white_transparent_cv2).
+        ttk.Label(right, text=_("Transparency band (px)\n(blank = unrestricted)")
+                  ).grid(row=row, column=0, sticky="w", pady=(10, 2))
+        self._transparency_band_var = tk.StringVar()
+        band_spin = ttk.Spinbox(right, textvariable=self._transparency_band_var, width=10,
+                                 from_=0, to=2000)
+        band_spin.grid(row=row, column=1, sticky="w", pady=(10, 2))
+        self._transparency_widgets.append(band_spin)
+        row += 1
+
+        # use_contour_geometry: detect the card's actual (possibly
+        # non-rectangular) physical outline instead of thresholding on
+        # color -- see TiffBackgroundRemover.make_border_transparent_by_contour_cv2.
+        # Slower than the color-based method, hence an explicit opt-in per profile.
+        self._transparency_contour_var = tk.BooleanVar()
+        contour_chk = ttk.Checkbutton(
+            right, variable=self._transparency_contour_var,
+            text=_("Detect card outline by contour\n(slower; handles non-rectangular cards)"),
+        )
+        contour_chk.grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 2))
+        self._transparency_widgets.append(contour_chk)
+        row += 1
+
+        # Sub-options for contour detection, only meaningful when the
+        # checkbox above is on -- see libpostcards.contour_utils.
+        contour_opts = ttk.Frame(right)
+        contour_opts.grid(row=row, column=0, columnspan=2, sticky="w", padx=(20, 0))
+        row += 1
+
+        self._contour_denoise_var = tk.BooleanVar()
+        contour_denoise_chk = ttk.Checkbutton(
+            contour_opts, variable=self._contour_denoise_var,
+            text=_("Denoise before detecting (helps faint/grainy edges)"),
+        )
+        contour_denoise_chk.pack(anchor="w")
+        self._transparency_widgets.append(contour_denoise_chk)
+
+        self._contour_clahe_var = tk.BooleanVar()
+        contour_clahe_chk = ttk.Checkbutton(
+            contour_opts, variable=self._contour_clahe_var,
+            text=_("Boost local contrast before detecting (helps low-contrast edges)"),
+        )
+        contour_clahe_chk.pack(anchor="w")
+        self._transparency_widgets.append(contour_clahe_chk)
+
+        self._contour_auto_canny_var = tk.BooleanVar()
+        contour_auto_canny_chk = ttk.Checkbutton(
+            contour_opts, variable=self._contour_auto_canny_var,
+            text=_("Auto-adjust edge sensitivity per scan"),
+        )
+        contour_auto_canny_chk.pack(anchor="w")
+        self._transparency_widgets.append(contour_auto_canny_chk)
+
+        # use_quad_geometry: crop to the card's approximate quadrilateral
+        # (detected on a downscaled copy, by color threshold) instead of
+        # using the row/column scan or the Canny-based contour for the
+        # final crop -- see ScanCorrector.crop_borders_by_quad. More
+        # robust than "Detect card outline by contour" on a low-contrast
+        # jagged/deckled edge (downscaling first smooths out scan noise
+        # that otherwise breaks a simple color threshold), at the cost
+        # of a coarser (envelope-only) crop -- always used together with
+        # generous margins and the fine-detail contour matting above.
+        self._quad_geometry_var = tk.BooleanVar()
+        quad_chk = ttk.Checkbutton(
+            right, variable=self._quad_geometry_var,
+            text=_("Crop to card envelope via downscaled color detection\n"
+                    "(experimental; more robust on faint jagged edges)"),
+        )
+        quad_chk.grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 2))
+        self._transparency_widgets.append(quad_chk)
         row += 1
 
         self._builtin_note = ttk.Label(
@@ -661,12 +852,28 @@ class ImportProfilesWindow(tk.Toplevel):
         profile = self._profiles[name]
 
         self._name_var.set(name + (" " + _("(active)") if name == self._active_name else ""))
+        self._description_var.set(profile.description)
         for key, _label, _kind, _kw in _PROFILE_FIELDS:
             self._field_vars[key].set(str(getattr(profile, key)))
+        self._update_transparency_label()
         self._transparency_var.set(
             "" if profile.transparency_white_threshold is None
             else str(profile.transparency_white_threshold))
-
+        self._transparency_band_var.set(
+            "" if profile.transparency_band is None
+            else str(profile.transparency_band))
+        self._transparency_contour_var.set(profile.use_contour_geometry)
+        self._contour_denoise_var.set(profile.contour_denoise)
+        self._contour_clahe_var.set(profile.contour_clahe)
+        self._contour_auto_canny_var.set(profile.contour_auto_canny)
+        self._quad_geometry_var.set(profile.use_quad_geometry)
+        # Set skip_transparency before skip_processing: the former's
+        # write-trace calls _update_processing_state() too, so setting
+        # skip_processing last is what leaves the widgets in the right
+        # final state (see _update_processing_state).
+        self._skip_transparency_var.set(profile.skip_transparency)
+        self._skip_processing_var.set(profile.skip_processing)
+        self._update_processing_state()
         if profile.builtin:
             self._builtin_note.config(
                 text=_("Built-in profile: editing it saves an override; "
@@ -679,6 +886,36 @@ class ImportProfilesWindow(tk.Toplevel):
             self._rename_btn.config(state=tk.NORMAL)
             self._delete_btn.config(state=tk.NORMAL)
             self._reset_btn.config(state=tk.DISABLED)
+
+    def _update_processing_state(self) -> None:
+        """Grey out fields that have no effect given the current
+        skip_processing/skip_transparency checkboxes (see
+        ScanProfile.skip_processing / .skip_transparency): all
+        correction fields when "No processing at all" is checked, just
+        the transparency-related ones when only "Skip background
+        transparency" is checked."""
+        skip_processing = self._skip_processing_var.get()
+        skip_transparency = self._skip_transparency_var.get()
+
+        proc_state = tk.DISABLED if skip_processing else tk.NORMAL
+        for widget in self._processing_widgets:
+            widget.config(state=proc_state)
+
+        transp_state = tk.DISABLED if (skip_processing or skip_transparency) else tk.NORMAL
+        for widget in self._transparency_widgets:
+            widget.config(state=transp_state)
+
+    def _update_transparency_label(self) -> None:
+        """Keep the "Transparency white threshold" field's hint explicit
+        and accurate: name the "White threshold" field by its exact
+        label (not a position-dependent "above", ambiguous if fields get
+        reordered) and show the value it currently resolves to."""
+        _ = self._
+        white_threshold = self._field_vars["white_threshold"].get().strip() or "?"
+        self._transparency_label_var.set(
+            _("Transparency white threshold\n"
+              "(blank = same as White threshold, currently {value})").format(
+                value=white_threshold))
 
     def _profile_from_form(self, name: str, builtin: bool) -> "ScanProfile | None":
         """Parse the form's fields into a ScanProfile, or show an error
@@ -710,9 +947,31 @@ class ImportProfilesWindow(tk.Toplevel):
                     parent=self)
                 return None
 
+        band_raw = self._transparency_band_var.get().strip()
+        transparency_band = None
+        if band_raw:
+            try:
+                transparency_band = int(band_raw)
+            except ValueError:
+                messagebox.showerror(
+                    _("Error"),
+                    _("Invalid value for {field}: {value!r}").format(
+                        field=_("Transparency band (px)"), value=band_raw),
+                    parent=self)
+                return None
+
         return ScanProfile(
             name=name, builtin=builtin,
+            description=self._description_var.get().strip(),
             transparency_white_threshold=transparency,
+            transparency_band=transparency_band,
+            use_contour_geometry=self._transparency_contour_var.get(),
+            contour_denoise=self._contour_denoise_var.get(),
+            contour_clahe=self._contour_clahe_var.get(),
+            contour_auto_canny=self._contour_auto_canny_var.get(),
+            use_quad_geometry=self._quad_geometry_var.get(),
+            skip_processing=self._skip_processing_var.get(),
+            skip_transparency=self._skip_transparency_var.get(),
             **values,
         )
 
@@ -921,9 +1180,17 @@ class PostcardImportApp(tk.Tk):
         ttk.Label(step1, textvariable=self._pending_var, foreground="gray").grid(
             row=0, column=5, sticky="e")
 
+        # Short reminder of what the currently selected profile is for
+        # (see ScanProfile.description) -- kept in sync in
+        # _refresh_profile_combo()/_on_profile_selected().
+        self._profile_description_var = tk.StringVar()
+        ttk.Label(step1, textvariable=self._profile_description_var,
+                  foreground="gray").grid(
+            row=1, column=0, columnspan=6, sticky="w", pady=(4, 0))
+
         self._prepare_btn = ttk.Button(step1, text=_("Analyze and correct scans"),
                                         command=self._start_prepare)
-        self._prepare_btn.grid(row=1, column=0, columnspan=6, sticky="w", pady=(8, 0))
+        self._prepare_btn.grid(row=2, column=0, columnspan=6, sticky="w", pady=(8, 0))
 
         # ── Step 2 ───────────────────────────────────────────────────────
         step2 = ttk.LabelFrame(self, text=_("2. Validate scans"), padding=10)
@@ -935,6 +1202,8 @@ class PostcardImportApp(tk.Tk):
         self._settings_btn = ttk.Button(
             toolbar, text="⚙", width=3, command=self._open_editor_settings)
         self._settings_btn.pack(side=tk.RIGHT, padx=2)
+        ttk.Button(toolbar, text=_("Cancel all…"), command=self._cancel_all
+                   ).pack(side=tk.LEFT)
         ttk.Button(toolbar, text=_("Select all"), command=lambda: self._select_all(True)
                    ).pack(side=tk.RIGHT, padx=2)
         ttk.Button(toolbar, text=_("Select none"), command=lambda: self._select_all(False)
@@ -983,6 +1252,19 @@ class PostcardImportApp(tk.Tk):
         self._prepare_btn.config(state=tk.DISABLED)
         _disable_recursive(self._step1_frame)
 
+    def _ungrey_step1(self) -> None:
+        """Re-enable step 1 (mirror of :meth:`_grey_step1`).
+
+        :func:`~.scan_prepare.prepare_pairs` only (re)creates whatever
+        destination file is currently *missing* -- see its docstring --
+        so once "Annuler"/"Annuler tout" has deleted one, re-running
+        "Analyze and correct scans" (with the same profile, or a
+        different one) is always safe, however :meth:`_grey_step1` had
+        greyed it out before.
+        """
+        self._prepare_btn.config(state=tk.NORMAL)
+        _enable_recursive(self._step1_frame)
+
     def _check_importdir_at_startup(self) -> bool:
         """Inspect ``importdir`` right after start-up.
 
@@ -1004,15 +1286,13 @@ class PostcardImportApp(tk.Tk):
                 _("Error"), _("Nombre de scan(s) à traiter incohérent"), parent=self)
             return False
 
-        if n > 0 and m > n:
-            messagebox.showerror(
-                _("Error"),
-                _("La précédente analyse n'a pas été terminée ... "
-                  "je ne sais pas quoi faire"),
-                parent=self)
-            return False
-
-        if n > 0 and m == n:
+        # n < m simply means some destination file is still missing --
+        # either never prepared yet, or deliberately deleted by
+        # "Annuler"/"Annuler tout" in a previous session to retry it
+        # with a different profile (see prepare_pairs()) -- step 1 has
+        # something to do, so it must stay enabled and there is no
+        # ambiguity to report.
+        if n == m:
             self._grey_step1()
 
             inconsistent = []
@@ -1080,7 +1360,7 @@ class PostcardImportApp(tk.Tk):
         s["remove_after_add"] = str(self._remove_after_var.get()).lower()
         save_config(self.cfg)
 
-    # ── Import profiles ("modèles d'import") ───────────────────────────────
+    # ── Import profiles ("profils d'import") ───────────────────────────────
 
     def _refresh_profile_combo(self) -> None:
         """Reload the list of profiles from the configuration and update
@@ -1096,13 +1376,19 @@ class PostcardImportApp(tk.Tk):
         if current not in self._profiles:
             current = DEFAULT_PROFILE_NAME
         self._profile_var.set(current)
+        self._update_profile_description()
+
+    def _update_profile_description(self) -> None:
+        profile = self._profiles.get(self._profile_var.get())
+        self._profile_description_var.set(profile.description if profile else "")
 
     def _on_profile_selected(self) -> None:
         set_active_profile_name(self.cfg, self._profile_var.get())
         save_config(self.cfg)
+        self._update_profile_description()
 
     def _open_profiles_manager(self) -> None:
-        """Open the "Modèles d'import" window to create/edit/duplicate/
+        """Open the "Profils d'import" window to create/edit/duplicate/
         delete import profiles, then refresh the combobox with the
         (possibly changed) list and selection."""
         ImportProfilesWindow(self, self.cfg, gettext_func=self._,
@@ -1215,9 +1501,16 @@ class PostcardImportApp(tk.Tk):
     # ── Step 2: review ──────────────────────────────────────────────────────
 
     def _load_existing_pairs(self) -> None:
-        """Populate the review list with pairs already prepared (previous run)."""
-        for pcid, sides in complete_pairs(self.importdir).items():
+        """Populate the review list with pairs already prepared (previous
+        run), including incomplete ones (only one side present) -- e.g.
+        a postcard whose "Annuler" was clicked in a previous session and
+        never re-analyzed since."""
+        for pcid, sides in list_pairs(self.importdir).items():
+            if sides["R"] is None and sides["V"] is None:
+                continue
             self._add_row(pcid, sides)
+            if sides["R"] is None or sides["V"] is None:
+                self._rows[pcid].included_var.set(False)
 
     def _add_row(self, pcid: str, paths: dict) -> None:
         if pcid in self._rows:
@@ -1233,6 +1526,55 @@ class PostcardImportApp(tk.Tk):
         for row in self._rows.values():
             if not row.added:
                 row.included_var.set(value)
+
+    def _on_side_cancelled(self, pcid: str, side: str) -> None:
+        """Called by :meth:`PairRow._cancel_side`: a destination file was
+        just deleted, so "Analyze and correct scans" has something to do
+        again -- re-enable it even if a previous run had greyed it out
+        (see :meth:`_ungrey_step1`)."""
+        self._ungrey_step1()
+        self._refresh_pending_count()
+        self._log(self._("Cancelled #{pcid} ({side}); pick a profile and "
+                          "analyze again to redo it.").format(pcid=pcid, side=side))
+        self._set_status(self._("Ready"))
+
+    def _cancel_all(self) -> None:
+        """Delete every analyzed-but-not-yet-published recto/verso file
+        (already published rows -- added this session or a previous one
+        -- are left untouched) and re-enable step 1, so the whole batch
+        can be re-analyzed from scratch with a different profile.
+        """
+        if self._busy:
+            return
+        _ = self._
+        cancellable = [row for row in self._rows.values()
+                       if not row.added and not row.inactive]
+        if not cancellable:
+            messagebox.showinfo(_("Info"), _("Nothing to cancel."), parent=self)
+            return
+        if not messagebox.askyesno(
+                _("Cancel all"),
+                _("Delete every analyzed (not yet added) recto/verso file "
+                  "so you can pick a different profile and analyze again? "
+                  "This cannot be undone."),
+                parent=self):
+            return
+
+        for row in cancellable:
+            for path in row.paths.values():
+                if path is not None and path.exists():
+                    try:
+                        path.unlink()
+                    except OSError as exc:
+                        logging.warning("could not remove %s: %s", path, exc)
+            row.destroy()
+            del self._rows[row.pcid]
+
+        self._ungrey_step1()
+        self._refresh_pending_count()
+        self._log(_("Cancelled {count} postcard(s); pick a profile and "
+                     "analyze again.").format(count=len(cancellable)))
+        self._set_status(_("Ready"))
 
     # ── Step 3: add ─────────────────────────────────────────────────────────
 
@@ -1358,7 +1700,7 @@ class PostcardImportApp(tk.Tk):
 @cli.command()
 @click.option("--prefix", default=None, help="Override file prefix.")
 @click.option("--profile", default=None,
-              help="Override the active import profile (\"modèle d'import\", "
+              help="Override the active import profile (\"profil d'import\", "
                    "e.g. cpa, semim or modern). See the \"Manage profiles…\" "
                    "window to create/edit profiles.")
 @click.version_option("1.0.0", prog_name="tkimport")

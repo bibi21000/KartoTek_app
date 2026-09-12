@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tkpostcards 2.0.0\n"
 "Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
-"POT-Creation-Date: 2026-08-30 21:50+0200\n"
+"POT-Creation-Date: 2026-09-12 10:43+0200\n"
 "PO-Revision-Date: 2026-07-24 22:03+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -46,316 +46,396 @@ msgid ""
 " or torch's own default (cuda if available, else cpu) if unset."
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:252
+#: src/tkpostcards/tkimport.py:257
 msgid "Fit to window"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:254
+#: src/tkpostcards/tkimport.py:259
 msgid "Actual size"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:262 src/tkpostcards/tkimport.py:628
-#: src/tkpostcards/tkimport.py:1152 src/tkpostcards/tkscan.py:738
-#: src/tkpostcards/tkscan.py:1336
+#: src/tkpostcards/tkimport.py:268 src/tkpostcards/tkimport.py:468
+msgid "Edit…"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:271 src/tkpostcards/tkimport.py:819
+#: src/tkpostcards/tkimport.py:1438 src/tkpostcards/tkscan.py:771
+#: src/tkpostcards/tkscan.py:1375
 msgid "Close"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:422
+#: src/tkpostcards/tkimport.py:451
 msgid "Recto"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:422
+#: src/tkpostcards/tkimport.py:451
 msgid "Verso"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:439
-msgid "Open…"
-msgstr ""
-
-#: src/tkpostcards/tkimport.py:441
+#: src/tkpostcards/tkimport.py:470
 msgid "Reload"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:452
+#: src/tkpostcards/tkimport.py:472
+msgid "Cancel"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:483
 msgid "missing"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:468 src/tkpostcards/tkimport.py:481
-#: src/tkpostcards/tkimport.py:694 src/tkpostcards/tkimport.py:707
-#: src/tkpostcards/tkimport.py:751 src/tkpostcards/tkimport.py:773
-#: src/tkpostcards/tkimport.py:808 src/tkpostcards/tkimport.py:1004
-#: src/tkpostcards/tkimport.py:1009 src/tkpostcards/tkimport.py:1210
-#: src/tkpostcards/tkimport.py:1319 src/tkpostcards/tkscan.py:700
-#: src/tkpostcards/tkscan.py:722
+#: src/tkpostcards/tkimport.py:499 src/tkpostcards/tkimport.py:512
+#: src/tkpostcards/tkimport.py:538 src/tkpostcards/tkimport.py:931
+#: src/tkpostcards/tkimport.py:944 src/tkpostcards/tkimport.py:957
+#: src/tkpostcards/tkimport.py:1010 src/tkpostcards/tkimport.py:1032
+#: src/tkpostcards/tkimport.py:1067 src/tkpostcards/tkimport.py:1286
+#: src/tkpostcards/tkimport.py:1496 src/tkpostcards/tkimport.py:1661
+#: src/tkpostcards/tkscan.py:733 src/tkpostcards/tkscan.py:755
 msgid "Error"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:493 src/tkpostcards/tkimport.py:1296
+#: src/tkpostcards/tkimport.py:550 src/tkpostcards/tkimport.py:1638
 msgid "Added"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:501
+#: src/tkpostcards/tkimport.py:558
 msgid "Already in collection"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:543
+#: src/tkpostcards/tkimport.py:602
 msgid "Import profiles"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:573
+#: src/tkpostcards/tkimport.py:632
 msgid "New…"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:575
+#: src/tkpostcards/tkimport.py:634
 msgid "Duplicate…"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:578
-#, fuzzy
+#: src/tkpostcards/tkimport.py:637
 msgid "Set as active"
-msgstr "Active"
+msgstr ""
 
-#: src/tkpostcards/tkimport.py:582
+#: src/tkpostcards/tkimport.py:641
 msgid "Profile settings"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:602
-msgid ""
-"Transparency white threshold\n"
-"(blank = same as above)"
+#: src/tkpostcards/tkimport.py:652
+msgid "Description"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:616
+#: src/tkpostcards/tkimport.py:676
+msgid ""
+"No processing at all\n"
+"(copy the raw file as-is: no crop, no rotation, no transparency)"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:705
+msgid ""
+"Skip background transparency\n"
+"(keep the background opaque; crop/deskew still apply)"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:729
+msgid ""
+"Transparency band (px)\n"
+"(blank = unrestricted)"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:745
+msgid ""
+"Detect card outline by contour\n"
+"(slower; handles non-rectangular cards)"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:760
+msgid "Denoise before detecting (helps faint/grainy edges)"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:768
+msgid "Boost local contrast before detecting (helps low-contrast edges)"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:776
+msgid "Auto-adjust edge sensitivity per scan"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:793
+msgid ""
+"Crop to card envelope via downscaled color detection\n"
+"(experimental; more robust on faint jagged edges)"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:807
 msgid "Save"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:619
+#: src/tkpostcards/tkimport.py:810
 msgid "Rename…"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:621
+#: src/tkpostcards/tkimport.py:812
 msgid "Reset to defaults"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:624
+#: src/tkpostcards/tkimport.py:815
 msgid "Delete…"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:663
+#: src/tkpostcards/tkimport.py:854
 msgid "(active)"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:672
+#: src/tkpostcards/tkimport.py:879
 msgid ""
 "Built-in profile: editing it saves an override; \"Reset to defaults\" "
 "removes that override."
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:695 src/tkpostcards/tkimport.py:708
+#: src/tkpostcards/tkimport.py:916
+#, python-brace-format
+msgid ""
+"Transparency white threshold\n"
+"(blank = same as White threshold, currently {value})"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:932 src/tkpostcards/tkimport.py:945
+#: src/tkpostcards/tkimport.py:958
 #, python-brace-format
 msgid "Invalid value for {field}: {value!r}"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:709
+#: src/tkpostcards/tkimport.py:946
 msgid "Transparency white threshold"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:745
+#: src/tkpostcards/tkimport.py:959
+msgid "Transparency band (px)"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:1004
 msgid "New profile"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:745
+#: src/tkpostcards/tkimport.py:1004
 msgid "Name of the new profile:"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:751 src/tkpostcards/tkimport.py:773
+#: src/tkpostcards/tkimport.py:1010 src/tkpostcards/tkimport.py:1032
 msgid "Invalid or already used profile name."
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:766
+#: src/tkpostcards/tkimport.py:1025
 msgid "Rename profile"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:766
+#: src/tkpostcards/tkimport.py:1025
 #, python-brace-format
 msgid "New name for {name!r}:"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:801
+#: src/tkpostcards/tkimport.py:1060
 msgid "Reset profile"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:802
+#: src/tkpostcards/tkimport.py:1061
 #, python-brace-format
 msgid "Reset {name!r} to its default values?"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:809
+#: src/tkpostcards/tkimport.py:1068
 msgid "Cannot delete the currently active profile: activate another one first."
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:814
+#: src/tkpostcards/tkimport.py:1073
 msgid "Delete profile"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:815
+#: src/tkpostcards/tkimport.py:1074
 #, python-brace-format
 msgid "Delete profile {name!r}? This cannot be undone."
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:853
+#: src/tkpostcards/tkimport.py:1112
 msgid "Postcard Import"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:899
+#: src/tkpostcards/tkimport.py:1158
 msgid "1. Analyze and correct scans"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:904
+#: src/tkpostcards/tkimport.py:1163
 msgid "Prefix:"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:909
+#: src/tkpostcards/tkimport.py:1168
 msgid "Import profile:"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:916
+#: src/tkpostcards/tkimport.py:1175
 msgid "Manage profiles…"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:924
+#: src/tkpostcards/tkimport.py:1191
 msgid "Analyze and correct scans"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:929
+#: src/tkpostcards/tkimport.py:1196
 msgid "2. Validate scans"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:938
+#: src/tkpostcards/tkimport.py:1205
+msgid "Cancel all…"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:1207
 msgid "Select all"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:940
+#: src/tkpostcards/tkimport.py:1209
 msgid "Select none"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:947
+#: src/tkpostcards/tkimport.py:1216
 msgid "3. Add to collection"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:952
+#: src/tkpostcards/tkimport.py:1221
 msgid ""
 "Empty the import folder once postcards are added (deletes every file in "
 "the folder)"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:956
+#: src/tkpostcards/tkimport.py:1225
 msgid "Add validated postcards to collection"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:961 src/tkpostcards/tkimport.py:1340
-#: src/tkpostcards/tkscan.py:993 src/tkpostcards/tkscan.py:1426
+#: src/tkpostcards/tkimport.py:1230 src/tkpostcards/tkimport.py:1682
+#: src/tkpostcards/tkscan.py:1026 src/tkpostcards/tkscan.py:1465
 msgid "Status:"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:961 src/tkpostcards/tkimport.py:1212
-#: src/tkpostcards/tkimport.py:1328 src/tkpostcards/tkscan.py:993
+#: src/tkpostcards/tkimport.py:1230 src/tkpostcards/tkimport.py:1498
+#: src/tkpostcards/tkimport.py:1539 src/tkpostcards/tkimport.py:1577
+#: src/tkpostcards/tkimport.py:1670 src/tkpostcards/tkscan.py:1026
 msgid "Ready"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:964 src/tkpostcards/tkscan.py:998
+#: src/tkpostcards/tkimport.py:1233 src/tkpostcards/tkscan.py:1031
 msgid "Log"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:999 src/tkpostcards/tkimport.py:1041
-#: src/tkpostcards/tkimport.py:1246
+#: src/tkpostcards/tkimport.py:1281 src/tkpostcards/tkimport.py:1321
+#: src/tkpostcards/tkimport.py:1553 src/tkpostcards/tkimport.py:1588
 msgid "Info"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:999
+#: src/tkpostcards/tkimport.py:1281
 msgid "Aucun scan à traiter"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1004
+#: src/tkpostcards/tkimport.py:1286
 msgid "Nombre de scan(s) à traiter incohérent"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1010
-msgid "La précédente analyse n'a pas été terminée ... je ne sais pas quoi faire"
-msgstr ""
-
-#: src/tkpostcards/tkimport.py:1034
+#: src/tkpostcards/tkimport.py:1314
 msgid "Warning"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1035
+#: src/tkpostcards/tkimport.py:1315
 msgid "Incohérence entre importdir et la base de données"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1041
+#: src/tkpostcards/tkimport.py:1321
 msgid "Rien à faire ... je quitte"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1073 src/tkpostcards/tkimport.py:1124
+#: src/tkpostcards/tkimport.py:1353 src/tkpostcards/tkimport.py:1410
 msgid "(system default)"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1114
+#: src/tkpostcards/tkimport.py:1400
 msgid "Choose your preferred image editor"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1120
+#: src/tkpostcards/tkimport.py:1406
 #, python-brace-format
 msgid "Preferred image editor set to {app}"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1131
+#: src/tkpostcards/tkimport.py:1417
 msgid "Preferred image editor"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1138
+#: src/tkpostcards/tkimport.py:1424
 msgid "Preferred image editor:"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1145
+#: src/tkpostcards/tkimport.py:1431
 msgid "Browse…"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1148
+#: src/tkpostcards/tkimport.py:1434
 msgid "Use system default"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1168
+#: src/tkpostcards/tkimport.py:1454
 #, python-brace-format
 msgid "Raw scans waiting: {count}"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1178
+#: src/tkpostcards/tkimport.py:1464
 msgid "Analyzing scans..."
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1208
+#: src/tkpostcards/tkimport.py:1494
 msgid "Preparation failed"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1213
+#: src/tkpostcards/tkimport.py:1499
 #, python-brace-format
 msgid "Prepared {count} postcard(s)"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1247
+#: src/tkpostcards/tkimport.py:1537
+#, python-brace-format
+msgid "Cancelled #{pcid} ({side}); pick a profile and analyze again to redo it."
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:1553
+msgid "Nothing to cancel."
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:1556
+msgid "Cancel all"
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:1557
+msgid ""
+"Delete every analyzed (not yet added) recto/verso file so you can pick a "
+"different profile and analyze again? This cannot be undone."
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:1575
+#, python-brace-format
+msgid "Cancelled {count} postcard(s); pick a profile and analyze again."
+msgstr ""
+
+#: src/tkpostcards/tkimport.py:1589
 msgid "No validated postcard to add."
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1251 src/tkpostcards/tkimport.py:1300
+#: src/tkpostcards/tkimport.py:1593 src/tkpostcards/tkimport.py:1642
 msgid "Adding postcards..."
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1317
+#: src/tkpostcards/tkimport.py:1659
 msgid "Add failed"
 msgstr ""
 
-#: src/tkpostcards/tkimport.py:1323
+#: src/tkpostcards/tkimport.py:1665
 msgid "Import folder emptied"
 msgstr ""
 
@@ -1333,224 +1413,224 @@ msgstr ""
 msgid "tsearch_results"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:456
+#: src/tkpostcards/tkscan.py:489
 msgid "Import folder is not empty"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:462
+#: src/tkpostcards/tkscan.py:495
 msgid "The import folder already contains files:"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:477
+#: src/tkpostcards/tkscan.py:510
 msgid "What do you want to do?"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:483
+#: src/tkpostcards/tkscan.py:516
 msgid "Delete files and continue"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:486
+#: src/tkpostcards/tkscan.py:519
 msgid "Continue and add files"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:488
+#: src/tkpostcards/tkscan.py:521
 msgid "Quit"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:582
+#: src/tkpostcards/tkscan.py:615
 msgid "Scanned Images"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:595 src/tkpostcards/tkscan.py:641
-#: src/tkpostcards/tkscan.py:714
+#: src/tkpostcards/tkscan.py:628 src/tkpostcards/tkscan.py:674
+#: src/tkpostcards/tkscan.py:747
 msgid "Total scanned:"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:597
+#: src/tkpostcards/tkscan.py:630
 msgid "(Double-click to enlarge)"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:613
+#: src/tkpostcards/tkscan.py:646
 msgid "No images yet"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:676 src/tkpostcards/tkscan.py:736
+#: src/tkpostcards/tkscan.py:709 src/tkpostcards/tkscan.py:769
 msgid "Delete"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:689
+#: src/tkpostcards/tkscan.py:722
 msgid "Delete image"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:690
+#: src/tkpostcards/tkscan.py:723
 #, python-brace-format
 msgid ""
 "Delete {name}?\n"
 "This cannot be undone."
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:768
+#: src/tkpostcards/tkscan.py:801
 msgid "Postcard Scanner"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:824
+#: src/tkpostcards/tkscan.py:857
 msgid "Settings"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:830
+#: src/tkpostcards/tkscan.py:863
 msgid "Scanner:"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:835
+#: src/tkpostcards/tkscan.py:868
 msgid "Refresh Scanners"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:840
+#: src/tkpostcards/tkscan.py:873
 msgid "Resolution:"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:848
+#: src/tkpostcards/tkscan.py:881
 msgid "File format:"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:856
+#: src/tkpostcards/tkscan.py:889
 msgid "Destination folder:"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:860
+#: src/tkpostcards/tkscan.py:893
 msgid "Browse"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:865
+#: src/tkpostcards/tkscan.py:898
 msgid "File prefix:"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:875
+#: src/tkpostcards/tkscan.py:908
 msgid "Scan area (mm):"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:900
+#: src/tkpostcards/tkscan.py:933
 msgid "Border crop (px):"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:907
+#: src/tkpostcards/tkscan.py:940
 msgid "px (each side)"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:917
+#: src/tkpostcards/tkscan.py:950
 msgid "JPEG quality:"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:927
+#: src/tkpostcards/tkscan.py:960
 msgid "PNG compress:"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:937
+#: src/tkpostcards/tkscan.py:970
 msgid "TIFF compression:"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:948
+#: src/tkpostcards/tkscan.py:981
 msgid "Batch Mode"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:952
+#: src/tkpostcards/tkscan.py:985
 msgid "Batch interval (s):"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:963 src/tkpostcards/tkscan.py:1416
+#: src/tkpostcards/tkscan.py:996 src/tkpostcards/tkscan.py:1455
 msgid "Start Batch"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:967 src/tkpostcards/tkscan.py:1405
-#: src/tkpostcards/tkscan.py:1417
+#: src/tkpostcards/tkscan.py:1000 src/tkpostcards/tkscan.py:1444
+#: src/tkpostcards/tkscan.py:1456
 msgid "Pause"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:971
+#: src/tkpostcards/tkscan.py:1004
 msgid "Stop"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:985 src/tkpostcards/tkscan.py:1359
+#: src/tkpostcards/tkscan.py:1018 src/tkpostcards/tkscan.py:1398
 msgid "Scan Now"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:989 src/tkpostcards/tkscan.py:1291
-#: src/tkpostcards/tkscan.py:1326
+#: src/tkpostcards/tkscan.py:1022 src/tkpostcards/tkscan.py:1327
+#: src/tkpostcards/tkscan.py:1365
 msgid "Preview"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1008
+#: src/tkpostcards/tkscan.py:1041
 msgid "Clear log"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1088
+#: src/tkpostcards/tkscan.py:1121
 msgid "Select destination folder"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1155
+#: src/tkpostcards/tkscan.py:1188
 #, python-brace-format
 msgid "Scanners found: {count}"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1215
+#: src/tkpostcards/tkscan.py:1248
 msgid "Scanning..."
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1226
+#: src/tkpostcards/tkscan.py:1262
 msgid "Simulated scan (no scanner)"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1232
+#: src/tkpostcards/tkscan.py:1268
 msgid "Scan complete"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1240 src/tkpostcards/tkscan.py:1241
+#: src/tkpostcards/tkscan.py:1276 src/tkpostcards/tkscan.py:1277
 msgid "Scan failed"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1284
+#: src/tkpostcards/tkscan.py:1320
 msgid "Previewing..."
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1299
+#: src/tkpostcards/tkscan.py:1338
 msgid "Simulated preview (no scanner)"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1305
+#: src/tkpostcards/tkscan.py:1344
 msgid "Preview complete"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1320 src/tkpostcards/tkscan.py:1321
+#: src/tkpostcards/tkscan.py:1359 src/tkpostcards/tkscan.py:1360
 msgid "Preview failed"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1362 src/tkpostcards/tkscan.py:1406
+#: src/tkpostcards/tkscan.py:1401 src/tkpostcards/tkscan.py:1445
 msgid "Batch running"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1363
+#: src/tkpostcards/tkscan.py:1402
 #, python-brace-format
 msgid "Batch started (interval={interval}s)"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1389 src/tkpostcards/tkscan.py:1401
-#: src/tkpostcards/tkscan.py:1402
+#: src/tkpostcards/tkscan.py:1428 src/tkpostcards/tkscan.py:1440
+#: src/tkpostcards/tkscan.py:1441
 msgid "Paused"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1392
+#: src/tkpostcards/tkscan.py:1431
 msgid "Next scan in:"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1400 src/tkpostcards/tkscan.py:1407
+#: src/tkpostcards/tkscan.py:1439 src/tkpostcards/tkscan.py:1446
 msgid "Resume"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1420 src/tkpostcards/tkscan.py:1421
+#: src/tkpostcards/tkscan.py:1459 src/tkpostcards/tkscan.py:1460
 msgid "Stopped"
 msgstr ""
 
-#: src/tkpostcards/tkscan.py:1463
+#: src/tkpostcards/tkscan.py:1502
 msgid "Finishing scan before closing..."
 msgstr ""
 
@@ -1574,7 +1654,7 @@ msgstr ""
 msgid "Delete card in database and its linked json and images"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:83 src/tkpostcards/scripts/tktools.py:172
+#: src/tkpostcards/scripts/tktools.py:83 src/tkpostcards/scripts/tktools.py:262
 msgid "Give me id(s) to add"
 msgstr ""
 
@@ -1593,27 +1673,27 @@ msgstr ""
 
 #: src/tkpostcards/scripts/tktools.py:97
 msgid ""
-"Name of the import profile (\"modèle d'import\") controlling the scan "
+"Name of the import profile (\"profil d'import\") controlling the scan "
 "correction (white threshold, crop margin, ...). Defaults to the "
-"[tkimport] scan_profile setting in the configuration file, or "
-"\"import_cpa\" if unset. See also \"tktools scan profiles\"."
+"[tkimport] scan_profile setting in the configuration file, or \"cpa\" if "
+"unset. See also \"tktools scan profiles\"."
 msgstr ""
 
 #: src/tkpostcards/scripts/tktools.py:103
-#: src/tkpostcards/scripts/tktools.py:597
+#: src/tkpostcards/scripts/tktools.py:687
 msgid ""
 "One-off override of the white threshold for background transparency, on "
 "top of --profile."
 msgstr ""
 
 #: src/tkpostcards/scripts/tktools.py:115
-#: src/tkpostcards/scripts/tktools.py:608
+#: src/tkpostcards/scripts/tktools.py:699
 #, python-brace-format
 msgid "Unknown import profile: {name}"
 msgstr ""
 
 #: src/tkpostcards/scripts/tktools.py:132
-msgid "List available import profiles (\"modèles d'import\")"
+msgid "List available import profiles (\"profils d'import\")"
 msgstr ""
 
 #: src/tkpostcards/scripts/tktools.py:141
@@ -1624,27 +1704,60 @@ msgstr ""
 msgid "custom"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:151
+#: src/tkpostcards/scripts/tktools.py:148
+msgid ""
+"no processing at all: the raw file is copied as-is (no crop, no deskew, "
+"no transparency)"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:166
+msgid "Re-save every TIFF in datadir/cards using lossless deflate compression"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:168
+msgid "List the files that would be recompressed, without touching them."
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:194
+#, python-brace-format
+msgid "No TIFF file found in {dir}"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:198
+msgid "TIFF files"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:232
+#, python-brace-format
+msgid "Failed on {path}: {exc}"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:237
+#, python-brace-format
+msgid "{converted} converted, {skipped} already deflate, {failed} failed"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:241
 msgid "Add postcards"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:154
-#: src/tkpostcards/scripts/tktools.py:480
+#: src/tkpostcards/scripts/tktools.py:244
+#: src/tkpostcards/scripts/tktools.py:570
 msgid ""
 "OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"). Defaults to"
 " the [tkimport] ocr_langs setting in the configuration file."
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:158
-#: src/tkpostcards/scripts/tktools.py:509
+#: src/tkpostcards/scripts/tktools.py:248
+#: src/tkpostcards/scripts/tktools.py:599
 msgid ""
 "Target language for the translated caption (e.g. \"fr\"). Defaults to the"
 " [tkimport] detect_lang setting in the configuration file, or \"fr\" if "
 "unset."
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:162
-#: src/tkpostcards/scripts/tktools.py:533
+#: src/tkpostcards/scripts/tktools.py:252
+#: src/tkpostcards/scripts/tktools.py:623
 msgid ""
 "Comma-separated list of object labels to always exclude from "
 "detected_objects (e.g. \"tie,person\", or their translation in --detect-"
@@ -1652,103 +1765,103 @@ msgid ""
 "excluded_objects setting in the configuration file."
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:193
-#: src/tkpostcards/scripts/tktools.py:496
-#: src/tkpostcards/scripts/tktools.py:577
-#: src/tkpostcards/scripts/tktools.py:619
+#: src/tkpostcards/scripts/tktools.py:283
+#: src/tkpostcards/scripts/tktools.py:586
+#: src/tkpostcards/scripts/tktools.py:667
+#: src/tkpostcards/scripts/tktools.py:716
 msgid "Postcards"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:214
+#: src/tkpostcards/scripts/tktools.py:304
 msgid "Backup cards directory"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:215
+#: src/tkpostcards/scripts/tktools.py:305
 msgid "Compression level"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:216
-#: src/tkpostcards/scripts/tktools.py:233
+#: src/tkpostcards/scripts/tktools.py:306
+#: src/tkpostcards/scripts/tktools.py:323
 msgid "Name of archive to create (backup_(date).tar.zst if None)"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:231
+#: src/tkpostcards/scripts/tktools.py:321
 msgid "Extract cards in directory"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:232
+#: src/tkpostcards/scripts/tktools.py:322
 msgid "Destination dir"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:242
+#: src/tkpostcards/scripts/tktools.py:332
 msgid "Need a dest directory"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:252
+#: src/tkpostcards/scripts/tktools.py:342
 msgid "Index similar postcards"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:282
+#: src/tkpostcards/scripts/tktools.py:372
 msgid "Find similar postcards from directory"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:323
+#: src/tkpostcards/scripts/tktools.py:413
 msgid "Find similar postcard from url"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:361
+#: src/tkpostcards/scripts/tktools.py:451
 msgid "Find similar postcard from clipboard"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:396
+#: src/tkpostcards/scripts/tktools.py:486
 msgid "List torch devices available for similarity search"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:402
+#: src/tkpostcards/scripts/tktools.py:492
 msgid "torch is not installed"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:416
+#: src/tkpostcards/scripts/tktools.py:506
 #, python-brace-format
 msgid "Currently configured device: {device}"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:418
+#: src/tkpostcards/scripts/tktools.py:508
 msgid "Currently configured device: (auto)"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:421
+#: src/tkpostcards/scripts/tktools.py:511
 msgid "Check for missing ids and replace cards wih last ones"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:477
+#: src/tkpostcards/scripts/tktools.py:567
 msgid "Redo OCR for postcards"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:488
-#: src/tkpostcards/scripts/tktools.py:544
+#: src/tkpostcards/scripts/tktools.py:578
+#: src/tkpostcards/scripts/tktools.py:634
 msgid "Give me a name"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:506
+#: src/tkpostcards/scripts/tktools.py:596
 msgid "Redo content detection for postcards"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:513
+#: src/tkpostcards/scripts/tktools.py:603
 msgid ""
 "Name of the HuggingFace image captioning model to use. Defaults to the "
 "[tkimport] model_name setting in the configuration file, or \"Salesforce"
 "/blip-image-captioning-large\" if unset."
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:518
+#: src/tkpostcards/scripts/tktools.py:608
 msgid ""
 "Name of the HuggingFace object detection model to use. Defaults to the "
 "[tkimport] objects_model_name setting in the configuration file, or "
 "\"facebook/detr-resnet-101\" if unset."
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:523
+#: src/tkpostcards/scripts/tktools.py:613
 msgid ""
 "Minimum confidence score (0-1) for an object detection to be kept. "
 "Defaults to the [tkimport] objects_threshold setting in the configuration"
@@ -1756,46 +1869,53 @@ msgid ""
 "quality over quantity)."
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:529
+#: src/tkpostcards/scripts/tktools.py:619
 msgid ""
 "Maximum number of detected objects to keep, once sorted by confidence. "
 "Defaults to the [tkimport] max_objects setting in the configuration file,"
 " or 10 if unset."
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:588
+#: src/tkpostcards/scripts/tktools.py:678
 msgid "Redo transparent on postcards"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:591
+#: src/tkpostcards/scripts/tktools.py:681
 msgid ""
-"Name of the import profile (\"modèle d'import\") whose transparency "
-"threshold should be used. Defaults to the [tkimport] scan_profile setting"
-" in the configuration file, or \"import_cpa\" if unset. See also "
-"\"tktools scan profiles\"."
+"Name of the import profile (\"profil d'import\") whose transparency "
+"settings should be used (white threshold, band, contour detection). "
+"Defaults to the [tkimport] scan_profile setting in the configuration "
+"file, or \"cpa\" if unset. See also \"tktools scan profiles\"."
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:632
+#: src/tkpostcards/scripts/tktools.py:706
+#, python-brace-format
+msgid ""
+"Profile {name!r} does not apply background transparency "
+"(skip_processing/skip_transparency); pick another profile."
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:753
 msgid "Calculate travels and add them to database"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:640
+#: src/tkpostcards/scripts/tktools.py:761
 msgid "Publish data to a remote web server"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:642
+#: src/tkpostcards/scripts/tktools.py:763
 msgid "Update all data (travel, ...) before publishing"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:649
+#: src/tkpostcards/scripts/tktools.py:770
 msgid "Give me a config"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:654
+#: src/tkpostcards/scripts/tktools.py:775
 msgid "Fix non-reciprocal double relations between cards"
 msgstr ""
 
-#: src/tkpostcards/scripts/tktools.py:655
+#: src/tkpostcards/scripts/tktools.py:776
 msgid "Do not update files"
 msgstr ""
 
@@ -1813,5 +1933,11 @@ msgstr ""
 #~ " Defaults to the [tkimport] white_threshold"
 #~ " setting in the configuration file, "
 #~ "or 240 if unset."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "La précédente analyse n'a pas été "
+#~ "terminée ... je ne sais pas quoi"
+#~ " faire"
 #~ msgstr ""
 

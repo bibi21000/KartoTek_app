@@ -94,7 +94,7 @@ def scan():
 @scan.command(help=_("Prepare scanned postcards for import"))
 @click.option('--prefix', default='', help=_("Prefix of scanned files"))
 @click.option('--profile', default=None,
-              help=_("Name of the import profile (\"modèle d'import\") controlling "
+              help=_("Name of the import profile (\"profil d'import\") controlling "
                      "the scan correction (white threshold, crop margin, ...). "
                      "Defaults to the [tkimport] scan_profile setting in the "
                      "configuration file, or \"cpa\" if unset. See also "
@@ -129,7 +129,7 @@ def prepare(common, prefix, profile, white_threshold):
         on_pair=_on_pair,
     )
 
-@scan.command(name="profiles", help=_("List available import profiles (\"modèles d'import\")"))
+@scan.command(name="profiles", help=_("List available import profiles (\"profils d'import\")"))
 @click.pass_obj
 def scan_profiles_cmd(common):
     from ..libs.scan_profiles import load_profiles, get_active_profile_name
@@ -139,14 +139,104 @@ def scan_profiles_cmd(common):
     for name, profile in profiles.items():
         marker = '*' if name == active else ' '
         kind = _("built-in") if profile.builtin else _("custom")
+        header = '%s %s (%s)' % (marker, name, kind)
+        if profile.description:
+            header += ': %s' % profile.description
+        click.echo(header)
+        if profile.skip_processing:
+            click.echo(
+                '    ' + _("no processing at all: the raw file is copied as-is "
+                            "(no crop, no deskew, no transparency)"))
+            continue
         click.echo(
-            '%s %s (%s): white_threshold=%s white_ratio_threshold=%s '
-            'crop_margin=%s angle_range=%s transparency_white_threshold=%s' % (
-                marker, name, kind, profile.white_threshold,
+            '    white_threshold=%s white_ratio_threshold=%s '
+            'crop_margin=%s final_crop_margin=%s angle_range=%s '
+            'transparency_white_threshold=%s transparency_band=%s '
+            'use_contour_geometry=%s skip_transparency=%s' % (
+                profile.white_threshold,
                 profile.white_ratio_threshold, profile.crop_margin,
-                profile.angle_range, profile.effective_transparency_threshold,
+                profile.final_crop_margin, profile.angle_range,
+                profile.effective_transparency_threshold,
+                profile.transparency_band, profile.use_contour_geometry,
+                profile.skip_transparency,
             )
         )
+
+@scan.command(name="recompress", help=_(
+    "Re-save every TIFF in datadir/cards using lossless deflate compression"))
+@click.option('--dry-run', is_flag=True, default=False,
+              help=_("List the files that would be recompressed, without touching them."))
+@click.pass_obj
+def scan_recompress_cmd(common, dry_run):
+    """Parcourt datadir/cards et réécrit chaque TIFF avec la compression
+    "tiff_deflate" (zlib, sans perte, décodable par tifffile sans
+    dépendance additionnelle -- contrairement au LZW utilisé par défaut
+    par cv2.imwrite, qui nécessite le paquet "imagecodecs") et une
+    balise alpha correctement définie pour les images RGBA. Ne modifie
+    aucun pixel : seul l'encodage du fichier change.
+
+    Utile pour mettre à niveau une collection dont les fichiers ont été
+    écrits par une version antérieure de tkpostcards (ou par
+    cv2.imwrite directement), sans avoir à tout refaire depuis les
+    scans bruts.
+    """
+    import cv2
+    from PIL import Image
+    from pathlib import Path
+
+    cards_dir = Path(common.datadir) / "cards"
+    tiff_files = sorted(
+        p for p in cards_dir.iterdir()
+        if p.suffix.lower() in (".tif", ".tiff")
+    ) if cards_dir.is_dir() else []
+
+    if not tiff_files:
+        click.echo(_("No TIFF file found in {dir}").format(dir=cards_dir))
+        return
+
+    skipped, converted, failed = 0, 0, 0
+    pbar = tqdm(total=len(tiff_files), desc=_("TIFF files"))
+    for path in tiff_files:
+        try:
+            import tifffile
+            with tifffile.TiffFile(str(path)) as tif:
+                already_deflate = tif.pages[0].compression == 8
+        except Exception:
+            already_deflate = False
+
+        if already_deflate:
+            skipped += 1
+            pbar.update(1)
+            continue
+
+        if dry_run:
+            click.echo(str(path))
+            converted += 1
+            pbar.update(1)
+            continue
+
+        try:
+            img = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+            if img is None:
+                raise ValueError("cv2.imread returned None")
+            if img.ndim == 2:
+                rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+            elif img.shape[2] == 4:
+                rgb = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
+            else:
+                rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            Image.fromarray(rgb).save(str(path), compression="tiff_deflate")
+            converted += 1
+        except Exception as exc:
+            failed += 1
+            click.echo(_("Failed on {path}: {exc}").format(path=path, exc=exc))
+        pbar.update(1)
+    pbar.close()
+
+    click.echo(
+        _("{converted} converted, {skipped} already deflate, {failed} failed").format(
+            converted=converted, skipped=skipped, failed=failed)
+    )
 
 @scan.command(help=_("Add postcards"))
 @click.argument('pcid', default=None, nargs=-1)
@@ -588,16 +678,17 @@ def detect(common, pcid, detect_lang, model_name, objects_model_name, objects_th
 @cli.command(help=_("Redo transparent on postcards"))
 @click.argument('pcid', default=None, nargs=-1)
 @click.option('--profile', default=None,
-              help=_("Name of the import profile (\"modèle d'import\") whose "
-                     "transparency threshold should be used. Defaults to the "
-                     "[tkimport] scan_profile setting in the configuration "
-                     "file, or \"cpa\" if unset. See also "
-                     "\"tktools scan profiles\"."))
+              help=_("Name of the import profile (\"profil d'import\") whose "
+                     "transparency settings should be used (white threshold, "
+                     "band, contour detection). Defaults to the [tkimport] "
+                     "scan_profile setting in the configuration file, or "
+                     "\"cpa\" if unset. See also \"tktools scan profiles\"."))
 @click.option('--white-threshold', default=None, type=int,
               help=_("One-off override of the white threshold for background "
                      "transparency, on top of --profile."))
 @click.pass_obj
 def transparency(common, pcid, profile, white_threshold):
+    import cv2
     from ..libs.transparency import TiffBackgroundRemover
     from ..libs.scan_profiles import get_active_profile, load_profiles
 
@@ -609,6 +700,12 @@ def transparency(common, pcid, profile, white_threshold):
         scan_profile = profiles[profile]
     else:
         scan_profile = get_active_profile(common.conf)
+
+    if scan_profile.skip_processing or scan_profile.skip_transparency:
+        raise RuntimeError(
+            _("Profile {name!r} does not apply background transparency "
+              "(skip_processing/skip_transparency); pick another profile.").format(
+                name=scan_profile.name))
 
     if white_threshold is None:
         white_threshold = scan_profile.effective_transparency_threshold
@@ -622,10 +719,34 @@ def transparency(common, pcid, profile, white_threshold):
             os.path.join(common.datadir, "cards", '%s_R.%s'%(pci, common.file_format)),
             os.path.join(common.datadir, "cards", '%s_V.%s'%(pci, common.file_format)),
         ]:
-            bgtrans.make_border_white_transparent(
-                tiff_file,
-                tiff_file
-            )
+            img = cv2.imread(tiff_file, cv2.IMREAD_UNCHANGED)
+            if img is None:
+                continue
+            if scan_profile.use_contour_geometry:
+                img = bgtrans.make_border_transparent_by_contour_cv2(
+                    img, band=scan_profile.transparency_band,
+                    denoise=scan_profile.contour_denoise,
+                    clahe=scan_profile.contour_clahe,
+                    auto_canny=scan_profile.contour_auto_canny,
+                )
+            else:
+                img = bgtrans.make_border_white_transparent_cv2(
+                    img, band=scan_profile.transparency_band)
+
+            ext = os.path.splitext(tiff_file)[1].lower()
+            if ext in (".tif", ".tiff"):
+                # PIL plutôt que cv2.imwrite : compression "tiff_deflate"
+                # (zlib, sans perte, décodable par tifffile sans
+                # dépendance additionnelle -- contrairement au LZW
+                # utilisé par défaut par cv2.imwrite, qui nécessite le
+                # paquet "imagecodecs") et balise correctement le canal
+                # alpha (voir tkpostcards.libs.scan_prepare.make_corrector).
+                from PIL import Image
+                rgba = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA) if img.shape[2] == 4 \
+                    else cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                Image.fromarray(rgba).save(tiff_file, compression="tiff_deflate")
+            else:
+                cv2.imwrite(tiff_file, img)
         pbar.update(1)
     pbar.close()
 
