@@ -95,7 +95,7 @@ def config(confile=None):
 
 class Common(object):
     def __init__(self, conffile=None, datadir=None, importdir=None, tmpdir=None, debug=None,
-                 torch_device=None):
+                 torch_device=None, external_helper=None, external_helper_timeout=None):
         self.conffile = conffile
         self.conf = config(self.conffile)
 
@@ -122,6 +122,51 @@ class Common(object):
             torch_device = self.conf.get('DEFAULT', 'torch_device', fallback=None)
         self.torch_device = (torch_device or '').strip() or None
 
+        # external_helper : URI d'un serveur simpostcards (ex :
+        # "http://simpostcards:8004") utilisé pour déléguer à ce
+        # serveur distant, au lieu d'un calcul local, tout ce que
+        # simpostcards sait faire à la place de cette machine :
+        #   - PostcardSearcher (recherche par similarité, recherche de
+        #     doublons, construction d'index) -- voir
+        #     libpostcards.similar.PostcardSearcher.external_helper ;
+        #     dispense d'installer torch/open-clip-torch/imagehash ici ;
+        #   - ParcoursCartes (calcul de parcours optimisés) -- voir
+        #     libpostcards.travel.ParcoursCartes.external_helper ;
+        #     dispense d'installer ortools ici ;
+        #   - PostcardOCR (extraction de texte) -- voir
+        #     libpostcards.ocr.PostcardOCR.external_helper ; dispense
+        #     d'installer pytesseract (et le binaire tesseract-ocr) ici.
+        # Un seul et même réglage pour les trois, puisqu'il s'agit en
+        # pratique toujours du même déploiement simpostcards.
+        # --external-helper en ligne de commande prévaut ; sinon
+        # [DEFAULT] external_helper de postcards.conf ; sinon None
+        # (comportement historique : calcul local, ces libs requises).
+        if external_helper is None:
+            external_helper = self.conf.get('DEFAULT', 'external_helper', fallback=None)
+        self.external_helper = (external_helper or '').strip() or None
+
+        # external_helper_timeout : délai d'attente (en secondes) d'une
+        # requête vers external_helper, avant d'abandonner côté client
+        # (voir requests' propre paramètre "timeout"). Chaque classe a
+        # son propre défaut raisonnable (30s pour PostcardSearcher/
+        # PostcardOCR, 60s pour ParcoursCartes/PostcardDetection) --
+        # None ici (valeur par défaut) laisse chacune utiliser le sien.
+        # À augmenter si le serveur simpostcards est amené à retomber
+        # sur cpu pour un calcul normalement fait sur GPU (voir
+        # simpostcards.libs.embedder : un modèle CLIP sur cpu peut
+        # largement dépasser 30s par image), ou plus généralement si le
+        # réseau/la charge du serveur distant est un facteur limitant.
+        # --external-helper-timeout en ligne de commande prévaut ;
+        # sinon [DEFAULT] external_helper_timeout de postcards.conf ;
+        # sinon None (chaque classe garde son propre défaut).
+        if external_helper_timeout is None:
+            external_helper_timeout = self.conf.get(
+                'DEFAULT', 'external_helper_timeout', fallback=None)
+        self.external_helper_timeout = (
+            float(external_helper_timeout) if external_helper_timeout not in (None, '')
+            else None
+        )
+
         self.debug = debug
 
 @click.group()
@@ -134,7 +179,26 @@ class Common(object):
               help=_("Torch device to use for similarity search (see \"tktools devices\"). "
                      "Defaults to the [DEFAULT] torch_device setting in the configuration "
                      "file, or torch's own default (cuda if available, else cpu) if unset."))
+@click.option('--external-helper', default=None,
+              help=_("URI of a remote simpostcards server (e.g. http://simpostcards:8004) "
+                     "used to delegate, instead of a local computation, whatever "
+                     "simpostcards can do in place of this machine: similarity/doubles "
+                     "search and index building (no torch/open-clip-torch/imagehash needed "
+                     "here), travel route optimization (no ortools needed here), and OCR "
+                     "text extraction (no pytesseract/tesseract-ocr needed here). Defaults "
+                     "to the [DEFAULT] external_helper setting in the configuration file, "
+                     "or unset (local computation, those libs required) if neither is "
+                     "given."))
+@click.option('--external-helper-timeout', default=None, type=float,
+              help=_("Timeout, in seconds, for a single request to --external-helper, "
+                     "before giving up client-side. Defaults to the [DEFAULT] "
+                     "external_helper_timeout setting in the configuration file, or each "
+                     "command's own built-in default (30-60s) if neither is given. Raise "
+                     "this if the remote server has to fall back to cpu for a computation "
+                     "normally done on GPU, which can easily take longer than the default."))
 @click.pass_context
-def cli(ctx, conffile, datadir, importdir, tmpdir, debug, torch_device):
+def cli(ctx, conffile, datadir, importdir, tmpdir, debug, torch_device, external_helper,
+        external_helper_timeout):
     """Command group."""
-    ctx.obj = Common(conffile, datadir, importdir, tmpdir, debug, torch_device)
+    ctx.obj = Common(conffile, datadir, importdir, tmpdir, debug, torch_device,
+                      external_helper, external_helper_timeout)

@@ -1,14 +1,60 @@
 """
-simpostcards - Micro-appli Flask de calcul de hashs de cartes postales.
+simpostcards - Micro-appli Flask de calcul de hashs (+ embedding CLIP
+optionnel), de parcours optimisés et de détection de contenu pour les
+cartes postales.
 
-Un seul point d'entrée API : POST /api/compute_hashes (voir
-``simpostcards.blueprints.api``).
+Cinq points d'entrée API (voir ``simpostcards.blueprints.api``) :
 
-Étant donné une image de carte postale (recto ou verso), l'appli :
-  1. la redresse et la détoure (``libpostcards.scan_corrector``) ;
-  2. calcule ses hashs perceptuels (``simpostcards.libs.hasher``,
-     mêmes hashs que ``libpostcards.similar``) ;
-  3. renvoie le résultat en JSON.
+  POST /api/compute_hashes
+    Étant donné une image de carte postale (recto ou verso) :
+      1. la redresse et la détoure (``libpostcards.scan_corrector``) ;
+      2. calcule ses hashs perceptuels (``simpostcards.libs.hasher``,
+         mêmes hashs que ``libpostcards.similar``) ;
+      3. si torch/open-clip-torch sont installés et [simpostcards]
+         clip_enabled n'est pas à "false" (``libs.embedder``), calcule
+         aussi son embedding CLIP, dans le MÊME espace vectoriel que
+         ``libpostcards.similar.PostcardSearcher`` (mêmes modèle/poids
+         par défaut) -- sinon, le champ "embedding" de la réponse vaut
+         ``None`` (comportement historique, hashs seuls) ;
+      4. renvoie le résultat en JSON.
+
+  POST /api/compute_hashes_only
+    Comme /api/compute_hashes, mais pour une image déjà correctement
+    orientée et cadrée (un scan déjà importé dans la collection) :
+    sans le redressement/détourage ni les rotations multiples --
+    utilisé par ``libpostcards.similar.PostcardSearcher`` pour
+    (re)construire l'index de similarité et pour y ajouter une
+    nouvelle carte, plutôt que de recadrer inutilement (voire
+    nuisiblement) une image déjà cadrée.
+
+  POST /api/compute_travel
+    Étant donné un point de départ et une liste de cartes
+    géolocalisées, calcule un parcours optimisé via OR-Tools
+    (``libpostcards.travel.ParcoursCartes``) -- sauf si ortools n'est
+    pas installé ici, ou si [simpostcards] travel_enabled = false (501
+    dans ces deux cas).
+
+  POST /api/compute_ocr
+    Étant donné une image déjà redressée/détourée (recto ou verso),
+    extrait son texte via Tesseract OCR
+    (``simpostcards.libs.ocr_backend``) -- sauf si pytesseract (+ le
+    binaire tesseract-ocr) n'est pas installé ici, ou si [simpostcards]
+    ocr_enabled = false (501 dans ces deux cas).
+
+  POST /api/compute_detection
+    Étant donné une image déjà redressée/détourée (recto ou verso),
+    génère une légende (BLIP) et/ou détecte les objets présents (DETR)
+    via ``simpostcards.libs.detection_backend`` -- sauf si transformers/
+    torch ne sont pas installés ici (pour la capacité demandée), ou si
+    [simpostcards] detection_enabled = false (501 dans ces deux cas).
+    Ni la légende ni les libellés ne sont traduits ici : la traduction
+    reste toujours côté client (n'a pas besoin de torch).
+
+Sur un serveur GPU partagé avec d'autres usages, voir [simpostcards]
+gpu_idle_timeout : libère automatiquement la mémoire GPU de chaque
+modèle (CLIP, BLIP, DETR) resté inactif trop longtemps -- voir
+``simpostcards.libs._idle_unload`` et les docstrings de
+``libs.embedder``/``libs.detection_backend``.
 
 Aucune donnée n'est persistée : simpostcards ne lit ni n'écrit dans
 datadir/, ne touche pas à postcards.sqlite et n'a pas besoin de
@@ -24,6 +70,12 @@ import logging
 from pathlib import Path
 
 from flask import Flask
+
+from simpostcards.libs.detection_backend import (
+    DEFAULT_MODEL_NAME as DEFAULT_DETECTION_MODEL_NAME,
+    DEFAULT_OBJECTS_MODEL_NAME,
+)
+from simpostcards.libs.embedder import DEFAULT_MODEL_NAME, DEFAULT_PRETRAINED
 
 
 def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
@@ -53,7 +105,69 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["MAX_CONTENT_LENGTH"] = (
                     parser.getint("simpostcards", "max_content_length_mb") * 1024 * 1024
                 )
+            elif key == "clip_enabled":
+                # Permet de désactiver le calcul d'embedding même quand
+                # torch/open-clip-torch sont installés (ex : déploiement
+                # au CPU limité où seuls les hashs perceptuels sont
+                # voulus). Voir libs.embedder.CLIP_AVAILABLE pour le cas
+                # "pas installés du tout".
+                app.config["CLIP_ENABLED"] = parser.getboolean(
+                    "simpostcards", "clip_enabled"
+                )
+            elif key == "clip_offline":
+                # Voir libs.embedder : évite toute tentative réseau vers
+                # Hugging Face Hub au chargement du modèle CLIP (poids
+                # déjà présents dans le cache local requis).
+                app.config["CLIP_OFFLINE"] = parser.getboolean(
+                    "simpostcards", "clip_offline"
+                )
+            elif key == "travel_enabled":
+                # Permet de désactiver /api/compute_travel même quand
+                # ortools est installé (ex : serveur dédié aux hashs/
+                # embeddings, pas au calcul de parcours -- gourmand en
+                # CPU). Voir libpostcards.travel.ORTOOLS_AVAILABLE pour
+                # le cas "pas installé du tout" (auquel cas la route
+                # répond déjà 501, quelle que soit cette valeur).
+                app.config["TRAVEL_ENABLED"] = parser.getboolean(
+                    "simpostcards", "travel_enabled"
+                )
+            elif key == "ocr_enabled":
+                # Permet de désactiver /api/compute_ocr même quand
+                # pytesseract est installé. Voir
+                # simpostcards.libs.ocr_backend.OCR_AVAILABLE pour le
+                # cas "pas installé du tout" (auquel cas la route
+                # répond déjà 501, quelle que soit cette valeur).
+                app.config["OCR_ENABLED"] = parser.getboolean(
+                    "simpostcards", "ocr_enabled"
+                )
+            elif key == "detection_enabled":
+                # Permet de désactiver /api/compute_detection même
+                # quand transformers/torch sont installés (ex : serveur
+                # dédié aux hashs/embeddings/OCR, pas à la détection de
+                # contenu -- gourmande en mémoire, deux modèles). Voir
+                # simpostcards.libs.detection_backend.CAPTION_AVAILABLE/
+                # OBJECTS_AVAILABLE pour le cas "pas installé du tout"
+                # (auquel cas la route répond déjà 501 pour la capacité
+                # concernée, quelle que soit cette valeur).
+                app.config["DETECTION_ENABLED"] = parser.getboolean(
+                    "simpostcards", "detection_enabled"
+                )
+            elif key == "gpu_idle_timeout":
+                # Voir libs._idle_unload : délai (secondes) d'inactivité
+                # au-delà duquel un modèle GPU (CLIP, BLIP, DETR) est
+                # déchargé et sa mémoire rendue -- utile sur un serveur
+                # GPU partagé avec d'autres usages. 0/vide désactive
+                # (comportement historique, jamais déchargé).
+                app.config["GPU_IDLE_TIMEOUT"] = parser.getfloat(
+                    "simpostcards", "gpu_idle_timeout"
+                )
             else:
+                # Inclut notamment clip_model_name / clip_pretrained /
+                # clip_device (voir libs.embedder) et
+                # detection_model_name / detection_objects_model_name /
+                # detection_device (voir libs.detection_backend) :
+                # simples chaînes, pas besoin d'un traitement
+                # particulier ici.
                 app.config[key.upper()] = value
 
     app.config.setdefault("HOST", "127.0.0.1")
@@ -63,6 +177,49 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     # carte postale (tiff non compressé compris) tout en évitant
     # qu'une requête abusive ne consomme trop de mémoire/CPU.
     app.config.setdefault("MAX_CONTENT_LENGTH", 25 * 1024 * 1024)
+    # Actif par défaut : si torch/open-clip-torch ne sont pas
+    # installés (CLIP_AVAILABLE = False, voir libs.embedder), le calcul
+    # est de toute façon sauté au niveau de la route, quelle que soit
+    # cette valeur -- ce réglage ne sert qu'à désactiver explicitement
+    # le calcul sur un déploiement où ces paquets SONT installés.
+    app.config.setdefault("CLIP_ENABLED", True)
+    app.config.setdefault("CLIP_MODEL_NAME", DEFAULT_MODEL_NAME)
+    app.config.setdefault("CLIP_PRETRAINED", DEFAULT_PRETRAINED)
+    # Chaîne vide (clé absente, ou présente mais vide) normalisée en
+    # None : voir libs.embedder.compute_embedding(device=None), qui
+    # sélectionne alors automatiquement cuda si disponible, sinon cpu.
+    app.config["CLIP_DEVICE"] = app.config.get("CLIP_DEVICE", "").strip() or None
+    # Mode hors-ligne (voir libs.embedder pour le contexte complet :
+    # évite les tentatives réseau -- et leurs 5 tentatives avec délai
+    # croissant -- vers Hugging Face Hub sur un déploiement sans accès
+    # sortant, à condition que les poids soient déjà dans le cache
+    # local). Off par défaut (comportement historique : accès réseau
+    # autorisé, comme n'importe quel usage normal d'open_clip).
+    app.config.setdefault("CLIP_OFFLINE", False)
+    # Actif par défaut, comme CLIP_ENABLED : si ortools n'est pas
+    # installé (ORTOOLS_AVAILABLE = False, voir libpostcards.travel),
+    # /api/compute_travel répond 501 de toute façon, quelle que soit
+    # cette valeur -- ce réglage ne sert qu'à désactiver explicitement
+    # la route sur un déploiement où ortools EST installé.
+    app.config.setdefault("TRAVEL_ENABLED", True)
+    # Idem : actif par défaut, sans effet si pytesseract n'est pas
+    # installé (voir simpostcards.libs.ocr_backend.OCR_AVAILABLE).
+    app.config.setdefault("OCR_ENABLED", True)
+    # Langue tesseract utilisée par défaut par /api/compute_ocr si le
+    # client n'en précise pas (rare en pratique : PostcardOCR envoie
+    # toujours sa propre langue -- voir libpostcards.ocr).
+    app.config.setdefault("OCR_DEFAULT_LANG", "fra")
+    # Idem : actif par défaut, sans effet si transformers/torch ne sont
+    # pas installés (voir simpostcards.libs.detection_backend
+    # .CAPTION_AVAILABLE/OBJECTS_AVAILABLE).
+    app.config.setdefault("DETECTION_ENABLED", True)
+    app.config.setdefault("DETECTION_MODEL_NAME", DEFAULT_DETECTION_MODEL_NAME)
+    app.config.setdefault("DETECTION_OBJECTS_MODEL_NAME", DEFAULT_OBJECTS_MODEL_NAME)
+    app.config["DETECTION_DEVICE"] = app.config.get("DETECTION_DEVICE", "").strip() or None
+    # 0/absent (par défaut) : comportement historique, aucun modèle
+    # n'est jamais déchargé automatiquement -- voir libs._idle_unload
+    # et le docstring du module ci-dessus.
+    app.config.setdefault("GPU_IDLE_TIMEOUT", 0)
 
 
 def create_app(config_path: str | Path = "postcards.conf") -> Flask:
@@ -73,6 +230,19 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
     # de compute_hashes (taille de l'image reçue, timing du
     # redressement + hashs) resteraient invisibles sous gunicorn.
     app.logger.setLevel(logging.DEBUG if app.debug else logging.INFO)
+
+    # Voir [simpostcards] gpu_idle_timeout ci-dessus / libs._idle_unload :
+    # démarre (une fois par processus -- important sous gunicorn
+    # --preload avec plusieurs workers, voir la note dans le Dockerfile
+    # sur GUNICORN_WORKERS) le déchargement automatique des modèles GPU
+    # inactifs. Import différé : ne force pas torch à être importé sur
+    # un déploiement qui n'en a pas besoin (ces fonctions ne touchent
+    # torch que si un modèle a réellement été chargé au moins une fois).
+    from simpostcards.libs.embedder import configure_idle_timeout as _clip_idle
+    from simpostcards.libs.detection_backend import configure_idle_timeout as _detection_idle
+    idle_timeout = app.config.get("GPU_IDLE_TIMEOUT") or None
+    _clip_idle(idle_timeout)
+    _detection_idle(idle_timeout)
 
     from simpostcards.blueprints.api import bp as api_bp
     app.register_blueprint(api_bp)

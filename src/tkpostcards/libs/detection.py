@@ -16,7 +16,7 @@ anglais par les modèles) dans la langue voulue :
   par défaut sont choisis délibérément pour privilégier la qualité
   (peu de faux positifs) à la quantité de détections.
 
-Suit le même principe que tkpostcards.libs.ocr.PostcardOCR : les
+Suit le même principe que libpostcards.ocr.PostcardOCR : les
 dépendances lourdes (torch, transformers, deep_translator) sont
 volontairement importées localement, dans les méthodes qui en ont
 besoin, et non ici en tête de module. Cela permet d'importer

@@ -74,7 +74,97 @@ lock_timeout = 60.0
 # recto view, the display-mode selector disappears.
 # postcards_verso = true
 
-# torch_device
+# Torch device used for image-similarity search (tkmanager's "Search
+# similar" / "Find missing doubles" and tktools' `similar`/`doubles`/
+# `missing-doubles` commands): e.g. "cuda", "cuda:0", "mps", "cpu". Run
+# "tktools devices" to list what's actually available on this machine.
+# Leave unset to let torch pick automatically (cuda if available, else
+# cpu).
+;torch_device =
+
+# tkmanager / tktools only: URI of a remote simpostcards server (see
+# [simpostcards] below) used to delegate, instead of a local
+# computation, whatever simpostcards can do in place of this machine:
+#
+# - similarity/doubles search and index building ("Search similar" /
+#   "Find missing doubles" menu items, `similar`/`doubles`/
+#   `missing-doubles` tktools commands): computes perceptual hashes
+#   (and, if that server has CLIP enabled -- see [simpostcards]
+#   clip_enabled -- the CLIP embedding too). Lets these run without
+#   torch, open-clip-torch, or imagehash installed on THIS machine.
+#   If the simpostcards server does NOT have CLIP available (libs not
+#   installed there, or clip_enabled=false), results fall back to
+#   hash-only similarity -- still effective at finding an actual
+#   duplicate scan, just less able to match a postcard photographed
+#   under very different lighting/framing than the reference scan.
+#
+# - travel-route optimization (tkmanager's "Publish" dialog "update
+#   travel routes" checkbox, `travels` / `publish --full` tktools
+#   commands): computes the optimized route via OR-Tools. Lets these
+#   run without ortools installed on THIS machine. If the simpostcards
+#   server does NOT have route computation available (ortools not
+#   installed there, or [simpostcards] travel_enabled=false), the
+#   request simply fails -- no degraded fallback is possible for this
+#   one, unlike the hash-only similarity fallback above: there is no
+#   meaningful "partial" travel route.
+#
+# - OCR text extraction ("add" and "ocr" tktools commands, tkimport's
+#   "Add to collection" step): runs Tesseract OCR on a postcard's
+#   recto/verso. Lets these run without pytesseract (and the
+#   tesseract-ocr binary) installed on THIS machine -- OCR stays
+#   best-effort either way: silently skipped if neither pytesseract is
+#   installed locally NOR this is set.
+#
+# - content detection ("add" tktools command, tkimport's "Add to
+#   collection" step): generates a caption (BLIP) and/or detects
+#   objects (DETR) on a postcard's recto. Lets this run without
+#   transformers/torch installed on THIS machine -- stays best-effort
+#   either way, like OCR above. Translation of the caption/object
+#   labels (deep_translator) always runs locally regardless, on either
+#   side of this setting: it doesn't need torch.
+#
+# - scan correction (tkimport/tktools "Analyze and correct scans" --
+#   step 1 of the import workflow): straightens/crops a raw scan and,
+#   unless the active profile skips it, makes its background
+#   transparent. Lets this run without cv2/numpy/
+#   libpostcards.contour_utils installed on THIS machine. Unlike the
+#   other capabilities above, there is no "libs not installed"
+#   fallback case for this one on either side: cv2/numpy are a core
+#   dependency of tkpostcards/simpostcards, not an optional extra (see
+#   [simpostcards] correct_scan_enabled below for the one way to
+#   disable it server-side regardless). A profile with "no processing
+#   at all" (the "null" built-in profile) never makes a network call
+#   either way -- there's nothing to correct, so nothing to delegate.
+#
+# A single setting for all five, since in practice it is always the
+# same simpostcards deployment. Each capability is enabled locally as
+# soon as EITHER its own libs are installed here OR this is set.
+# Unrelated to [flask] similar_server below, which is flpostcards' own
+# (server-side, always-remote, unconditional) use of simpostcards for
+# the mobile app -- a different setting for a different purpose.
+;external_helper = http://simpostcards:8004
+
+# Timeout, in seconds, for a single request to external_helper, before
+# giving up client-side. Each capability has its own reasonable
+# built-in default (30s for similarity/OCR, 60s for travel/detection)
+# used when this is unset. Raise it if the simpostcards server is
+# amended to fall back to cpu for a computation normally done on GPU
+# (see [simpostcards] clip_device below, and the "GPU cassé/non
+# supporté" note in simpostcards.libs.embedder): CLIP inference on cpu
+# can easily exceed the default 30s per image, especially with several
+# postcards queued back to back.
+#
+# IMPORTANT: this timeout only controls how long the CLIENT waits for
+# a reply -- it does NOT cancel the computation already running on the
+# simpostcards server when it fires. A client that gives up after a
+# timeout does not stop a stuck/slow GPU computation server-side; if
+# you see the server's GPU pegged at 100% after a client-side timeout,
+# that's a separate, server-side problem (a hung ROCm/CUDA kernel after
+# a prior driver-level failure is a known cause -- often only fixable
+# by restarting the simpostcards container/process) -- see gunicorn's
+# own --timeout option below, in [simpostcards], to have gunicorn kill
+# and restart a worker stuck for too long, as a safety net.
+;external_helper_timeout = 30
 
 [flask]
 
@@ -287,11 +377,45 @@ http_timeout_s = 10
 
 
 [simpostcards]
-# Standalone Flask micro-service: given a scanned postcard photo, it
-# straightens/crops it and returns its perceptual hashes (used by
-# flpostcards' /api/v1/similar and by tkpostcards' duplicate search).
+# Standalone Flask micro-service, five independent capabilities:
+# - given a scanned postcard photo, straightens/crops it and returns
+#   its perceptual hashes -- and, if torch/open-clip-torch are
+#   installed here (see clip_enabled below), a CLIP embedding too --
+#   used by flpostcards' /api/v1/similar and by tkpostcards' duplicate
+#   search (see [DEFAULT] external_helper above);
+# - given a raw scan and a set of profile parameters, straightens/
+#   crops it and (unless asked to skip it) makes its background
+#   transparent (see correct_scan_enabled below and [DEFAULT]
+#   external_helper above), used by tkimport/tktools' "Analyze and
+#   correct scans" step;
+# - given a start point and a list of geolocated postcards, computes
+#   an optimized travel route via OR-Tools (see travel_enabled below
+#   and [DEFAULT] external_helper above), used by tkpostcards;
+# - given a postcard image, extracts its text via Tesseract OCR (see
+#   ocr_enabled below and [DEFAULT] external_helper above), used by
+#   tkpostcards when adding postcards to the collection;
+# - given a postcard's recto, generates a caption (BLIP) and/or
+#   detects objects (DETR) (see detection_enabled below and [DEFAULT]
+#   external_helper above), used by tkpostcards when adding postcards
+#   to the collection.
+# See gpu_idle_timeout below to automatically free GPU memory (CLIP/
+# BLIP/DETR) after a period of inactivity, on a GPU shared with other
+# uses.
 # Stores no data; independent of datadir. Deploy it separately (its own
 # postcards.conf copy is fine, only this section + [DEFAULT] matter).
+#
+# Deployment note -- a slow/stuck request doesn't just make the client
+# wait: gunicorn's own worker is blocked for the same duration, and a
+# genuinely hung GPU kernel (see the "GPU cassé/non supporté" note in
+# simpostcards.libs.embedder) can leave it stuck indefinitely, with the
+# GPU pegged at 100%, even after the client gives up. Nothing in this
+# application can safely interrupt an already-running GPU computation
+# from the outside -- the practical safety net is gunicorn's own
+# --timeout option (e.g. `gunicorn --timeout 120 ...`), which kills and
+# automatically restarts a worker stuck longer than that, rather than
+# leaving it wedged forever. Set it comfortably above
+# [DEFAULT] external_helper_timeout above (clients give up first,
+# gunicorn's --timeout is the last-resort cleanup).
 
 debug = false
 host = 127.0.0.1
@@ -308,6 +432,97 @@ white_threshold = 240
 # for an uncompressed TIFF scan while avoiding an abusive request eating
 # too much memory/CPU).
 max_content_length_mb = 25
+
+# Scan correction (straighten/crop + background transparency, driven by
+# the same parameters as a tkimport "import profile"): needs only
+# cv2/numpy, which simpostcards already requires for everything else --
+# so there is no "libs not installed" case here, unlike CLIP/OCR/
+# detection/travel. Set to false only to disable this endpoint on a
+# deployment dedicated to the other capabilities.
+;correct_scan_enabled = true
+
+# CLIP embedding (in addition to the perceptual hashes above): only
+# computed if torch + open-clip-torch are installed on THIS machine,
+# and this isn't set to false. When available, results returned to
+# clients (see [DEFAULT] external_helper) include a full similarity
+# score (hashes + CLIP), not just hash-only matching. Safe to leave at
+# its default (true) on a deployment without those libs installed:
+# computation is skipped automatically, "embedding" stays null in the
+# response, exactly as if this were false.
+;clip_enabled = true
+
+# CLIP model to use, and the device to run it on (e.g. "cuda", "cpu").
+# MUST match whatever a client comparing these embeddings itself uses
+# (see PostcardSearcher(model_name=..., pretrained=...) in
+# libpostcards.similar) -- comparing embeddings from two different
+# models is meaningless. Leave clip_device unset to auto-detect (cuda
+# if available, else cpu).
+;clip_model_name = ViT-L-14
+;clip_pretrained = laion2b_s32b_b82k
+;clip_device =
+
+# The first time CLIP is used, open_clip downloads its weights (~890 MB
+# for the default model) from Hugging Face Hub if not already cached
+# locally (~/.cache/huggingface). On a Docker container with no
+# outbound network access, this fails with repeated "Connection
+# refused" retries -- and, without this setting, EVERY subsequent
+# compute_hashes request repeats that same failing multi-second retry
+# sequence. Set clip_offline = true once the weights are already in
+# the container's cache (e.g. pre-downloaded at image build time) to
+# skip the network entirely: instant, clear failure if they're
+# missing, instead of retrying against an unreachable server. A failed
+# load is remembered for the life of the process either way (only
+# attempted once, not once per request) -- restart the container to
+# retry after fixing connectivity or baking in the weights.
+;clip_offline = false
+
+# Route optimization (OR-Tools): only active if ortools is installed
+# here. Set to false to disable this endpoint even if ortools IS
+# installed (e.g. a server dedicated to hashes/embeddings only, kept
+# free of the CPU-heavy route solver).
+;travel_enabled = true
+
+# OCR (Tesseract): only active if pytesseract (and the tesseract-ocr
+# binary + language data, e.g. tesseract-ocr-fra) is installed here.
+# Set to false to disable this endpoint even if pytesseract IS
+# installed (e.g. a server dedicated to hashes/embeddings/travel only).
+;ocr_enabled = true
+
+# Tesseract language used by default if a client doesn't specify one
+# (rare in practice: PostcardOCR always sends its own -- see
+# libpostcards.ocr).
+;ocr_default_lang = fra
+
+# Content detection (BLIP caption + DETR object detection): only
+# active if transformers + torch are installed here. Set to false to
+# disable this endpoint even if they ARE installed (e.g. a server
+# dedicated to hashes/embeddings/travel/OCR only -- the two detection
+# models together are the heaviest of the four capabilities, memory-
+# wise).
+;detection_enabled = true
+
+# Models to use, and the device to run them on (e.g. "cuda", "cpu").
+# Unlike CLIP/OCR, these don't need to match anything client-side:
+# results (captions/object labels, always in English) are translated
+# locally by the client, so the exact model used server-side is purely
+# a server deployment choice. Leave detection_device unset to
+# auto-detect (cuda if available, else cpu).
+;detection_model_name = Salesforce/blip-image-captioning-large
+;detection_objects_model_name = facebook/detr-resnet-101
+;detection_device =
+
+# On a GPU shared with other uses (e.g. another service on the same
+# machine), a model that simpostcards has loaded (CLIP, BLIP, DETR --
+# each independently) otherwise stays resident in GPU memory forever
+# once used. Set this (in seconds) to automatically unload a model
+# that has been idle for longer than this, freeing its GPU memory back
+# for other uses; it transparently reloads (paying the load cost
+# again) on the next request that needs it. 0/unset (default): never
+# unload, matching the historical behaviour. A few minutes (e.g. 600 =
+# 10 minutes) is a reasonable starting point: long enough to avoid
+# reloading on every short pause between requests, short enough to
+# give memory back promptly once you're done for a while.
+;gpu_idle_timeout = 600
 
 
 [tkmanager]

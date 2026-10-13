@@ -11,17 +11,19 @@ from .remotesync import (
 class PostcardPublish:
 
     @staticmethod
-    def publish(datadir, conffile, config, full=False):
+    def publish(datadir, conffile, config, full=False, external_helper=None,
+                external_helper_timeout=None):
         """Publish data to a remote web server"""
 
         if config is None:
             raise RuntimeError("Give me a config")
 
         if full is True:
-            from ..libs.travel import (
+            from libpostcards.travel import (
                 ParcoursCartes
             )
-            ParcoursCartes.travels(datadir)
+            ParcoursCartes.travels(datadir, external_helper=external_helper,
+                                    external_helper_timeout=external_helper_timeout)
 
         logging.basicConfig(
             level=logging.INFO,

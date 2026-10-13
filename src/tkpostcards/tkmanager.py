@@ -30,15 +30,18 @@ from . import cli
 from .libs.publish import PostcardPublish
 
 try:
-    from libpostcards.similar import PostcardSearcher
+    from libpostcards.similar import PostcardSearcher, SIMILARITY_LIBS_AVAILABLE
     SEARCHER_AVAILABLE = True
 except ImportError:
     SEARCHER_AVAILABLE = False
+    SIMILARITY_LIBS_AVAILABLE = False
 
 try:
-    from .libs.travel import ORTOOLS_AVAILABLE as TRAVEL_AVAILABLE
+    from libpostcards.travel import ORTOOLS_AVAILABLE
+    TRAVEL_MODULE_AVAILABLE = True
 except ImportError:
-    TRAVEL_AVAILABLE = False
+    TRAVEL_MODULE_AVAILABLE = False
+    ORTOOLS_AVAILABLE = False
 
 try:
     from .libs.mapview import SlippyMapCanvas, google_provider, osm_provider
@@ -1631,7 +1634,7 @@ class PublishConfirmDialog(tk.Toplevel):
         self.resizable(False, False)
 
         self.result: bool = False
-        self.full: bool = full_default and TRAVEL_AVAILABLE
+        self.full: bool = full_default and parent.travel_available()
 
         self._full_var = tk.BooleanVar(value=self.full)
 
@@ -1641,7 +1644,7 @@ class PublishConfirmDialog(tk.Toplevel):
 
         tk.Checkbutton(self, text=_("publish_full_checkbox"),
                        variable=self._full_var,
-                       state=tk.NORMAL if TRAVEL_AVAILABLE else tk.DISABLED,
+                       state=tk.NORMAL if parent.travel_available() else tk.DISABLED,
                        bg=BG_MAIN, fg=FG_TEXT, selectcolor=BG_FIELD,
                        activebackground=BG_MAIN, activeforeground=FG_ACCENT2,
                        font=FONT_LABEL, relief=tk.FLAT,
@@ -1756,7 +1759,8 @@ class PublishProgressDialog(tk.Toplevel):
     """
 
     def __init__(self, parent, datadir: Path, conf_file: Path, section: str,
-                 full: bool, t, on_done=None):
+                 full: bool, t, external_helper: str | None = None,
+                 external_helper_timeout: float | None = None, on_done=None):
         super().__init__(parent)
         self._t = t
         self._on_done = on_done
@@ -1808,7 +1812,9 @@ class PublishProgressDialog(tk.Toplevel):
         logging.getLogger().setLevel(logging.INFO)
 
         self._thread = threading.Thread(
-            target=self._run, args=(datadir, conf_file, section, full), daemon=True)
+            target=self._run,
+            args=(datadir, conf_file, section, full, external_helper, external_helper_timeout),
+            daemon=True)
         self._thread.start()
         self._poll_log()
 
@@ -1872,13 +1878,16 @@ class PublishProgressDialog(tk.Toplevel):
             except tk.TclError:
                 pass
 
-    def _run(self, datadir, conf_file, section, full):
+    def _run(self, datadir, conf_file, section, full, external_helper=None,
+             external_helper_timeout=None):
         old_stdout, old_stderr = sys.stdout, sys.stderr
         writer = _QueueWriter(self._log_queue)
         sys.stdout = writer
         sys.stderr = writer
         try:
-            PostcardPublish.publish(datadir, conf_file, section, full=full)
+            PostcardPublish.publish(datadir, conf_file, section, full=full,
+                                     external_helper=external_helper,
+                                     external_helper_timeout=external_helper_timeout)
         except Exception as e:
             self.error = e
         finally:
@@ -1946,6 +1955,36 @@ class App(tk.Tk):
         # => laisse PostcardSearcher choisir son propre défaut (cuda si
         # disponible, sinon cpu).
         self.torch_device = self.config_parser["DEFAULT"].get("torch_device", "").strip() or None
+
+        # URI d'un serveur simpostcards distant (voir [DEFAULT]
+        # external_helper dans postcards.conf) utilisé pour déléguer à
+        # ce serveur, au lieu d'un calcul local :
+        #   - la recherche par similarité / de doublons (voir
+        #     libpostcards.similar.PostcardSearcher.external_helper et
+        #     similarity_available() ci-dessous) ;
+        #   - le calcul de parcours optimisés (voir
+        #     libpostcards.travel.ParcoursCartes.external_helper et
+        #     travel_available() ci-dessous).
+        # Vide/absent => calcul local, comme avant (nécessite
+        # respectivement torch/open-clip-torch/imagehash, et ortools).
+        self.external_helper = self.config_parser["DEFAULT"].get(
+            "external_helper", "").strip() or None
+
+        # Délai d'attente (secondes) d'une requête vers external_helper
+        # -- voir [DEFAULT] external_helper_timeout dans postcards.conf.
+        # Vide/absent : chaque classe garde son propre défaut (30-60s) --
+        # à augmenter si le serveur distant est amené à retomber sur cpu
+        # pour un calcul normalement fait sur GPU (peut largement
+        # dépasser 30s), ou plus généralement si le réseau/la charge du
+        # serveur distant est un facteur limitant.
+        _external_helper_timeout_str = self.config_parser["DEFAULT"].get(
+            "external_helper_timeout", "").strip()
+        try:
+            self.external_helper_timeout = (
+                float(_external_helper_timeout_str) if _external_helper_timeout_str else None
+            )
+        except ValueError:
+            self.external_helper_timeout = None
 
         self._t = setup_i18n()
 
@@ -2863,7 +2902,7 @@ class App(tk.Tk):
 
         full_default = (
             self.get_search_conf("tkmanager", "publish_full", "0") == "1"
-            and TRAVEL_AVAILABLE
+            and self.travel_available()
         )
 
         do_publish, full = False, full_default
@@ -2904,7 +2943,8 @@ class App(tk.Tk):
 
         PublishProgressDialog(
             self, self.datadir, self.conf_file, self.publish_section,
-            full, self._t, on_done=on_done)
+            full, self._t, external_helper=self.external_helper,
+            external_helper_timeout=self.external_helper_timeout, on_done=on_done)
 
     # ── "More" dropdown menu ──────────────────────────────────────────────────
     def _open_more_menu(self):
@@ -2912,13 +2952,13 @@ class App(tk.Tk):
                     activebackground=FG_ACCENT, activeforeground="#fff")
         m.add_command(label=_("nav_textsearch"), command=self._open_text_search)
         m.add_command(label=_("nav_similar"), command=self._open_search,
-                      state=tk.NORMAL if SEARCHER_AVAILABLE else tk.DISABLED)
+                      state=tk.NORMAL if self.similarity_available() else tk.DISABLED)
         m.add_command(label=_("nav_doubles"), command=self._open_doubles_search,
-                      state=tk.NORMAL if SEARCHER_AVAILABLE else tk.DISABLED)
+                      state=tk.NORMAL if self.similarity_available() else tk.DISABLED)
         m.add_command(label=_("nav_pois"), command=self._open_poi_manager)
         m.add_command(label=_("nav_auths"), command=self._open_auth_manager)
         m.add_command(label=_("nav_travels"), command=self._open_travel_manager,
-                      state=tk.NORMAL if TRAVEL_AVAILABLE else tk.DISABLED)
+                      state=tk.NORMAL if self.travel_available() else tk.DISABLED)
         m.add_command(label=_("nav_gallery"), command=self._open_gallery)
         m.add_separator()
         m.add_command(label=_("nav_settings"), command=self._open_settings)
@@ -2938,6 +2978,30 @@ class App(tk.Tk):
             pass
 
     # ── Shared PostcardSearcher ───────────────────────────────────────────────
+    def similarity_available(self) -> bool:
+        """Whether the similarity-search / doubles-search features (menu
+        items, SearchView, DoublesSearchView) can be used at all.
+
+        ``SEARCHER_AVAILABLE`` only means ``libpostcards.similar`` itself
+        imports (requests + PIL) -- torch/open-clip-torch/imagehash are
+        imported lazily inside PostcardSearcher's methods, so it says
+        nothing about whether an actual search would succeed. This adds
+        that missing check: either those heavy libs are installed
+        (``SIMILARITY_LIBS_AVAILABLE``), or a remote simpostcards server
+        is configured (``self.external_helper``) to compute perceptual
+        hashes instead -- see libpostcards.similar.PostcardSearcher.
+        """
+        return SEARCHER_AVAILABLE and (SIMILARITY_LIBS_AVAILABLE or bool(self.external_helper))
+
+    def travel_available(self) -> bool:
+        """Whether travel-route computation (the "full" publish option,
+        the "travels" tktools command) can be used: libpostcards.travel
+        must be importable (TRAVEL_MODULE_AVAILABLE, tests requests)
+        AND either ortools is installed, or a remote simpostcards
+        server is configured (self.external_helper) to compute optimized
+        routes instead -- see libpostcards.travel.ParcoursCartes."""
+        return TRAVEL_MODULE_AVAILABLE and (ORTOOLS_AVAILABLE or bool(self.external_helper))
+
     def load_searcher_async(self, on_ready=None, on_error=None):
         """Load the shared PostcardSearcher once.
 
@@ -2964,7 +3028,9 @@ class App(tk.Tk):
 
         def worker():
             try:
-                s = PostcardSearcher(datadir=self.datadir, device=self.torch_device)
+                s = PostcardSearcher(datadir=self.datadir, device=self.torch_device,
+                                      external_helper=self.external_helper,
+                                      external_helper_timeout=self.external_helper_timeout)
                 s.load_index(str(index_path))
                 self.after(0, lambda: self._on_searcher_loaded(s))
             except Exception as e:
@@ -3224,7 +3290,7 @@ class SearchView(tk.Toplevel):
 
     # ── Index loading ─────────────────────────────────────────────────────────
     def _load_index_async(self):
-        if not SEARCHER_AVAILABLE:
+        if not self._app.similarity_available():
             self._status.set(_("search_unavailable"))
             self._btn_search.config(state=tk.DISABLED)
             self._btn_clipboard.config(state=tk.DISABLED)
@@ -3394,9 +3460,9 @@ class SearchView(tk.Toplevel):
         factorisé entre la recherche par URL (_run_search) et depuis le
         presse-papiers (_run_search_clipboard), qui ne diffèrent que par
         la méthode de PostcardSearcher appelée."""
-        if not SEARCHER_AVAILABLE or self._searcher is None:
+        if not self._app.similarity_available() or self._searcher is None:
             messagebox.showerror(_("error_title"),
-                                 _("search_unavailable") if not SEARCHER_AVAILABLE
+                                 _("search_unavailable") if not self._app.similarity_available()
                                  else _("search_index_not_ready"), parent=self)
             return
 
@@ -3781,7 +3847,7 @@ class DoublesSearchView(tk.Toplevel):
 
     # ── Index loading ─────────────────────────────────────────────────────────
     def _load_index_async(self):
-        if not SEARCHER_AVAILABLE:
+        if not self._app.similarity_available():
             self._status.set(_("search_unavailable"))
             self._btn_run.config(state=tk.DISABLED)
             return
@@ -3869,9 +3935,9 @@ class DoublesSearchView(tk.Toplevel):
         # Persist parameters
         self._app.save_search_conf("tkmanager", doubles_threshold=threshold)
 
-        if not SEARCHER_AVAILABLE or self._searcher is None:
+        if not self._app.similarity_available() or self._searcher is None:
             messagebox.showerror(_("error_title"),
-                                 _("search_unavailable") if not SEARCHER_AVAILABLE
+                                 _("search_unavailable") if not self._app.similarity_available()
                                  else _("search_index_not_ready"), parent=self)
             return
 

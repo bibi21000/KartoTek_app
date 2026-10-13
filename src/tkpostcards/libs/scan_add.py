@@ -7,7 +7,7 @@ Mutualizes the "add prepared scans to the collection" step that used to
 live only in ``tktools scan add``. Both ``tktools`` (CLI) and ``tkimport``
 (GUI) call :func:`add_pairs` so postcards are copied, OCR'ed, content-
 detected (BLIP caption + DETR object detection on the recto, see
-``tkpostcards.libs.detection``), exported and indexed the exact same way
+``libpostcards.detection``), exported and indexed the exact same way
 whatever the front-end.
 """
 import os
@@ -48,7 +48,8 @@ def guess_ext(importdir, pcid, default="tiff"):
 
 
 def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
-            searcher=None, detector=None, detect_lang=None, force=True):
+            searcher=None, detector=None, detect_lang=None, force=True,
+            external_helper=None, external_helper_timeout=None):
     """Add a single postcard (recto + verso) to the collection.
 
     :param datadir: collection data directory (``common.datadir``).
@@ -58,19 +59,30 @@ def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
     :param ext: extension of the prepared files; auto-detected with
         :func:`guess_ext` when omitted.
     :param ocr: a ``libpostcards`` ``PostcardOCR`` instance (built lazily
-        when omitted).
+        when omitted, if pytesseract is installed or *external_helper* is
+        given -- see ``libpostcards.ocr.PostcardOCR.external_helper``).
     :param pcs: a :class:`tkpostcards.libs.size.PostcardSize` instance
         (built lazily when omitted).
     :param searcher: optional ``PostcardSearcher`` instance; when given,
         the new postcard is added to the similarity index (the caller is
         responsible for loading/saving the index).
-    :param detector: a ``tkpostcards.libs.detection`` ``PostcardDetection``
+    :param detector: a ``libpostcards.detection`` ``PostcardDetection``
         instance (built lazily when omitted, if ``transformers`` is
-        installed); used to fill ``detected_content`` (BLIP caption) and
-        ``detected_objects`` (DETR object detection) from the recto.
+        installed or *external_helper* is given); used to fill
+        ``detected_content`` (BLIP caption) and ``detected_objects``
+        (DETR object detection) from the recto.
     :param detect_lang: target language for the lazily-built ``detector``
         (ignored when ``detector`` is given explicitly).
     :param force: re-run OCR/detection even if already filled in the JSON.
+    :param external_helper: URI of a remote simpostcards server used to
+        build the lazy ``ocr``/``detector`` (ignored when *ocr*/*detector*
+        are given explicitly) -- see
+        ``libpostcards.ocr.PostcardOCR.external_helper`` and
+        ``libpostcards.detection.PostcardDetection.external_helper``.
+    :param external_helper_timeout: timeout (seconds) for a single
+        request to *external_helper*, passed to the lazily-built
+        ``ocr``/``detector``. ``None`` (default) lets each keep its own
+        built-in default (30s/60s).
     :return: an :class:`AddedPostcard` instance.
     :raises RuntimeError: if the destination files already exist, or if
         the source files are missing from *importdir*.
@@ -79,17 +91,16 @@ def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
     from .size import PostcardSize
 
     try:
-        from .ocr import PostcardOCR, PYTESSERACT_AVAILABLE
+        from libpostcards.ocr import PostcardOCR, PYTESSERACT_AVAILABLE
     except ImportError:
         PostcardOCR = None
         PYTESSERACT_AVAILABLE = False
 
     try:
-        from .detection import PostcardDetection, TRANSFORMERS_AVAILABLE, OBJDETECT_AVAILABLE
-        DETECTION_AVAILABLE = TRANSFORMERS_AVAILABLE and OBJDETECT_AVAILABLE
+        from libpostcards.detection import PostcardDetection, DETECTION_LIBS_AVAILABLE
     except ImportError:
         PostcardDetection = None
-        DETECTION_AVAILABLE = False
+        DETECTION_LIBS_AVAILABLE = False
 
     datadir = Path(datadir)
     importdir = Path(importdir)
@@ -117,10 +128,15 @@ def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
     shutil.copyfile(str(src_recto), str(dst_recto))
     shutil.copyfile(str(src_verso), str(dst_verso))
 
-    if ocr is None and PYTESSERACT_AVAILABLE:
-        ocr = PostcardOCR()
-    if detector is None and DETECTION_AVAILABLE:
-        detector = PostcardDetection(lang=detect_lang) if detect_lang else PostcardDetection()
+    if ocr is None and (PYTESSERACT_AVAILABLE or external_helper):
+        ocr = PostcardOCR(external_helper=external_helper,
+                           external_helper_timeout=external_helper_timeout)
+    if detector is None and (DETECTION_LIBS_AVAILABLE or external_helper):
+        detector_kwargs = {"external_helper": external_helper,
+                            "external_helper_timeout": external_helper_timeout}
+        if detect_lang:
+            detector_kwargs["lang"] = detect_lang
+        detector = PostcardDetection(**detector_kwargs)
     if pcs is None:
         pcs = PostcardSize(datadir)
 
@@ -160,12 +176,14 @@ def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
 def add_pairs(datadir, importdir, ids, ext=None, force=True,
               use_searcher=True, on_progress=None, ocr_lang=None, torch_device=None,
               detect_lang=None, model_name=None, objects_model_name=None,
-              objects_threshold=None, max_objects=None, excluded_objects=None):
+              objects_threshold=None, max_objects=None, excluded_objects=None,
+              external_helper=None, external_helper_timeout=None):
     """Add several postcards at once, mirroring ``tktools scan add``.
 
     :param ids: iterable of postcard ids to add.
     :param use_searcher: try to load/update the similarity index
-        (``libpostcards.similar.PostcardSearcher``) if it is available.
+        (``libpostcards.similar.PostcardSearcher``) if it is available
+        (installed locally, or *external_helper* is given).
     :param on_progress: optional ``on_progress(index, total, added)``
         callback, where ``added`` is the :class:`AddedPostcard` just
         created (or ``None`` if it raised, see below).
@@ -176,16 +194,20 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
         ``PostcardDetection`` (see ``[DEFAULT] torch_device`` in
         postcards.conf, and "tktools devices" for the list of available
         devices). ``None`` lets them pick their own default (cuda if
-        available, else cpu).
+        available, else cpu). Ignored by both when *external_helper* is
+        given (the remote server picks its own device).
     :param detect_lang: target language passed to ``PostcardDetection``
         (translation of the BLIP caption / DETR object labels). Falls
         back to ``PostcardDetection``'s own default (``"fr"``) when
         omitted.
     :param model_name: BLIP model name passed to ``PostcardDetection``.
         Falls back to ``PostcardDetection``'s own default when omitted.
+        Ignored when *external_helper* is given (the remote server uses
+        its own configured model -- see [simpostcards] detection_model_name).
     :param objects_model_name: DETR model name passed to
         ``PostcardDetection``. Falls back to ``PostcardDetection``'s own
-        default when omitted.
+        default when omitted. Ignored when *external_helper* is given
+        (see [simpostcards] detection_objects_model_name).
     :param objects_threshold: minimum confidence score (0-1) passed to
         ``PostcardDetection``. Falls back to ``PostcardDetection``'s own
         default when omitted.
@@ -195,14 +217,35 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
     :param excluded_objects: iterable of object labels (English, case
         insensitive) always excluded from ``detected_objects``, passed
         to ``PostcardDetection``. Falls back to ``PostcardDetection``'s
-        own default (empty) when omitted.
+        own default (empty) when omitted. Always applied locally, even
+        when *external_helper* is given (see
+        ``libpostcards.detection.PostcardDetection.detect_objects``).
+    :param external_helper: URI of a remote simpostcards server (see
+        ``[DEFAULT] external_helper`` in postcards.conf) used, instead
+        of a local computation, for OCR (see
+        ``libpostcards.ocr.PostcardOCR.external_helper`` -- lets OCR
+        run without pytesseract/tesseract-ocr installed here, even if
+        ``pytesseract`` is not installed locally, see
+        ``PYTESSERACT_AVAILABLE`` below), content detection (see
+        ``libpostcards.detection.PostcardDetection.external_helper`` --
+        lets it run without transformers/torch installed here), and
+        the similarity index (see
+        ``libpostcards.similar.PostcardSearcher.external_helper`` --
+        lets the index be updated without torch/open-clip-torch/
+        imagehash installed here). Same server for all three, since in
+        practice it is always the same simpostcards deployment.
+    :param external_helper_timeout: timeout (seconds) for a single
+        request to *external_helper*, passed to the lazily-built
+        ``ocr``/``detector``/``searcher``. ``None`` (default) lets each
+        keep its own built-in default (30s/60s).
     :return: the list of :class:`AddedPostcard` successfully added.
 
     OCR and content detection (BLIP caption + DETR object detection on
-    the recto, see ``tkpostcards.libs.detection``) are both best-effort:
+    the recto, see ``libpostcards.detection``) are both best-effort:
     each is silently skipped (without raising) when its dependencies
-    (``pytesseract`` / ``transformers`` + ``torch``) are not installed,
-    exactly like the original OCR-only behaviour.
+    (``pytesseract`` / ``transformers`` + ``torch``) are not installed
+    AND no remote server is configured for it (*external_helper*),
+    exactly like the original OCR-only behaviour otherwise.
 
     Errors while adding a single id are *not* swallowed: the exception
     propagates after ``on_progress`` has been called with ``added=None``,
@@ -212,17 +255,16 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
     from .size import PostcardSize
 
     try:
-        from .ocr import PostcardOCR, PYTESSERACT_AVAILABLE
+        from libpostcards.ocr import PostcardOCR, PYTESSERACT_AVAILABLE
     except ImportError:
         PostcardOCR = None
         PYTESSERACT_AVAILABLE = False
 
     try:
-        from .detection import PostcardDetection, TRANSFORMERS_AVAILABLE, OBJDETECT_AVAILABLE
-        DETECTION_AVAILABLE = TRANSFORMERS_AVAILABLE and OBJDETECT_AVAILABLE
+        from libpostcards.detection import PostcardDetection, DETECTION_LIBS_AVAILABLE
     except ImportError:
         PostcardDetection = None
-        DETECTION_AVAILABLE = False
+        DETECTION_LIBS_AVAILABLE = False
 
     try:
         from libpostcards.similar import PostcardSearcher
@@ -231,13 +273,18 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
         searcher_available = False
 
     datadir = Path(datadir)
-    if PYTESSERACT_AVAILABLE:
-        ocr = PostcardOCR(lang=ocr_lang) if ocr_lang else PostcardOCR()
+    if PYTESSERACT_AVAILABLE or external_helper:
+        ocr_kwargs = {"external_helper": external_helper,
+                      "external_helper_timeout": external_helper_timeout}
+        if ocr_lang:
+            ocr_kwargs["lang"] = ocr_lang
+        ocr = PostcardOCR(**ocr_kwargs)
     else:
         ocr = None
 
-    if DETECTION_AVAILABLE:
-        detector_kwargs = {"device": torch_device}
+    if DETECTION_LIBS_AVAILABLE or external_helper:
+        detector_kwargs = {"device": torch_device, "external_helper": external_helper,
+                            "external_helper_timeout": external_helper_timeout}
         if detect_lang:
             detector_kwargs["lang"] = detect_lang
         if model_name:
@@ -260,7 +307,9 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
     index_file = None
     if use_searcher and searcher_available:
         index_file = datadir / "postcards.pkl"
-        searcher = PostcardSearcher(datadir=datadir, device=torch_device)
+        searcher = PostcardSearcher(datadir=datadir, device=torch_device,
+                                     external_helper=external_helper,
+                                     external_helper_timeout=external_helper_timeout)
         searcher.load_index(index_file)
 
     ids = list(ids)

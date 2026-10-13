@@ -8,12 +8,11 @@ les valeurs renvoyées par l'API ``compute_hashes`` de simpostcards
 restent directement comparables à celles stockées dans l'index de
 recherche de cartes similaires (même ``hash_size`` par défaut = 8).
 
-Volontairement, ce module ne calcule PAS l'embedding CLIP utilisé par
-``PostcardSearcher`` (modèle lourd à charger, dépendance à torch /
-open-clip) : simpostcards est une petite appli Flask dédiée au seul
-calcul des hashs, appelée à la demande, et doit rester légère en
-ressources. Le rapprochement CLIP reste du ressort de
-``libpostcards.similar`` (indexation offline).
+Volontairement, ce module ne dépend PAS de torch / open-clip (contrairement
+à ``simpostcards.libs.embedder``, qui calcule l'embedding CLIP -- optionnel,
+voir son docstring) : simpostcards doit rester utilisable pour le seul
+calcul des hashs perceptuels (rapide, sans dépendance lourde) même sur
+un déploiement où ces paquets ne sont pas installés.
 """
 
 from __future__ import annotations

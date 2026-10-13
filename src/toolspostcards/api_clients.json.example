@@ -1,0 +1,10 @@
+{
+  "REMPLACER_PAR_LE_SHA256_DE_LA_CLE": {
+    "name": "service-facturation",
+    "scopes": ["read:secrets"]
+  },
+  "REMPLACER_PAR_UN_AUTRE_SHA256": {
+    "name": "admin-cli",
+    "scopes": ["read:secrets", "write:secrets"]
+  }
+}

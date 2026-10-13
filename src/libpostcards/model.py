@@ -990,7 +990,7 @@ class Model:
                 " OR unaccent_lower(address) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
                 # Contenu détecté automatiquement (BLIP + DETR sur le
-                # recto, voir tkpostcards.libs.detection) : inclus dans
+                # recto, voir libpostcards.detection) : inclus dans
                 # la recherche textuelle au même titre que les champs
                 # saisis/OCR'isés manuellement.
                 " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"
@@ -1043,7 +1043,7 @@ class Model:
                 " OR unaccent_lower(address) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
                 # Contenu détecté automatiquement (BLIP + DETR sur le
-                # recto, voir tkpostcards.libs.detection) : inclus dans
+                # recto, voir libpostcards.detection) : inclus dans
                 # la recherche textuelle au même titre que les champs
                 # saisis/OCR'isés manuellement.
                 " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"
@@ -1242,7 +1242,7 @@ class Model:
                 " OR unaccent_lower(address) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
                 # Contenu détecté automatiquement (BLIP + DETR sur le
-                # recto, voir tkpostcards.libs.detection) : inclus dans
+                # recto, voir libpostcards.detection) : inclus dans
                 # la recherche textuelle au même titre que les champs
                 # saisis/OCR'isés manuellement.
                 " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"
@@ -1369,7 +1369,7 @@ class Model:
                 " OR unaccent_lower(address) LIKE unaccent_lower(?)"
                 " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
                 # Contenu détecté automatiquement (BLIP + DETR sur le
-                # recto, voir tkpostcards.libs.detection) : inclus dans
+                # recto, voir libpostcards.detection) : inclus dans
                 # la recherche textuelle au même titre que les champs
                 # saisis/OCR'isés manuellement.
                 " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"

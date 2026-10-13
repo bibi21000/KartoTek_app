@@ -393,7 +393,7 @@ def card_detail(card_id: str):
     og_description = (
         card.get("description")
         or card.get("title2")
-        # Contenu détecté automatiquement (BLIP, voir tkpostcards.libs.detection)
+        # Contenu détecté automatiquement (BLIP, voir libpostcards.detection)
         # : à défaut de description/titre secondaire renseignés à la main,
         # donne un texte unique et pertinent par carte plutôt que de
         # retomber sur le titre générique "Carte #123".
@@ -424,7 +424,7 @@ def card_detail(card_id: str):
     # Texte alternatif du recto : on concatène, une par ligne, les
     # informations disponibles (titre, titre secondaire, description,
     # contenu détecté automatiquement par BLIP - voir
-    # tkpostcards.libs.detection), sans libellé ni mention "Recto de la
+    # libpostcards.detection), sans libellé ni mention "Recto de la
     # carte x", pour un alt à la fois concis, descriptif, utile pour
     # l'accessibilité et le référencement (recherche d'images).
     recto_alt_parts = [

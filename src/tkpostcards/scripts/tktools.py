@@ -17,7 +17,7 @@ def _travels(common):
     from pathlib import Path
     import json
     from libpostcards.model import Model
-    from ..libs.travel import (
+    from libpostcards.travel import (
         ParcoursCartes
     )
     datadir = Path(common.datadir)
@@ -37,7 +37,7 @@ def _travels(common):
         travel_data['title'] = travels[tt]['title']
         travel_data['title2'] = travels[tt]['title2']
         # Voir le même commentaire dans ParcoursCartes.travels()
-        # (libs/travel.py) : source de vérité dans travels.json.
+        # (libpostcards/travel.py) : source de vérité dans travels.json.
         travel_data['position'] = travels[tt].get('position', 0)
 
         # model.write_travel() met à jour mdate lui-même, uniquement si
@@ -293,7 +293,9 @@ def add(common, pcid, ocr_langs, detect_lang, excluded_objects):
                   detect_lang=detect_lang, model_name=model_name,
                   objects_model_name=objects_model_name,
                   objects_threshold=objects_threshold, max_objects=max_objects,
-                  excluded_objects=excluded_objects)
+                  excluded_objects=excluded_objects,
+                  external_helper=common.external_helper,
+        external_helper_timeout=common.external_helper_timeout)
     finally:
         pbar.close()
 
@@ -351,7 +353,10 @@ def index(common):
 
     index_file = Path(common.datadir) / "postcards.pkl"
 
-    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir, device=common.torch_device)
+    searcher = PostcardSearcher(
+        tqdm=tqdm, datadir=common.datadir, device=common.torch_device,
+        external_helper=common.external_helper,
+        external_helper_timeout=common.external_helper_timeout)
 
     searcher.load_index(
         index_file
@@ -382,7 +387,10 @@ def files(common, query_dir, threshold, max_results):
 
     index_file = Path(common.datadir) / "postcards.pkl"
 
-    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir, device=common.torch_device)
+    searcher = PostcardSearcher(
+        tqdm=tqdm, datadir=common.datadir, device=common.torch_device,
+        external_helper=common.external_helper,
+        external_helper_timeout=common.external_helper_timeout)
 
     searcher.load_index(
         index_file
@@ -423,7 +431,10 @@ def url(common, url, threshold, max_results):
 
     index_file = Path(common.datadir) / "postcards.pkl"
 
-    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir, device=common.torch_device)
+    searcher = PostcardSearcher(
+        tqdm=tqdm, datadir=common.datadir, device=common.torch_device,
+        external_helper=common.external_helper,
+        external_helper_timeout=common.external_helper_timeout)
 
     searcher.load_index(
         index_file
@@ -460,7 +471,10 @@ def clipboard(common, threshold, max_results):
 
     index_file = Path(common.datadir) / "postcards.pkl"
 
-    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir, device=common.torch_device)
+    searcher = PostcardSearcher(
+        tqdm=tqdm, datadir=common.datadir, device=common.torch_device,
+        external_helper=common.external_helper,
+        external_helper_timeout=common.external_helper_timeout)
 
     searcher.load_index(
         index_file
@@ -520,7 +534,10 @@ def duplicates(common, threshold, max_results):
     )
 
     index_file = Path(common.datadir) / "postcards.pkl"
-    searcher = PostcardSearcher(tqdm=tqdm, datadir=common.datadir, device=common.torch_device)
+    searcher = PostcardSearcher(
+        tqdm=tqdm, datadir=common.datadir, device=common.torch_device,
+        external_helper=common.external_helper,
+        external_helper_timeout=common.external_helper_timeout)
 
     searcher.load_index(
         index_file
@@ -573,14 +590,15 @@ def duplicates(common, threshold, max_results):
 @click.pass_obj
 def ocr(common, pcid, ocr_langs):
     from libpostcards.model import Model
-    from ..libs.ocr import PostcardOCR
+    from libpostcards.ocr import PostcardOCR
     if pcid is None:
         raise RuntimeError(_("Give me a name"))
 
     if not ocr_langs:
         ocr_langs = common.conf.get("tkimport", "ocr_langs", fallback="fra")
 
-    ocr = PostcardOCR(lang=ocr_langs)
+    ocr = PostcardOCR(lang=ocr_langs, external_helper=common.external_helper,
+        external_helper_timeout=common.external_helper_timeout)
     ids = split_ids(pcid)
 
     pbar = tqdm(total=len(ids), desc=_("Postcards"))
@@ -629,7 +647,7 @@ def ocr(common, pcid, ocr_langs):
 def detect(common, pcid, detect_lang, model_name, objects_model_name, objects_threshold,
            max_objects, excluded_objects):
     from libpostcards.model import Model
-    from ..libs.detection import PostcardDetection
+    from libpostcards.detection import PostcardDetection
     if pcid is None:
         raise RuntimeError(_("Give me a name"))
 
@@ -661,6 +679,8 @@ def detect(common, pcid, detect_lang, model_name, objects_model_name, objects_th
         objects_threshold=objects_threshold,
         max_objects=max_objects,
         excluded_objects=excluded_objects,
+        external_helper=common.external_helper,
+        external_helper_timeout=common.external_helper_timeout,
     )
     ids = split_ids(pcid)
 
@@ -753,10 +773,11 @@ def transparency(common, pcid, profile, white_threshold):
 @cli.command(help=_("Calculate travels and add them to database"))
 @click.pass_obj
 def travels(common):
-    from ..libs.travel import (
+    from libpostcards.travel import (
         ParcoursCartes
     )
-    ParcoursCartes.travels(common.datadir)
+    ParcoursCartes.travels(common.datadir, external_helper=common.external_helper,
+        external_helper_timeout=common.external_helper_timeout)
 
 @cli.command(help=_("Publish data to a remote web server"))
 @click.argument('config', default='sync_default')
@@ -770,7 +791,9 @@ def publish(common, config, full):
         raise RuntimeError(_("Give me a config"))
 
     publish = PostcardPublish()
-    publish.publish(common.datadir, common.conffile, config, full=full)
+    publish.publish(common.datadir, common.conffile, config, full=full,
+                     external_helper=common.external_helper,
+        external_helper_timeout=common.external_helper_timeout)
 
 @cli.command(help=_("Fix non-reciprocal double relations between cards"))
 @click.option('--dryrun', is_flag=True, default=True, help=_("Do not update files"))

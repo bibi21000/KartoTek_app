@@ -1599,12 +1599,31 @@ class PostcardImportApp(tk.Tk):
 
         ocr_langs = self.cfg["tkimport"].get("ocr_langs", "fra") or "fra"
         torch_device = self.cfg["DEFAULT"].get("torch_device", "").strip() or None
+        # Serveur simpostcards distant (voir libpostcards.ocr.PostcardOCR
+        # .external_helper / libpostcards.similar.PostcardSearcher
+        # .external_helper / libpostcards.detection.PostcardDetection
+        # .external_helper) : dispense d'installer pytesseract / torch+
+        # open-clip-torch+imagehash / transformers+torch ici -- voir
+        # [DEFAULT] external_helper dans postcards.conf.
+        external_helper = self.cfg["DEFAULT"].get("external_helper", "").strip() or None
+        # Délai d'attente (secondes) d'une requête vers external_helper
+        # -- voir [DEFAULT] external_helper_timeout dans postcards.conf.
+        # Vide/absent : chaque classe garde son propre défaut (30-60s).
+        external_helper_timeout_str = self.cfg["DEFAULT"].get(
+            "external_helper_timeout", "").strip()
+        try:
+            external_helper_timeout = (
+                float(external_helper_timeout_str) if external_helper_timeout_str else None
+            )
+        except ValueError:
+            external_helper_timeout = None
 
         # Détection de contenu (BLIP + DETR sur le recto, voir
-        # tkpostcards.libs.detection) : mêmes réglages que "tktools
+        # libpostcards.detection) : mêmes réglages que "tktools
         # detect", lus dans la section [tkimport] du fichier de
         # configuration. add_pairs() se contente d'ignorer la détection
-        # (comme l'OCR) si transformers/torch ne sont pas installés.
+        # (comme l'OCR) si transformers/torch ne sont pas installés ET
+        # qu'aucun external_helper n'est configuré.
         detect_lang = self.cfg["tkimport"].get("detect_lang", "fr") or "fr"
         model_name = self.cfg["tkimport"].get(
             "model_name", "Salesforce/blip-image-captioning-large") or None
@@ -1627,7 +1646,9 @@ class PostcardImportApp(tk.Tk):
                       detect_lang=detect_lang, model_name=model_name,
                       objects_model_name=objects_model_name,
                       objects_threshold=objects_threshold, max_objects=max_objects,
-                      excluded_objects=excluded_objects)
+                      excluded_objects=excluded_objects,
+                      external_helper=external_helper,
+                      external_helper_timeout=external_helper_timeout)
             self.after(0, self._on_add_done, None)
         except Exception as exc:
             self.after(0, self._on_add_done, str(exc))

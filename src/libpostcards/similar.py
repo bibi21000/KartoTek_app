@@ -14,6 +14,29 @@ from PIL import Image, ImageGrab
 # assez lourds (torch, open-clip-torch) — installés. Ils ne sont
 # requis qu'au moment où une méthode les utilisant est réellement
 # appelée.
+#
+# Un déploiement peut aussi s'en passer ENTIÈREMENT (même pour
+# construire/interroger un index depuis tkmanager/tktools, pas
+# seulement flpostcards) en pointant PostcardSearcher vers un serveur
+# simpostcards distant via ``external_helper`` : le calcul des hashs
+# perceptuels -- et, si ce serveur a torch/open-clip-torch installés et
+# ne l'a pas explicitement désactivé (voir [simpostcards] clip_enabled),
+# de l'embedding CLIP aussi -- se fait alors côté serveur (POST
+# /api/compute_hashes, voir _compute_hashes_remote). Si ce serveur n'a
+# PAS l'embedding CLIP (libs absentes, ou clip_enabled=false), la
+# comparaison retombe automatiquement sur les hashs seuls -- voir
+# _combined_score(), qui gère aussi le cas d'un index construit par une
+# version antérieure sans CLIP.
+
+SIMILARITY_LIBS_AVAILABLE: bool
+try:
+    import torch  # noqa: F401
+    import open_clip  # noqa: F401
+    import imagehash  # noqa: F401
+    SIMILARITY_LIBS_AVAILABLE = True
+    del torch, open_clip, imagehash
+except ImportError:
+    SIMILARITY_LIBS_AVAILABLE = False
 
 
 class PostcardSearcher:
@@ -27,6 +50,8 @@ class PostcardSearcher:
         tqdm=list,
         datadir=None,
         device=None,
+        external_helper=None,
+        external_helper_timeout=None,
     ):
 
         # torch n'est requis qu'à partir du moment où le modèle CLIP est
@@ -67,6 +92,20 @@ class PostcardSearcher:
         # modèle CLIP à chaque requête.
         self.model = None
         self.preprocess = None
+
+        # URI d'un serveur simpostcards (ex : "http://simpostcards:8004",
+        # voir [DEFAULT] external_helper dans postcards.conf) utilisé pour
+        # calculer les hashs perceptuels d'une image AU LIEU d'un calcul
+        # local (imagehash + open_clip/torch) -- voir compute_hashes()
+        # et _compute_hashes_remote(). Permet d'utiliser tkmanager/
+        # tktools (recherche par similarité, recherche de doublons,
+        # construction d'index) sans installer torch/open-clip-torch/
+        # imagehash sur le poste, en délégant ce calcul à un serveur
+        # simpostcards qui les a (déploiement séparé, potentiellement
+        # avec GPU). Vide/None (par défaut) : calcul local, comme avant.
+        self.external_helper = (external_helper or "").strip() or None
+        self.external_helper_timeout = (
+            30.0 if external_helper_timeout is None else external_helper_timeout)
 
         # Racine par rapport à laquelle les chemins stockés dans
         # l'index (clés + champ "path") sont rendus relatifs — voir
@@ -146,7 +185,70 @@ class PostcardSearcher:
     # --------------------------------------------------
 
     def compute_hashes(self, image_path):
+        """
+        Calcule les hashs perceptuels (+ embedding CLIP) d'une image
+        QUELCONQUE (recherche par URL/presse-papiers, photo prise sous
+        n'importe quel angle...), au format stocké dans l'index (voir
+        build_index/save_index). Pour une image déjà correctement
+        orientée et cadrée (un scan déjà importé dans la collection),
+        voir plutôt :meth:`compute_hashes_only`, plus rapide et qui
+        évite tout risque de la recadrer une seconde fois pour rien.
 
+        Si ``self.external_helper`` est configuré, délègue le calcul
+        des hashs perceptuels (et, si ce serveur les fournit -- voir
+        [simpostcards] clip_enabled -- de l'embedding CLIP) à ce
+        serveur simpostcards (_compute_hashes_remote), qui redresse et
+        détoure l'image avant de la hasher (voir
+        simpostcards.blueprints.api.compute_hashes_route) -- torch/
+        open_clip/imagehash ne sont alors pas nécessaires ici. Si ce
+        serveur ne fournit pas d'embedding (libs absentes côté serveur,
+        ou désactivé), voir _combined_score(), qui gère cette absence
+        avec grâce en retombant sur une comparaison hashs seuls.
+        """
+        if isinstance(image_path, str):
+            image_path = Path(image_path)
+
+        if self.external_helper:
+            return self._compute_hashes_remote(image_path)
+
+        return self._compute_hashes_local(image_path)
+
+    # --------------------------------------------------
+
+    def compute_hashes_only(self, image_path):
+        """
+        Comme :meth:`compute_hashes`, mais pour une image déjà
+        correctement orientée et cadrée -- un scan déjà importé dans la
+        collection : utilisée par :meth:`build_index` (donc aussi bien
+        pour (re)construire l'index en entier que pour y ajouter une
+        carte qui vient d'être ajoutée à la collection, voir
+        ``tkpostcards.libs.scan_add``).
+
+        Le calcul local est rigoureusement identique à
+        :meth:`compute_hashes` (celui-ci n'a jamais appliqué le moindre
+        redressement/recadrage -- seul le calcul DISTANT en applique
+        un, voir plus bas) ; seul le comportement avec
+        ``self.external_helper`` change : délègue à
+        ``POST {external_helper}/api/compute_hashes_only`` au lieu de
+        ``/api/compute_hashes`` -- endpoint dédié qui hashe l'image
+        telle quelle, SANS la redresser/détourer au préalable (voir
+        simpostcards.blueprints.api.compute_hashes_only_route). Utiliser
+        ici /api/compute_hashes (comme compute_hashes()) recadrerait une
+        image déjà cadrée : temps perdu au mieux, hashs légèrement
+        décalés par rapport à ceux déjà en index pour cette même carte
+        au pire.
+        """
+        if isinstance(image_path, str):
+            image_path = Path(image_path)
+
+        if self.external_helper:
+            return self._compute_hashes_only_remote(image_path)
+
+        return self._compute_hashes_local(image_path)
+
+    # --------------------------------------------------
+
+    def _compute_hashes_local(self, image_path: Path) -> dict:
         import torch
         import imagehash
 
@@ -199,6 +301,99 @@ class PostcardSearcher:
             # (flpostcards / search_hashes). Reconverti à la volée par
             # embedding_similarity() quand un vrai calcul CLIP est fait.
             "embedding" : embedding.tolist(),
+        }
+
+    # --------------------------------------------------
+
+    def _compute_hashes_remote(self, image_path: Path) -> dict:
+        """
+        Calcule les hashs perceptuels (+ embedding CLIP si le serveur le
+        fournit) de ``image_path`` via
+        ``POST {self.external_helper}/api/compute_hashes`` (voir
+        simpostcards.blueprints.api.compute_hashes_route), au lieu d'un
+        calcul local -- aucun de torch/open_clip/imagehash n'est requis
+        sur cette machine.
+
+        Le champ ``"embedding"`` du dict retourné peut être ``None`` :
+        simpostcards ne le calcule que si torch/open-clip-torch y sont
+        installés ET [simpostcards] clip_enabled n'y est pas à "false"
+        (voir simpostcards.libs.embedder) -- sinon, comparaison hashs
+        seuls, voir _combined_score(). ATTENTION : pour que l'embedding
+        renvoyé soit comparable à ceux d'un index construit localement,
+        le serveur simpostcards doit utiliser le même modèle CLIP (voir
+        [simpostcards] clip_model_name/clip_pretrained côté serveur, et
+        les paramètres model_name/pretrained de ce PostcardSearcher).
+
+        L'endpoint calcule par défaut ces hashs/embeddings pour 4
+        rotations (0/90/180/270°), pensé pour une photo de carte prise
+        sous n'importe quelle orientation (usage mobile) ; seule
+        l'entrée à 0° est utilisée ici, les images manipulées par
+        PostcardSearcher pour une RECHERCHE (requêtes URL/presse-papiers)
+        étant supposées déjà correctement orientées, quoique pas encore
+        cadrées -- d'où ``single_rotation=true`` ci-dessous (ne demande
+        que l'angle 0, jusqu'à 4x plus rapide), MAIS pas d'appel à
+        /api/compute_hashes_only : cette image-ci n'est pas encore
+        redressée/détourée, contrairement à celles de
+        :meth:`compute_hashes_only` (déjà dans la collection).
+        """
+        with open(image_path, "rb") as fh:
+            response = requests.post(
+                f"{self.external_helper.rstrip('/')}/api/compute_hashes",
+                files={"image": (Path(image_path).name, fh)},
+                data={"single_rotation": "true"},
+                timeout=self.external_helper_timeout,
+            )
+        response.raise_for_status()
+        entry = response.json()["hashes"][0]
+        hashes = entry["hashes"]
+
+        return {
+            "path" : self.relative_path(image_path),
+            "mpath" : image_path.stat().st_mtime,
+            "chash" : self._content_hash(image_path),
+            "ahash" : hashes["ahash"],
+            "dhash" : hashes["dhash"],
+            "phash" : hashes["phash"],
+            "whash" : hashes["whash"],
+            # None si le serveur n'a pas calculé d'embedding (libs
+            # absentes, ou clip_enabled=false côté simpostcards) --
+            # géré avec grâce par _combined_score().
+            "embedding" : entry.get("embedding"),
+        }
+
+    # --------------------------------------------------
+
+    def _compute_hashes_only_remote(self, image_path: Path) -> dict:
+        """
+        Comme :meth:`_compute_hashes_remote`, mais via
+        ``POST {self.external_helper}/api/compute_hashes_only`` (voir
+        simpostcards.blueprints.api.compute_hashes_only_route) : pas de
+        redressement/détourage côté serveur (l'image de *image_path*
+        est supposée déjà correctement orientée et cadrée -- voir
+        :meth:`compute_hashes_only`), et pas de rotations multiples non
+        plus (superflu pour la même raison) -- réponse plus légère,
+        un seul jeu de hashs/embedding directement à la racine du JSON
+        plutôt qu'une liste "hashes": [...] par rotation.
+        """
+        with open(image_path, "rb") as fh:
+            response = requests.post(
+                f"{self.external_helper.rstrip('/')}/api/compute_hashes_only",
+                files={"image": (Path(image_path).name, fh)},
+                timeout=self.external_helper_timeout,
+            )
+        response.raise_for_status()
+        payload = response.json()
+        hashes = payload["hashes"]
+
+        return {
+            "path" : self.relative_path(image_path),
+            "mpath" : image_path.stat().st_mtime,
+            "chash" : self._content_hash(image_path),
+            "ahash" : hashes["ahash"],
+            "dhash" : hashes["dhash"],
+            "phash" : hashes["phash"],
+            "whash" : hashes["whash"],
+            "embedding" : payload.get("embedding"),
         }
 
     # --------------------------------------------------
@@ -377,7 +572,7 @@ class PostcardSearcher:
 
             try:
 
-                self.index[sfile] = self.compute_hashes(file)
+                self.index[sfile] = self.compute_hashes_only(file)
                 # ~ self.index.append({
 
                     # ~ "path": str(file),
@@ -504,6 +699,28 @@ class PostcardSearcher:
 
     # --------------------------------------------------
 
+    def _combined_score(self, hashes1, hashes2, hash_weight=0.60, clip_weight=0.40):
+        """
+        Score de similarité (0-100) combinant hashs perceptuels et
+        embedding CLIP, avec repli automatique sur les hashs seuls
+        quand l'un des deux côtés n'a pas d'embedding -- ``None``, ce
+        qui arrive quand ce jeu de hashs a été calculé via un serveur
+        simpostcards distant (voir external_helper / compute_hashes),
+        ou chargé depuis un index construit par une version antérieure
+        sans CLIP. Ce repli ne nécessite pas torch : la présence/
+        absence d'embedding est testée avant tout import.
+        """
+        hash_score = self.multi_hash_similarity(hashes1, hashes2)
+
+        e1, e2 = hashes1.get("embedding"), hashes2.get("embedding")
+        if e1 is None or e2 is None:
+            return hash_score
+
+        clip_score = self.embedding_similarity(e1, e2)
+        return hash_weight * hash_score + clip_weight * clip_score
+
+    # --------------------------------------------------
+
     def search_file(
         self,
         image_path,
@@ -526,36 +743,8 @@ class PostcardSearcher:
 
         for item in self.tqdm(self.index.values()):
 
-            # ~ phash_score = self.phash_similarity(
-                # ~ q_hash,
-                # ~ item["phash"]
-            # ~ )
-
-            # ~ clip_score = self.embedding_similarity(
-                # ~ q_emb,
-                # ~ item["embedding"]
-            # ~ )
-
-            # ~ final_score = (
-                # ~ phash_weight * phash_score
-                # ~ +
-                # ~ clip_weight * clip_score
-            # ~ )
-            hash_score = self.multi_hash_similarity(
-                hashes,
-                item
-            )
-
-            clip_score = self.embedding_similarity(
-                hashes["embedding"],
-                item["embedding"]
-            )
-
-            final_score = (
-                hash_weight * hash_score
-                +
-                clip_weight * clip_score
-            )
+            final_score = self._combined_score(
+                hashes, item, hash_weight=hash_weight, clip_weight=clip_weight)
 
             if final_score >= threshold:
 
@@ -789,20 +978,8 @@ class PostcardSearcher:
 
                 item2 = sindex[j]
 
-                phash_score = self.multi_hash_similarity(
-                    item1,
-                    item2
-                )
-
-                clip_score = self.embedding_similarity(
-                    item1["embedding"],
-                    item2["embedding"]
-                )
-
-                final_score = (
-                    hash_weight * phash_score +
-                    clip_weight * clip_score
-                )
+                final_score = self._combined_score(
+                    item1, item2, hash_weight=hash_weight, clip_weight=clip_weight)
 
                 if final_score >= threshold:
 
