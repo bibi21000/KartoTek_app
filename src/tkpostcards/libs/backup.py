@@ -70,6 +70,16 @@ class PostcardBackup:
                     )
                     files.append((full_path, arcname))
 
+        masks_dir = os.path.join(source_dir, 'masks')
+        if os.path.isdir(masks_dir):
+            for root, _dirs, filenames in os.walk(masks_dir):
+                for name in filenames:
+                    full_path = os.path.join(root, name)
+                    arcname = os.path.join(
+                        'masks', os.path.relpath(full_path, masks_dir)
+                    )
+                    files.append((full_path, arcname))
+
         verification_dir = os.path.join(source_dir, 'verification')
         if os.path.isdir(verification_dir):
             for root, _dirs, filenames in os.walk(verification_dir):

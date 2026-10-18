@@ -95,6 +95,13 @@ DEFAULT_CONFIG = {
     "scan_profile": DEFAULT_PROFILE_NAME,
     "language": "",
     "ocr_langs": "fra",
+    # OCR engine, chosen here whether it runs locally or on external_helper:
+    # "tesseract" or "paddleocr". ocr_min_score: PaddleOCR only, minimum
+    # confidence of a line (0-1, empty = 0.5). paddleocr_device: local runs
+    # only ("cpu", "gpu:0"; empty = PaddlePaddle's choice).
+    "ocr_engine": "tesseract",
+    "ocr_min_score": "",
+    "paddleocr_device": "",
     "detect_lang": "fr",
     "model_name": "Salesforce/blip-image-captioning-large",
     "objects_model_name": "facebook/detr-resnet-101",
@@ -1448,6 +1455,22 @@ class PostcardImportApp(tk.Tk):
 
     # ── Step 1: prepare ────────────────────────────────────────────────────
 
+    def _external_helper_settings(self) -> tuple[str | None, float | None]:
+        """Lit [DEFAULT] external_helper / external_helper_timeout depuis
+        la configuration -- voir libpostcards.similar.PostcardSearcher
+        .external_helper (et les classes équivalentes
+        PostcardOCR/PostcardDetection/ParcoursCartes, ainsi que
+        tkpostcards.libs.scan_prepare.make_corrector) pour ce qu'ils
+        permettent de déporter sur un serveur simpostcards distant
+        plutôt que de calculer localement."""
+        external_helper = self.cfg["DEFAULT"].get("external_helper", "").strip() or None
+        timeout_str = self.cfg["DEFAULT"].get("external_helper_timeout", "").strip()
+        try:
+            external_helper_timeout = float(timeout_str) if timeout_str else None
+        except ValueError:
+            external_helper_timeout = None
+        return external_helper, external_helper_timeout
+
     def _refresh_pending_count(self) -> None:
         _rv, other = scan_importdir(self.importdir)
         self._pending_var.set(
@@ -1474,10 +1497,13 @@ class PostcardImportApp(tk.Tk):
             def _on_pair(pair):
                 self.after(0, self._on_pair_prepared, pair)
 
+            external_helper, external_helper_timeout = self._external_helper_settings()
             pairs = prepare_pairs(
                 self.importdir, next_id,
                 prefix=prefix, profile=profile,
                 on_pair=_on_pair,
+                external_helper=external_helper,
+                external_helper_timeout=external_helper_timeout,
             )
             self.after(0, self._on_prepare_done, len(pairs), None)
         except Exception as exc:
@@ -1598,6 +1624,13 @@ class PostcardImportApp(tk.Tk):
             self.after(0, self._on_add_progress, i, total, added)
 
         ocr_langs = self.cfg["tkimport"].get("ocr_langs", "fra") or "fra"
+        ocr_engine = self.cfg["tkimport"].get("ocr_engine", "tesseract") or "tesseract"
+        raw_score = (self.cfg["tkimport"].get("ocr_min_score", "") or "").strip()
+        try:
+            ocr_min_score = float(raw_score) if raw_score else None
+        except ValueError:
+            ocr_min_score = None
+        paddle_device = (self.cfg["tkimport"].get("paddleocr_device", "") or "").strip() or None
         torch_device = self.cfg["DEFAULT"].get("torch_device", "").strip() or None
         # Serveur simpostcards distant (voir libpostcards.ocr.PostcardOCR
         # .external_helper / libpostcards.similar.PostcardSearcher
@@ -1605,18 +1638,7 @@ class PostcardImportApp(tk.Tk):
         # .external_helper) : dispense d'installer pytesseract / torch+
         # open-clip-torch+imagehash / transformers+torch ici -- voir
         # [DEFAULT] external_helper dans postcards.conf.
-        external_helper = self.cfg["DEFAULT"].get("external_helper", "").strip() or None
-        # Délai d'attente (secondes) d'une requête vers external_helper
-        # -- voir [DEFAULT] external_helper_timeout dans postcards.conf.
-        # Vide/absent : chaque classe garde son propre défaut (30-60s).
-        external_helper_timeout_str = self.cfg["DEFAULT"].get(
-            "external_helper_timeout", "").strip()
-        try:
-            external_helper_timeout = (
-                float(external_helper_timeout_str) if external_helper_timeout_str else None
-            )
-        except ValueError:
-            external_helper_timeout = None
+        external_helper, external_helper_timeout = self._external_helper_settings()
 
         # Détection de contenu (BLIP + DETR sur le recto, voir
         # libpostcards.detection) : mêmes réglages que "tktools
@@ -1640,8 +1662,16 @@ class PostcardImportApp(tk.Tk):
         excluded_objects = self.cfg["tkimport"].get("excluded_objects", "tie") or ""
         excluded_objects = [o.strip() for o in excluded_objects.split(",") if o.strip()]
 
+        # Signalements non bloquants (langue de détection indisponible, texte
+        # resté en anglais...) : collectés ici (thread de travail), montrés
+        # à l'utilisateur à la fin par _on_add_done.
+        issues = []
+
         try:
             add_pairs(str(self.datadir), self.importdir, ids, on_progress=_progress,
+                      on_issue=issues.append,
+                      ocr_engine=ocr_engine, ocr_min_score=ocr_min_score,
+                      paddle_device=paddle_device,
                       ocr_lang=ocr_langs, torch_device=torch_device,
                       detect_lang=detect_lang, model_name=model_name,
                       objects_model_name=objects_model_name,
@@ -1649,9 +1679,11 @@ class PostcardImportApp(tk.Tk):
                       excluded_objects=excluded_objects,
                       external_helper=external_helper,
                       external_helper_timeout=external_helper_timeout)
-            self.after(0, self._on_add_done, None)
+            self.after(0, self._on_add_done, None, list(issues))
         except Exception as exc:
-            self.after(0, self._on_add_done, str(exc))
+            # Dont LanguageUnavailable (langue OCR absente de tesseract) :
+            # son message dit quoi installer ou régler ; rien n'a été copié.
+            self.after(0, self._on_add_done, str(exc), list(issues))
 
     def _on_add_progress(self, i: int, total: int, added) -> None:
         if added is None:
@@ -1674,13 +1706,24 @@ class PostcardImportApp(tk.Tk):
                 except Exception as exc:
                     logging.warning("could not remove %s: %s", entry, exc)
 
-    def _on_add_done(self, error: str | None) -> None:
+    def _on_add_done(self, error: str | None, issues=()) -> None:
         self._set_busy(False)
+        for issue in issues:
+            self._log(f"! {issue}")
         if error:
             self._set_status(self._("Add failed"))
             self._log(f"x {error}")
             messagebox.showerror(self._("Error"), error, parent=self)
             return
+        if issues:
+            # Les cartes sont ajoutées ; seule la traduction manque.
+            messagebox.showwarning(
+                self._("Warning"),
+                "\n\n".join(str(i) for i in issues) + "\n\n"
+                + self._("The detected texts stay in English. Once the "
+                         "language is available, translate them with: "
+                         "kttools detect-translate"),
+                parent=self)
         if self._remove_after_var.get():
             self._clear_importdir()
             self._log(self._("Import folder emptied"))

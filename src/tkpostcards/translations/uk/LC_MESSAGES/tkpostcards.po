@@ -1883,6 +1883,148 @@ msgstr "Виправити нереципрокні зв'язки дубліка
 msgid "Do not update files"
 msgstr "Не оновлювати файли"
 
+# --- masks (COLMAP) ---
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "nav_masks"
+msgstr "Masks (COLMAP)"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_editor_title"
+msgstr "COLMAP masks"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_tool_brush_off"
+msgstr "Brush: ignore"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_tool_brush_on"
+msgstr "Brush: keep"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_tool_rect_off"
+msgstr "Rectangle: ignore"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_tool_rect_on"
+msgstr "Rectangle: keep"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_size"
+msgstr "Size"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_show"
+msgstr "Show mask"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_undo"
+msgstr "Undo"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_save"
+msgstr "Save"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_clear"
+msgstr "Keep all"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_auto_one"
+msgstr "Auto (this card)"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_auto_all"
+msgstr "Auto (collection)"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_stop"
+msgstr "Stop"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_status"
+msgstr "Card {id} ({n}/{total}) — mask: {src} — {coll}"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_src_none"
+msgstr "none"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_src_auto"
+msgstr "auto"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_src_manual"
+msgstr "manual"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_no_image"
+msgstr "Image not found: {path}"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_help"
+msgstr "Left click: paint · Right click: the opposite · ←/→: previous/next card · Ctrl+Z: undo · Ctrl+Y: redo · Ctrl+S: save · M: show/hide · [ ]: size"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_need_libs"
+msgstr "Automatic generation requires: pip install pypostcards[masks]"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_overwrite_q"
+msgstr "Also regenerate existing automatic masks?\n\nYes: replace them\nNo: only cards without a mask\n\nMasks edited by hand are never overwritten."
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_save_q"
+msgstr "Save the mask changes?"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_loading_model"
+msgstr "Loading SAM (first run: downloading the model)…"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_batch_progress"
+msgstr "Generating: {i}/{total}"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_batch_done"
+msgstr "Done: {done} generated, {skipped} skipped, {missing} without image, {error} failed"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_error"
+msgstr "Error: {error}"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_need_libs_remote"
+msgstr "Automatic generation through external_helper requires: pip install requests numpy opencv-python-headless"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_remote_wait"
+msgstr "SAM is running on {helper}… (the first card may take a while: the server loads the model)"
+
+#: src/tkpostcards/tkmanager.py
+msgid "nav_poi_filter_label"
+msgstr "POI"
+
+#: src/tkpostcards/tkmanager.py
+msgid "gall_no_collection"
+msgstr "No collection"
+
+#: src/tkpostcards/tkmanager.py
+msgid "gall_empty"
+msgstr "No card matches this filter."
+
+#: src/tkpostcards/tkmanager.py
+msgid "side_mask"
+msgstr "Mask"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_redo"
+msgstr "Redo"
+
+#: src/tkpostcards/libs/mask_editor.py
+msgid "mask_exclude_all"
+msgstr "Mask all"
+
 #~ msgid "White threshold:"
 #~ msgstr "Поріг білого:"
 
@@ -1926,3 +2068,7 @@ msgstr "Видалити всі проаналізовані (ще не дода
 #: tkpostcards/tkimport.py:1575
 msgid "Cancelled {count} postcard(s); pick a profile and analyze again."
 msgstr "Скасовано {count} листівок(и); виберіть профіль і повторіть аналіз."
+
+#: src/tkpostcards/tkmanager.py:157 src/tkpostcards/tkmanager.py:2722
+msgid "field_storage"
+msgstr "Зберігання"

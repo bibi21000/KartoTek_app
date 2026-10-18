@@ -20,6 +20,8 @@ venv: venv-min
 	./venv/bin/pip install -e .[ocr]
 	./venv/bin/pip install -e .[travel]
 	./venv/bin/pip install -e .[detection]
+	./venv/bin/pip install -e .[colmap]
+	./venv/bin/pip install -e .[masks]
 
 venv-dev: venv
 	./venv/bin/pip install -e .[flask]

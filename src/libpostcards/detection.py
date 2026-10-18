@@ -41,17 +41,51 @@ DETR) se fait alors côté serveur (POST /api/compute_detection) -- même
 principe que ``external_helper`` sur
 ``libpostcards.similar.PostcardSearcher``/
 ``libpostcards.travel.ParcoursCartes``/``libpostcards.ocr.PostcardOCR``.
-La traduction, elle, reste TOUJOURS locale (voir plus haut) : le
-serveur ne renvoie que la légende/les libellés en anglais, non
-traduits, exactement comme le fait le calcul local avant l'appel à
-``translate()``.
+La traduction suit la même logique que le calcul : avec ``external_helper``,
+la langue demandée (``lang``) est envoyée au serveur, qui traduit lui-même la
+légende et les libellés (voir ``translation`` dans la réponse de
+``POST /api/compute_detection``) ; sans lui, la traduction est locale
+(``deep_translator``). Un serveur plus ancien, qui ne renvoie pas de bloc
+``translation``, est traité comme avant : traduction locale du texte anglais.
+
+Si la langue n'est pas disponible (ou si la traduction échoue), la détection
+n'est pas perdue : le texte reste en anglais, la langue du texte
+(``DetectionText.lang``) vaut alors "en", et un :class:`libpostcards.langs.Issue`
+est renvoyé à l'appelant (``DetectionText.issues`` / ``PostcardDetection
+.issues``) en plus d'être consigné dans les logs ; la commande ``kttools
+detect-translate`` permet de traduire ces textes plus tard.
 """
 import io
+import logging
 import re
+from dataclasses import dataclass, field
 
 import requests
 
 from PIL import Image
+
+from .langs import (
+    LANGUAGE_UNAVAILABLE, TRANSLATION_FAILED, TRANSLATOR_UNAVAILABLE, Issue,
+    HelperTranslator, LanguageUnavailable, TranslationError,
+    TranslatorUnavailable, is_english, log_once, normalize_code,
+    resolve_language, translate_texts,
+)
+
+LOG = logging.getLogger(__name__)
+
+
+@dataclass
+class DetectionText:
+    """Texte de détection (légende ou liste d'objets) prêt à être stocké.
+
+    ``lang`` : langue du texte, à enregistrer dans
+    ``detected_content_lang`` / ``detected_objects_lang`` ("en" quand il
+    n'a pas pu être traduit). ``issues`` : signalements à montrer à
+    l'utilisateur (langue indisponible, traduction en échec...).
+    """
+    text: str
+    lang: str
+    issues: list = field(default_factory=list)
 
 try:
     from transformers import BlipProcessor, BlipForConditionalGeneration
@@ -218,6 +252,16 @@ class PostcardDetection:
 
         self.objects_processor = None
         self.objects_model = None
+
+        # Signalements (libpostcards.langs.Issue, dédoublonnés par code et
+        # langue) accumulés pendant la vie de l'instance : voir describe().
+        self.issues = []
+        # Passe à True quand la langue demandée s'est révélée indisponible :
+        # on cesse alors de la demander (inutile et bruyant dans les logs du
+        # serveur, un lot de cent cartes ne doit pas répéter cent fois la
+        # même erreur) ; le texte reste en anglais, et ``lang`` = "en".
+        self._lang_unavailable = False
+        self._translator_unavailable = False
 
         # URI d'un serveur simpostcards (ex : "http://simpostcards:8004",
         # voir [DEFAULT] external_helper dans postcards.conf) utilisé
@@ -400,32 +444,134 @@ class PostcardDetection:
         """
         Traduit ``text`` (typiquement la légende anglaise renvoyée par
         caption()) vers ``lang`` (par défaut : ``self.lang``, ex :
-        "fr"). Toujours local (voir docstring du module), que
-        caption()/detect_objects() aient tourné localement ou via
-        ``external_helper``.
+        "fr"), localement (``deep_translator``).
 
-        Retourne ``text`` tel quel si la langue cible est l'anglais,
-        si ``text`` est vide, si ``deep_translator`` n'est pas
-        installé, ou si la traduction échoue (ex : hors ligne) : la
-        légende anglaise reste toujours disponible, la traduction est
-        une amélioration, pas un prérequis.
+        Retourne ``text`` tel quel si la langue cible est l'anglais, si
+        ``text`` est vide, ou si la traduction est impossible (voir
+        :meth:`describe` pour savoir POURQUOI, et dans quelle langue est
+        le texte renvoyé) : la légende anglaise reste toujours disponible,
+        la traduction est une amélioration, pas un prérequis.
+        """
+        return self._translate_local(text, lang or self.lang).text
+
+    # --------------------------------------------------
+
+    def _marker_lang(self, lang):
+        """Code de langue à enregistrer pour un texte traduit en ``lang``."""
+        if not lang or is_english(lang):
+            return "en"
+        try:
+            return resolve_language(lang) or normalize_code(lang)
+        except TranslatorUnavailable:
+            return normalize_code(lang)
+
+    def _report(self, code, lang, message):
+        """Consigne (logs, une fois par code+langue) et renvoie un Issue ;
+        ajouté à ``self.issues`` s'il n'y est pas déjà."""
+        log_once(LOG, ("detection", code, lang), "%s", message)
+        issue = Issue(code, "detection", lang, message)
+        if not any(i.code == code and i.lang == lang for i in self.issues):
+            self.issues.append(issue)
+        if code == LANGUAGE_UNAVAILABLE:
+            self._lang_unavailable = True
+        elif code == TRANSLATOR_UNAVAILABLE:
+            self._translator_unavailable = True
+        return issue
+
+    def _translate_local(self, text, lang):
+        """Traduction locale -> DetectionText (jamais d'exception)."""
+        if not lang or is_english(lang) or not text:
+            return DetectionText(text or "", self._marker_lang(lang), [])
+        if self._lang_unavailable or self._translator_unavailable:
+            return DetectionText(text, "en", [])   # déjà signalé : une fois
+        try:
+            out = translate_texts([text], lang)[0]
+        except LanguageUnavailable as exc:
+            return DetectionText(text, "en", [self._report(
+                LANGUAGE_UNAVAILABLE, lang,
+                "Detection language %r is not available, keeping the "
+                "English text (translate it later with \"kttools "
+                "detect-translate\"): %s" % (lang, exc))])
+        except TranslatorUnavailable as exc:
+            return DetectionText(text, "en", [self._report(
+                TRANSLATOR_UNAVAILABLE, lang,
+                "No translation engine available, keeping the English text "
+                "(translate it later with \"kttools detect-translate\"): "
+                "%s" % exc)])
+        except TranslationError as exc:
+            return DetectionText(text, "en", [self._report(
+                TRANSLATION_FAILED, lang,
+                "Translation to %r failed, keeping the English text "
+                "(translate it later with \"kttools detect-translate\"): "
+                "%s" % (lang, exc))])
+        return DetectionText(out, self._marker_lang(lang), [])
+
+    def _lang_fields(self, lang):
+        """Champs de formulaire ``lang`` à envoyer au serveur : seulement
+        quand une traduction est utile et possible."""
+        if not lang or is_english(lang) or self._lang_unavailable \
+                or self._translator_unavailable:
+            return {}
+        return {"lang": lang}
+
+    def _from_payload(self, english, payload, lang, pick):
+        """DetectionText à partir de la réponse du serveur ; ``pick(tr)``
+        extrait le texte traduit du bloc ``translation``."""
+        translation = payload.get("translation")
+        if translation is None:
+            # Pas de bloc translation : langue non demandée (anglais, ou
+            # indisponible, déjà signalé) ou serveur trop ancien pour
+            # traduire -> traduction locale, comme avant.
+            return self._translate_local(english, lang)
+        status = translation.get("status")
+        if status == "ok":
+            return DetectionText(pick(translation) or english,
+                                 translation.get("lang") or self._marker_lang(lang),
+                                 [])
+        code = {LANGUAGE_UNAVAILABLE: LANGUAGE_UNAVAILABLE,
+                TRANSLATOR_UNAVAILABLE: TRANSLATOR_UNAVAILABLE}.get(
+                    status, TRANSLATION_FAILED)
+        message = translation.get("message") or (
+            "the server could not translate to %r (%s)" % (lang, status))
+        return DetectionText(english, "en", [self._report(
+            code, lang,
+            "Detection language %r: %s Keeping the English text (translate "
+            "it later with \"kttools detect-translate\")." % (lang, message))])
+
+    def check_language(self, lang=None):
+        """Vérifie TOUT DE SUITE que la langue de traduction est
+        disponible (sur ``external_helper`` s'il est configuré, sinon ici),
+        pour prévenir l'utilisateur avant un lot au lieu de le découvrir
+        carte après carte. Renvoie None si tout va bien, sinon l'
+        :class:`libpostcards.langs.Issue` (déjà consigné dans les logs et
+        dans ``self.issues``) ; le texte restera alors en anglais.
+        Jamais d'exception : la détection reste possible sans traduction.
         """
         lang = lang or self.lang
-
-        if not text or not lang or lang.lower().startswith("en"):
-            return text
-
-        if not TRANSLATOR_AVAILABLE:
-            if self.debug:
-                print("deep_translator is not installed, skipping translation")
-            return text
-
+        if not lang or is_english(lang):
+            return None
         try:
-            return GoogleTranslator(source="en", target=lang).translate(text)
-        except Exception as e:
-            if self.debug:
-                print(f"Translation failed ({e}), keeping original caption")
-            return text
+            if self.external_helper:
+                HelperTranslator(
+                    self.external_helper,
+                    self.external_helper_timeout).check_language(lang)
+            elif resolve_language(lang) is None:
+                from .langs import language_unavailable_error
+                raise language_unavailable_error(lang, "detection")
+        except LanguageUnavailable as exc:
+            return self._report(
+                LANGUAGE_UNAVAILABLE, lang,
+                "Detection language %r is not available, detected texts "
+                "will stay in English (translate them later with "
+                "\"kttools detect-translate\"): %s" % (lang, exc))
+        except TranslatorUnavailable as exc:
+            return self._report(
+                TRANSLATOR_UNAVAILABLE, lang,
+                "No translation engine available, detected texts will stay "
+                "in English: %s" % exc)
+        except (TranslationError, requests.RequestException):
+            return None   # indisponibilité passagère : on essaiera à l'usage
+        return None
 
     # --------------------------------------------------
 
@@ -436,7 +582,22 @@ class PostcardDetection:
         (chemin de fichier OU image PIL déjà chargée) et retourne la
         légende traduite dans ``lang`` (par défaut : ``self.lang``).
         """
-        return self.translate(self.caption(image), lang=lang)
+        return self.describe(image, lang=lang).text
+
+    def describe(self, image, lang=None):
+        """Comme :meth:`to_string`, mais renvoie un :class:`DetectionText` :
+        le texte, SA LANGUE (à enregistrer dans ``detected_content_lang`` ;
+        "en" s'il n'a pas pu être traduit) et les signalements éventuels.
+
+        Avec ``external_helper``, la langue est envoyée au serveur qui
+        traduit lui-même (``POST /api/compute_detection``, champ ``lang``)."""
+        lang = lang or self.lang
+        if self.external_helper:
+            payload = self._post_to_helper(
+                image, caption="true", objects="false", **self._lang_fields(lang))
+            return self._from_payload(
+                payload["caption"], payload, lang, lambda t: t.get("caption"))
+        return self._translate_local(self.caption(image), lang)
 
     # --------------------------------------------------
 
@@ -480,9 +641,22 @@ class PostcardDetection:
             else self._to_english_words(excluded_objects)
         )
 
+        detections, _payload = self._objects_candidates(
+            image, threshold, max_objects, excluded)
+        return detections
+
+    def _objects_candidates(self, image, threshold, max_objects, excluded, lang=None):
+        """``(détections, réponse_brute_du_serveur)``. Les détections sont
+        filtrées (exclusions) et tronquées (``max_objects``) ICI, sur les
+        libellés anglais, que le calcul vienne du serveur ou d'un modèle
+        local ; la réponse brute (``{}`` en local) porte le bloc
+        ``translation`` éventuel -- voir :meth:`describe_objects`."""
+        payload = {}
         if self.external_helper:
+            fields = self._lang_fields(lang) if lang else {}
             payload = self._post_to_helper(
-                image, caption="false", objects="true", threshold=str(threshold))
+                image, caption="false", objects="true",
+                threshold=str(threshold), **fields)
             best_by_label = [(item["label"], item["score"]) for item in payload["objects"]]
         else:
             best_by_label = self._detect_objects_local(image, threshold)
@@ -493,7 +667,7 @@ class PostcardDetection:
         if max_objects is not None:
             detections = detections[:max_objects]
 
-        return detections
+        return detections, payload
 
     def _detect_objects_local(self, image, threshold):
         """Calcul local (DETR) des détections brutes -- dédoublonnées
@@ -541,11 +715,30 @@ class PostcardDetection:
 
         Une chaîne vide est renvoyée si aucun objet n'atteint le seuil
         de confiance demandé (ou s'ils ont tous été écartés par
-        ``excluded_objects``).
+        ``excluded_objects``). Voir :meth:`describe_objects` pour obtenir
+        aussi la langue du texte et les signalements.
         """
-        detections = self.detect_objects(
-            image, threshold=threshold, max_objects=max_objects,
-            excluded_objects=excluded_objects,
+        return self.describe_objects(
+            image, lang=lang, threshold=threshold, max_objects=max_objects,
+            excluded_objects=excluded_objects).text
+
+    def describe_objects(self, image, lang=None, threshold=None, max_objects=None,
+                          excluded_objects=None):
+        """Comme :meth:`to_objects_string`, mais renvoie un
+        :class:`DetectionText` (texte, langue du texte, signalements). Avec
+        ``external_helper``, le serveur traduit les libellés (``lang``
+        envoyé avec la requête) ; les exclusions et la troncature
+        s'appliquent, elles, aux libellés anglais bruts."""
+        lang = lang or self.lang
+        threshold = self.objects_threshold if threshold is None else threshold
+        max_objects = self.max_objects if max_objects is None else max_objects
+        excluded = (
+            self.excluded_objects if excluded_objects is None
+            else self._to_english_words(excluded_objects)
         )
-        labels = ", ".join(label for label, _score in detections)
-        return self.translate(labels, lang=lang)
+        detections, payload = self._objects_candidates(
+            image, threshold, max_objects, excluded, lang=lang)
+        english = [label for label, _score in detections]
+        return self._from_payload(
+            ", ".join(english), payload, lang,
+            lambda t: ", ".join(t.get("labels", {}).get(l, l) for l in english))

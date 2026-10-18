@@ -24,13 +24,20 @@ class AddedPostcard(object):
     # verso_ocr, detected_content, detected_objects) -- the name is
     # kept for backward compatibility, its scope simply broadened when
     # content detection was added alongside OCR.
-    __slots__ = ("pcid", "recto", "verso", "ocr_updated")
+    #
+    # ``issues`` : ``libpostcards.langs.Issue`` raised while processing this
+    # card (typically: the detection language is unavailable or the
+    # translation failed, so ``detected_content`` / ``detected_objects`` were
+    # stored in English -- see ``detected_*_lang`` and ``kttools
+    # detect-translate``). Empty when all went well.
+    __slots__ = ("pcid", "recto", "verso", "ocr_updated", "issues")
 
-    def __init__(self, pcid, recto, verso, ocr_updated):
+    def __init__(self, pcid, recto, verso, ocr_updated, issues=None):
         self.pcid = pcid
         self.recto = recto
         self.verso = verso
         self.ocr_updated = ocr_updated
+        self.issues = list(issues or [])
 
 
 def guess_ext(importdir, pcid, default="tiff"):
@@ -143,6 +150,7 @@ def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
     mod = Model(datadir)
     card = mod.load_json(pcid)
     updated = False
+    issues = []
     if ocr is not None:
         if card.get("recto_ocr") is None or force is True:
             updated = True
@@ -153,12 +161,21 @@ def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
     if detector is not None:
         # La détection de contenu ne porte que sur le recto (voir
         # tkpostcards.libs.detection).
+        # La langue du texte enregistré est mémorisée ("en" = non traduit :
+        # langue indisponible, traduction en échec) pour que ``kttools
+        # detect-translate`` sache quoi traduire plus tard.
         if card.get("detected_content") is None or force is True:
             updated = True
-            card["detected_content"] = detector.to_string(str(dst_recto))
+            described = detector.describe(str(dst_recto))
+            card["detected_content"] = described.text
+            card["detected_content_lang"] = described.lang
+            issues.extend(described.issues)
         if card.get("detected_objects") is None or force is True:
             updated = True
-            card["detected_objects"] = detector.to_objects_string(str(dst_recto))
+            described = detector.describe_objects(str(dst_recto))
+            card["detected_objects"] = described.text
+            card["detected_objects_lang"] = described.lang
+            issues.extend(described.issues)
     if updated is True:
         mod.write_json(card)
 
@@ -170,14 +187,15 @@ def add_one(datadir, importdir, pcid, ext=None, ocr=None, pcs=None,
         base_name = dst_recto.stem
         searcher.build_index(output_original / ("%s.png" % base_name))
 
-    return AddedPostcard(pcid, dst_recto, dst_verso, updated)
+    return AddedPostcard(pcid, dst_recto, dst_verso, updated, issues)
 
 
 def add_pairs(datadir, importdir, ids, ext=None, force=True,
               use_searcher=True, on_progress=None, ocr_lang=None, torch_device=None,
-              detect_lang=None, model_name=None, objects_model_name=None,
+              detect_lang=None, on_issue=None, model_name=None, objects_model_name=None,
               objects_threshold=None, max_objects=None, excluded_objects=None,
-              external_helper=None, external_helper_timeout=None):
+              external_helper=None, external_helper_timeout=None,
+              ocr_engine=None, ocr_min_score=None, paddle_device=None):
     """Add several postcards at once, mirroring ``tktools scan add``.
 
     :param ids: iterable of postcard ids to add.
@@ -187,6 +205,15 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
     :param on_progress: optional ``on_progress(index, total, added)``
         callback, where ``added`` is the :class:`AddedPostcard` just
         created (or ``None`` if it raised, see below).
+    :param ocr_engine: OCR engine, chosen by the caller: ``"tesseract"``
+        (default) or ``"paddleocr"``; run here, or on *external_helper* when
+        given (the server must then have this engine).
+        ``libpostcards.langs.EngineUnavailable`` is raised BEFORE any file
+        is copied when the chosen engine is not usable (PaddleOCR is never
+        silently skipped the way a missing tesseract is).
+    :param ocr_min_score: PaddleOCR only: minimum confidence of a line.
+    :param paddle_device: PaddleOCR only, local runs only: ``"cpu"``,
+        ``"gpu:0"``...
     :param ocr_lang: languages passed to ``PostcardOCR`` (tesseract
         ``lang`` argument, e.g. ``"fra"`` or ``"fra+eng"``). Falls back
         to ``PostcardOCR``'s own default (``"fra"``) when omitted.
@@ -196,6 +223,15 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
         devices). ``None`` lets them pick their own default (cuda if
         available, else cpu). Ignored by both when *external_helper* is
         given (the remote server picks its own device).
+    :param on_issue: callable receiving each ``libpostcards.langs.Issue``
+        (at most once per code and language) -- typically "the detection
+        language is not available on the server, the detected texts stay in
+        English". Called from the same thread as ``add_pairs`` (and before
+        the first card for what can be checked up front). The issues are
+        also logged by ``libpostcards.detection``. An unavailable OCR
+        language is not an ``Issue`` but fatal:
+        ``libpostcards.langs.LanguageUnavailable`` is raised BEFORE any
+        file is copied.
     :param detect_lang: target language passed to ``PostcardDetection``
         (translation of the BLIP caption / DETR object labels). Falls
         back to ``PostcardDetection``'s own default (``"fr"``) when
@@ -273,9 +309,17 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
         searcher_available = False
 
     datadir = Path(datadir)
-    if PYTESSERACT_AVAILABLE or external_helper:
+    from libpostcards.langs import normalize_ocr_engine
+    engine = normalize_ocr_engine(ocr_engine)
+    # Tesseract absent : l'OCR est ignoré (historique, "au mieux"). Un autre
+    # moteur est un choix explicite de l'utilisateur : on le construit
+    # toujours, pour que son indisponibilité soit signalée par le contrôle de
+    # ``ocr.check_language()`` plus bas, au lieu d'être passée sous silence.
+    if engine != "tesseract" or PYTESSERACT_AVAILABLE or external_helper:
         ocr_kwargs = {"external_helper": external_helper,
-                      "external_helper_timeout": external_helper_timeout}
+                      "external_helper_timeout": external_helper_timeout,
+                      "engine": engine, "min_score": ocr_min_score,
+                      "paddle_device": paddle_device}
         if ocr_lang:
             ocr_kwargs["lang"] = ocr_lang
         ocr = PostcardOCR(**ocr_kwargs)
@@ -314,6 +358,26 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
 
     ids = list(ids)
     results = []
+
+    # Langues : vérifiées UNE fois avant de toucher à quoi que ce soit, pour
+    # prévenir l'utilisateur tout de suite plutôt qu'à la première carte
+    # (OCR : erreur fatale ; détection : le texte restera en anglais).
+    if ocr is not None:
+        ocr.check_language()                    # LanguageUnavailable
+    reported = set()
+
+    def _report(issue):
+        key = (issue.code, issue.lang)
+        if key not in reported:
+            reported.add(key)
+            if on_issue is not None:
+                on_issue(issue)
+
+    if detector is not None:
+        preflight = detector.check_language()
+        if preflight is not None:
+            _report(preflight)
+
     try:
         for i, pcid in enumerate(ids):
             try:
@@ -324,6 +388,8 @@ def add_pairs(datadir, importdir, ids, ext=None, force=True,
                 if on_progress is not None:
                     on_progress(i, len(ids), None)
                 raise
+            for issue in added.issues:
+                _report(issue)
             results.append(added)
             if on_progress is not None:
                 on_progress(i, len(ids), added)

@@ -20,7 +20,7 @@ maintainers = [
   {name = "bibi21000", email = "bibi21000@gmail.com"}
 ]
 description = "Scan, manage and publish your postcards collection"
-version = "4.1.0"
+version = "4.2.0"
 requires-python = ">=3.9"
 dependencies = [
     "pillow",
@@ -71,8 +71,28 @@ ktimport = [
 ocr = [
     "pytesseract",
 ]
+# PaddleOCR engine (see [tkimport] ocr_engine). This extra does NOT install
+# the PaddlePaddle framework, on purpose: install it first, for your platform
+# (PyPI's "paddlepaddle" has wheels only for CPython 3.9-3.13 on Linux x86_64,
+# macOS arm64 and Windows, and is CPU-only):
+#   CPU:  pip install paddlepaddle -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+#   GPU:  pip install paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+# Letting this extra pull "paddlepaddle" would fail on the other platforms and
+# would clash with a GPU build.
+paddleocr = [
+    "paddleocr",
+    "numpy",
+]
 colmap = [
     "pycolmap",
+]
+masks = [
+    "pillow",
+    "numpy",
+    "opencv-python-headless",
+    "torch",
+    "transformers",
+    "tqdm",
 ]
 similar = [
     "requests",
@@ -100,6 +120,22 @@ detection = [
     "transformers",
     "torch",
     "deep-translator",
+]
+# Server-side translation only (POST /api/translate, "lang" of
+# /api/compute_detection) on a machine without torch.
+translate = [
+    "deep-translator",
+]
+# Local translation engine (translate_engine = marian or auto in
+# [simpostcards]): Marian models, no rate limit, no network once downloaded.
+# Needs deep-translator too (it names the languages). sentencepiece has wheels
+# up to CPython 3.14, sacremoses is pure Python.
+translate-local = [
+    "deep-translator",
+    "transformers",
+    "torch",
+    "sentencepiece",
+    "sacremoses",
 ]
 
 dev = [

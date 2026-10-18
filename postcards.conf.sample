@@ -482,11 +482,44 @@ max_content_length_mb = 25
 # free of the CPU-heavy route solver).
 ;travel_enabled = true
 
-# OCR (Tesseract): only active if pytesseract (and the tesseract-ocr
-# binary + language data, e.g. tesseract-ocr-fra) is installed here.
-# Set to false to disable this endpoint even if pytesseract IS
-# installed (e.g. a server dedicated to hashes/embeddings/travel only).
+# OCR: two engines, and the CLIENT chooses which one it wants for each request
+# ([tkimport] ocr_engine, or "kttools ... --ocr-engine"):
+#  - Tesseract: only active if pytesseract (and the tesseract-ocr binary +
+#    language data, e.g. tesseract-ocr-fra) is installed here.
+#  - PaddleOCR: only active if paddleocr + paddlepaddle are installed here.
+#    Install the PaddlePaddle framework FIRST, for your platform (see the
+#    comment of the "paddleocr" extra in pyproject.toml: PyPI has it only for
+#    Python 3.9-3.13 on Linux x86_64 / macOS arm64 / Windows, CPU-only),
+#    then: pip install pypostcards[paddleocr]. Better than tesseract on noisy
+#    printed text and text laid over a photo (captions, publisher marks);
+#    like tesseract it is NOT a handwriting reader. Its models (a few tens
+#    of MB per language) are downloaded from the Internet the first time a
+#    language is used, into ~/.paddlex: a server without network access
+#    must have them there beforehand.
+# If a client asks for a language the engine does not have, or for an engine
+# that is not available here, the server logs a WARNING and tells the client
+# (HTTP 422 / 501), which shows it to the user.
+# Set to false to disable the OCR endpoints altogether, whatever is installed
+# (e.g. a server dedicated to hashes/embeddings/travel only).
 ;ocr_enabled = true
+
+# Disable the PaddleOCR engine only (tesseract stays available) even if
+# paddleocr IS installed.
+;paddleocr_enabled = true
+
+# Where PaddleOCR runs on this server: "cpu", "gpu:0"... Empty = PaddlePaddle's
+# own choice (the GPU if its build has CUDA). "cpu" is a good value on a
+# machine whose GPU memory is wanted by something else (the PP-OCR models
+# are small; a postcard takes a few seconds on CPU). Together with
+# gpu_idle_timeout, which also unloads PaddleOCR when it is idle.
+# NOTE for AMD GPUs: PaddlePaddle's pip wheels exist for the CPU and for NVIDIA
+# CUDA only, not for AMD ROCm (that needs a build from source). With the
+# standard wheel, "gpu:0" is refused with an explicit message: keep "cpu".
+;paddleocr_device = cpu
+
+# PP-OCR generation to use ("PP-OCRv5", "PP-OCRv6"...). Empty = the best one
+# the installed paddleocr has for the requested language.
+;paddleocr_version =
 
 # Tesseract language used by default if a client doesn't specify one
 # (rare in practice: PostcardOCR always sends its own -- see
@@ -511,17 +544,74 @@ max_content_length_mb = 25
 ;detection_objects_model_name = facebook/detr-resnet-101
 ;detection_device =
 
-# On a GPU shared with other uses (e.g. another service on the same
-# machine), a model that simpostcards has loaded (CLIP, BLIP, DETR --
-# each independently) otherwise stays resident in GPU memory forever
-# once used. Set this (in seconds) to automatically unload a model
-# that has been idle for longer than this, freeing its GPU memory back
-# for other uses; it transparently reloads (paying the load cost
-# again) on the next request that needs it. 0/unset (default): never
-# unload, matching the historical behaviour. A few minutes (e.g. 600 =
-# 10 minutes) is a reasonable starting point: long enough to avoid
-# reloading on every short pause between requests, short enough to
-# give memory back promptly once you're done for a while.
+# SAM segmentation (POST /api/compute_segments), used by the clients' mask
+# generation ("kttools masks generate", ktmanager "Masks") when they have
+# [DEFAULT] external_helper set: the server only segments, the clients pick
+# which segments are stamps (thresholds in their own [masks] section).
+# Needs transformers + torch on this server. Same rules as detection_*:
+# model and device are a server deployment choice, not a request parameter.
+# gpu_idle_timeout also unloads SAM when it stays unused.
+;segment_enabled = true
+;segment_model_name = facebook/sam-vit-base
+;segment_device =
+
+# Translation of the detection texts (caption and object labels), done here
+# when a client has external_helper set and sends its language: the "lang" of
+# POST /api/compute_detection, and POST /api/translate (used by "kttools
+# detect-translate" to translate texts that were stored in English). Uses
+# deep_translator (an online translation service: this server needs internet
+# access for it). If the language is not supported, or the translation fails,
+# the server logs a WARNING and tells the client, which warns the user: the
+# detection result is never lost, it just stays in English.
+# The free translation service allows about 5 requests per second (and 5000
+# characters per request): this server spaces its requests, groups many texts
+# into one request, and waits when the service answers "too many requests". If
+# the service still refuses, /api/translate answers HTTP 429 with a
+# Retry-After and "kttools detect-translate" waits and retries by itself
+# (what is already translated stays saved; running it again continues).
+;translate_enabled = true
+
+# Which engine translates:
+#  - google (default): Google's free web service, through deep_translator.
+#    It refuses this server's IP address (HTTP 429) after a burst of requests,
+#    and the refusal can last minutes or hours even at one request every few
+#    seconds. When that happens the server stops asking for 10 min, then 30
+#    min, then 2 h (so as not to prolong it) and answers 429; "kttools
+#    detect-translate" then tells you how long to wait.
+#  - marian: a local model (Helsinki-NLP/opus-mt-en-<lang>, ~300 MB per
+#    language, downloaded from Hugging Face on first use into HF_HOME). No rate
+#    limit, works offline afterwards, the text never leaves the machine.
+#    Needs: pip install pypostcards[translate-local]. Quality is that of a
+#    small translation model: fine for captions, a lone ambiguous word such as
+#    "tie" can be mistranslated (as with any translator given no context).
+#  - auto: google first, and the local model takes over as soon as google
+#    refuses this server. The recommended setting if google is sometimes
+#    refused: nothing to do on the client side.
+;translate_engine = google
+
+# Where the local model runs ("cpu" by default, which leaves the GPU to other
+# uses; "cuda" or "cuda:0" to use it) and the name of the model, with {lang}
+# replaced by the language code ("fr", "de"...).
+# On an AMD GPU with a ROCm build of torch, the device is called "cuda" (that is
+# how torch names it): translate_device = cuda. For a model this small and a
+# few hundred short texts, the CPU is usually just as practical.
+;translate_device = cpu
+;translate_marian_model = Helsinki-NLP/opus-mt-en-{lang}
+
+# Free the memory (GPU *and* RAM) of every model this server has loaded
+# (CLIP, BLIP, DETR, SAM) once it has not been used for this many seconds,
+# so the machine can give it to something else -- e.g. Open WebUI/Ollama
+# on the same GPU. A model is reloaded transparently (paying the load cost
+# again) on the next request that needs it, and is never unloaded while a
+# request is using it. 0/unset (default): never unload, matching the
+# historical behaviour. A few minutes (e.g. 300-600) is a reasonable
+# starting point: long enough to avoid reloading on every short pause
+# between requests, short enough to give memory back promptly. The check
+# runs 4 times per period, so unloading happens between 1x and 1.25x this
+# delay after the last use.
+# Each gunicorn worker watches (and unloads) its own models.
+# To free everything right now instead of waiting:
+#   curl -X POST http://host:8002/api/unload_models
 ;gpu_idle_timeout = 600
 
 
@@ -559,11 +649,63 @@ doubles_threshold = 90
 ;publish_full = 0
 
 
+[masks]
+# tkmanager (menu "Plus" > "Masques") / "kttools masks ..." : masks given to
+# pycolmap so that stamps, postmarks, the transparent background and the card
+# border produce no keypoints (stamps look alike from one card to another and
+# create wrong matches). Needs: pip install pypostcards[masks]
+# With [DEFAULT] external_helper set, SAM runs on that simpostcards server
+# (see segment_enabled in [simpostcards]) and only numpy, opencv and requests
+# are needed here; "kttools masks generate --local" forces a local run.
+# sam_model below is then ignored: the server's segment_model_name applies.
+#
+# Hugging Face SAM model used to find the stamps. "facebook/sam-vit-base" is
+# a good speed/quality compromise ("-large" and "-huge" are slower).
+;sam_model = facebook/sam-vit-base
+# Grid of SAM prompts (points per side). 32 is SAM's default; 20 is enough
+# for objects as big as a stamp and about 2.5x faster on CPU.
+;sam_points_per_side = 20
+# Longest side, in pixels, at which masks are stored and edited.
+;max_side = 1600
+# Border band ignored along the edge of the card (fraction of longest side).
+;border_margin = 0.004
+# A stamp candidate is a SAM segment whose area is between these fractions of
+# the card, which is close to a rectangle, and which touches the card edge
+# zone (fraction of width/height).
+;stamp_min_area = 0.004
+;stamp_max_area = 0.12
+;stamp_min_fill = 0.80
+;stamp_edge_zone = 0.15
+# Stamp masks are grown by this fraction of the longest side (perforations,
+# shadow, postmark overlapping the stamp).
+;stamp_dilate = 0.006
+;max_stamps = 3
+
 [tkimport]
 # OCR language(s) passed to the recognition engine when importing scans
 # (tesseract-style language codes, e.g. "fra", "fra+eng"). "fra" by
-# default.
+# default. PaddleOCR language codes ("fr", "en", "german"...) work with both
+# engines. PaddleOCR reads ONE language per call: with several, the first
+# one that is not English is used ("fra+eng" -> French, which reads English
+# too).
 ocr_langs = fra
+
+# OCR engine, chosen here whether it runs on this machine or on the server
+# (external_helper): "tesseract" (default) or "paddleocr". Also available as
+# --ocr-engine on "kttools add" and "kttools ocr". If the engine, or the
+# language for it, is not available where it would run, the import stops
+# before copying anything, with a message saying what to install or change.
+ocr_engine = tesseract
+
+# PaddleOCR only: minimum confidence (0-1) of a text line to keep it. Lower
+# keeps more text but also more noise read from textures (stone, foliage).
+# Empty = 0.5.
+;ocr_min_score = 0.5
+
+# PaddleOCR only, when it runs on this machine (not on the server, whose own
+# setting is paddleocr_device in [simpostcards]): "cpu", "gpu:0"... Empty =
+# PaddlePaddle's choice.
+;paddleocr_device =
 
 # White-pixel threshold (0-255) used when correcting/cropping a scan
 # against the scanner background, both in the tkimport GUI ("White

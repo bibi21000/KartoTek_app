@@ -12,10 +12,12 @@ Reprend la même logique de traitement que
 ``libpostcards.detection.PostcardDetection`` (mots-artefacts BLIP
 retirés, détections DETR dédoublonnées par libellé en gardant le
 meilleur score, triées par confiance décroissante) -- SANS la
-traduction (``deep_translator``) : elle reste toujours effectuée côté
-client (``PostcardDetection.translate()``), après réception de la
-légende/des libellés en anglais. Elle ne nécessite pas torch et n'a
-donc aucune raison d'être déportée ici.
+traduction : ce module ne produit que de l'anglais. La traduction
+(``deep_translator``, qui ne nécessite pas torch) est faite par la route
+(``POST /api/compute_detection``, champ ``lang``, voir
+``simpostcards.blueprints.api``) et ``libpostcards.langs``, puis les
+exclusions et la troncature restent appliquées côté client sur les
+libellés anglais.
 
 Modèles et device fixés par la configuration serveur (voir
 [simpostcards] detection_model_name / detection_objects_model_name /
@@ -128,38 +130,30 @@ class _DetectionModels:
         self._caption_idle_timer.configure(seconds)
         self._objects_idle_timer.configure(seconds)
 
-    @staticmethod
-    def _empty_cuda_cache() -> None:
-        try:
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception:
-            pass
 
-    def _unload_caption(self) -> None:
+    def _unload_caption(self) -> bool:
         """Callback de ``self._caption_idle_timer`` : voir
         ``_ClipEmbedder._unload`` dans embedder.py pour la note sur la
         sûreté vis-à-vis d'une requête BLIP déjà en cours."""
         with self._caption_lock:
             if self._model is None:
-                return
+                return False
             self._model = None
             self._processor = None
             self._device = None
             self._caption_model_name = None
-        self._empty_cuda_cache()
+        return True
 
-    def _unload_objects(self) -> None:
+    def _unload_objects(self) -> bool:
         """Callback de ``self._objects_idle_timer`` (voir _unload_caption)."""
         with self._objects_lock:
             if self._objects_model is None:
-                return
+                return False
             self._objects_model = None
             self._objects_processor = None
             self._objects_device = None
             self._objects_model_name = None
-        self._empty_cuda_cache()
+        return True
 
     def _ensure_caption(self, model_name: str, device: str | None) -> None:
         with self._caption_lock:
@@ -182,6 +176,11 @@ class _DetectionModels:
             self._caption_model_name = model_name
 
     def caption(self, image: Image.Image, model_name: str, device: str | None) -> str:
+        # busy() : voir libs._idle_unload (pas de déchargement en plein calcul).
+        with self._caption_idle_timer.busy():
+            return self._caption(image, model_name, device)
+
+    def _caption(self, image: Image.Image, model_name: str, device: str | None) -> str:
         import torch
 
         self._ensure_caption(model_name, device)
@@ -216,6 +215,11 @@ class _DetectionModels:
             self._objects_model_name = model_name
 
     def detect_objects(self, image: Image.Image, model_name: str, device: str | None,
+                        threshold: float) -> list[tuple[str, float]]:
+        with self._objects_idle_timer.busy():
+            return self._detect_objects(image, model_name, device, threshold)
+
+    def _detect_objects(self, image: Image.Image, model_name: str, device: str | None,
                         threshold: float) -> list[tuple[str, float]]:
         import torch
 

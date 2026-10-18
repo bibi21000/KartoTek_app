@@ -60,12 +60,18 @@ ARG TORCH_INDEX_URL=""
 #     "latest" on repo.radeon.com now serves the newer, differently-
 #     packaged Core SDK (amdrocm-* names, /opt/rocm/core-X.Y layout) --
 #     do not switch to "latest" without rewriting the ROCm blocks below.
-ARG COLMAP_VERSION=4.2.0
+ARG COLMAP_VERSION=4.2.1
 ARG CUDA_ARCHITECTURES="75;80;86;89;90"
 ARG HIP_ARCHITECTURES="gfx1150"
 ARG ROCM_VERSION=6.4
 
 ARG PYTHON_VERSION=3.14
+# PaddleOCR (moteur OCR alternatif, choisi par les clients avec [tkimport]
+# ocr_engine = paddleocr). Désactivé par défaut : PaddlePaddle n'a pas de roue
+# pour Python 3.14. Pour l'activer :
+#   --build-arg PYTHON_VERSION=3.13 --build-arg WITH_PADDLEOCR=1
+ARG WITH_PADDLEOCR=0
+ARG PADDLE_INDEX_URL=https://www.paddlepaddle.org.cn/packages/stable/cpu/
 
 # ----------------------------------------------------------------------------
 # Build-time only proxy
@@ -102,7 +108,10 @@ RUN set -eux; \
         } > /etc/apt/apt.conf.d/01proxy; \
     fi
 
-ENV PIP_NO_CACHE_DIR=false
+# ENV PIP_NO_CACHE_DIR=false
+ENV PIP_PROXY=${HTTPS_PROXY:-${HTTP_PROXY}} \
+    PIP_DEFAULT_TIMEOUT=300 \
+    PIP_RETRIES=10
 
 # Python 3.14 from deadsnakes (not in Ubuntu 24.04's own archive, which
 # ships 3.12). software-properties-common provides add-apt-repository.
@@ -241,14 +250,45 @@ RUN set -eux; \
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
     fi
 
-RUN pip install . && pip install .[similar] && \
+# PaddlePaddle : build CPU, volontairement. Ses roues pip n'existent qu'en CPU
+# et en NVIDIA CUDA ; il n'y en a PAS pour AMD (ROCm), qui demande une
+# compilation depuis les sources (non testée sur un iGPU RDNA comme le
+# gfx1150). L'OCR PaddleOCR tourne donc sur le CPU (paddleocr_device = cpu) ;
+# le GPU reste à torch (CLIP/BLIP/DETR/SAM, traduction Marian) et Open WebUI.
+# --extra-index-url plutôt que -i : les dépendances (numpy, protobuf...)
+# viennent de PyPI.
+RUN set -eux; \
+    if [ "$WITH_PADDLEOCR" = "1" ]; then \
+        case "$PYTHON_VERSION" in \
+            3.9|3.10|3.11|3.12|3.13) ;; \
+            *) echo "WITH_PADDLEOCR=1 needs Python 3.9-3.13 (no PaddlePaddle wheel for ${PYTHON_VERSION}): rebuild with --build-arg PYTHON_VERSION=3.13" >&2; exit 1 ;; \
+        esac; \
+        pip install paddlepaddle --extra-index-url "$PADDLE_INDEX_URL"; \
+    fi
+
+RUN pip install . && \
+    pip install .[similar] && \
     pip install .[deskew] && \
     pip install .[ocr] && \
+    if [ "$WITH_PADDLEOCR" = "1" ]; then pip install .[paddleocr]; fi && \
     pip install .[travel] && \
     pip install .[detection] && \
+    pip install .[translate-local] && \
+    pip install .[masks] && \
     pip install .[colmap] && \
     pip install .[flask] && \
     pip install .[prod]
+
+# paddleocr tire opencv-contrib-python (version graphique d'OpenCV, qui a besoin
+# de libGL/libglib/libxcb, absents de l'image finale : `import cv2` y échouerait)
+# et cohabite mal avec opencv-python-headless de l'extra masks (même dossier
+# cv2/ : la dernière variante installée écrase les autres). Une seule build :
+RUN set -eux; \
+    if [ "$WITH_PADDLEOCR" = "1" ]; then \
+        pip uninstall -y opencv-python opencv-contrib-python opencv-python-headless opencv-contrib-python-headless; \
+        pip install "opencv-contrib-python-headless==4.10.0.84"; \
+        python -c "import cv2, paddle, paddleocr; print('cv2', cv2.__version__)"; \
+    fi
 
 # ============================================================================
 # Stage 2: runtime — small final image, no build toolchain.
@@ -314,7 +354,8 @@ ENV GUNICORN_TIMEOUT=120 \
 # TRANSFORMERS_CACHE is kept too for older transformers releases that
 # don't yet honor HF_HOME.
 ENV HF_HOME=/data/hf_cache \
-    TRANSFORMERS_CACHE=/data/hf_cache
+    TRANSFORMERS_CACHE=/data/hf_cache \
+    PADDLE_PDX_CACHE_HOME=/data/paddlex_cache
 
 # Python 3.14 runtime interpreter (must match the venv baked in the
 # builder stage -- a venv only symlinks to the system interpreter, it
@@ -331,7 +372,7 @@ RUN apt-get update && apt-get install -y software-properties-common ca-certifica
 # here too (Ubuntu universe "hipcc"/ROCm 6.4 symlink regression) -- see
 # the long comment in that stage.
 RUN set -eux; \
-    apt-get update && apt-get install -y \
+    apt-get update && apt-get install -y libgomp1 \
         tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-deu tesseract-ocr-spa; \
     if [ "$TORCH_BACKEND" = "cuda" ]; then \
         apt-get install -y nvidia-cuda-toolkit; \

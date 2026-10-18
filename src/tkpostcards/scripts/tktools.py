@@ -4,6 +4,8 @@ The postcard scripts
 ------------------------
 
 """
+import contextlib
+import logging
 import os
 
 import click
@@ -127,6 +129,8 @@ def prepare(common, prefix, profile, white_threshold):
         common.importdir, next_id,
         prefix=prefix, profile=scan_profile, white_threshold=white_threshold,
         on_pair=_on_pair,
+        external_helper=common.external_helper,
+        external_helper_timeout=common.external_helper_timeout,
     )
 
 @scan.command(name="profiles", help=_("List available import profiles (\"profils d'import\")"))
@@ -241,9 +245,16 @@ def scan_recompress_cmd(common, dry_run):
 @scan.command(help=_("Add postcards"))
 @click.argument('pcid', default=None, nargs=-1)
 @click.option('--ocr-langs', default=None,
-              help=_("OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"). "
+              help=_("OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"; "
+                     "PaddleOCR codes such as \"fr\" work with both engines). "
                      "Defaults to the [tkimport] ocr_langs setting in the "
                      "configuration file."))
+@click.option('--ocr-engine', default=None,
+              type=click.Choice(['tesseract', 'paddleocr'], case_sensitive=False),
+              help=_("OCR engine. Defaults to the [tkimport] ocr_engine setting in "
+                     "the configuration file, or \"tesseract\". Runs here, or on the "
+                     "simpostcards server (external_helper), which must have the "
+                     "engine."))
 @click.option('--detect-lang', default=None,
               help=_("Target language for the translated caption (e.g. \"fr\"). "
                      "Defaults to the [tkimport] detect_lang setting in the "
@@ -255,7 +266,7 @@ def scan_recompress_cmd(common, dry_run):
                      "Defaults to the [tkimport] excluded_objects setting in "
                      "the configuration file."))
 @click.pass_obj
-def add(common, pcid, ocr_langs, detect_lang, excluded_objects):
+def add(common, pcid, ocr_langs, ocr_engine, detect_lang, excluded_objects):
     from ..libs.scan_add import add_pairs
 
     if pcid is None:
@@ -287,17 +298,74 @@ def add(common, pcid, ocr_langs, detect_lang, excluded_objects):
             click.echo(f'Work on {added.pcid}')
         pbar.update(1)
 
+    ocr_settings = _ocr_settings(common, ocr_engine)
     try:
-        add_pairs(common.datadir, common.importdir, ids, on_progress=_on_progress,
-                  ocr_lang=ocr_langs, torch_device=common.torch_device,
-                  detect_lang=detect_lang, model_name=model_name,
-                  objects_model_name=objects_model_name,
-                  objects_threshold=objects_threshold, max_objects=max_objects,
-                  excluded_objects=excluded_objects,
-                  external_helper=common.external_helper,
-        external_helper_timeout=common.external_helper_timeout)
+        with _ocr_errors():
+            add_pairs(common.datadir, common.importdir, ids,
+                      on_progress=_on_progress, on_issue=_echo_issue,
+                      **ocr_settings, ocr_lang=ocr_langs,
+                      torch_device=common.torch_device,
+                      detect_lang=detect_lang, model_name=model_name,
+                      objects_model_name=objects_model_name,
+                      objects_threshold=objects_threshold,
+                      max_objects=max_objects,
+                      excluded_objects=excluded_objects,
+                      external_helper=common.external_helper,
+                      external_helper_timeout=common.external_helper_timeout)
     finally:
         pbar.close()
+
+def _echo_issue(issue):
+    """Signalement non bloquant (langue indisponible, traduction en échec) :
+    vu par l'utilisateur sur la sortie d'erreur, en plus des logs."""
+    click.secho(_("WARNING: ") + str(issue), fg="yellow", err=True)
+
+
+@contextlib.contextmanager
+def _ocr_errors():
+    """Erreurs de langue ou de moteur OCR -> message lisible (le détail est
+    aussi dans les logs du serveur quand l'OCR y tourne)."""
+    from libpostcards.langs import EngineUnavailable, LanguageUnavailable
+    try:
+        yield
+    except LanguageUnavailable as exc:
+        raise _language_error(exc)
+    except EngineUnavailable as exc:
+        raise click.ClickException(str(exc))
+
+
+def _ocr_settings(common, ocr_engine):
+    """Moteur OCR et réglages choisis par le client : option de ligne de
+    commande, sinon [tkimport] ocr_engine / ocr_min_score / paddleocr_device
+    du fichier de configuration. ValueError -> ClickException."""
+    from libpostcards.langs import normalize_ocr_engine
+    conf = common.conf
+    try:
+        engine = normalize_ocr_engine(
+            ocr_engine or conf.get("tkimport", "ocr_engine", fallback="tesseract"))
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+    raw_score = conf.get("tkimport", "ocr_min_score", fallback="").strip()
+    try:
+        min_score = float(raw_score) if raw_score else None
+    except ValueError:
+        raise click.ClickException(
+            _("[tkimport] ocr_min_score must be a number between 0 and 1"))
+    device = conf.get("tkimport", "paddleocr_device", fallback="").strip() or None
+    return {"ocr_engine": engine, "ocr_min_score": min_score,
+            "paddle_device": device}
+
+
+def _language_error(exc):
+    """LanguageUnavailable -> ClickException lisible (le détail est aussi
+    consigné dans les logs du serveur)."""
+    lines = [str(exc)]
+    if exc.service == "translate" and exc.available:
+        lines.append(_("Supported language codes: ") + ", ".join(exc.available))
+    elif exc.service == "ocr" and exc.available:
+        lines.append(_("OCR languages installed there: ") + ", ".join(exc.available))
+    return click.ClickException("\n".join(lines))
+
 
 @cli.group()
 def backup():
@@ -584,11 +652,18 @@ def duplicates(common, threshold, max_results):
 @cli.command(help=_("Redo OCR for postcards"))
 @click.argument('pcid', default=None, nargs=-1)
 @click.option('--ocr-langs', default=None,
-              help=_("OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"). "
+              help=_("OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"; "
+                     "PaddleOCR codes such as \"fr\" work with both engines). "
                      "Defaults to the [tkimport] ocr_langs setting in the "
                      "configuration file."))
+@click.option('--ocr-engine', default=None,
+              type=click.Choice(['tesseract', 'paddleocr'], case_sensitive=False),
+              help=_("OCR engine. Defaults to the [tkimport] ocr_engine setting in "
+                     "the configuration file, or \"tesseract\". Runs here, or on the "
+                     "simpostcards server (external_helper), which must have the "
+                     "engine."))
 @click.pass_obj
-def ocr(common, pcid, ocr_langs):
+def ocr(common, pcid, ocr_langs, ocr_engine):
     from libpostcards.model import Model
     from libpostcards.ocr import PostcardOCR
     if pcid is None:
@@ -597,12 +672,17 @@ def ocr(common, pcid, ocr_langs):
     if not ocr_langs:
         ocr_langs = common.conf.get("tkimport", "ocr_langs", fallback="fra")
 
+    settings = _ocr_settings(common, ocr_engine)
     ocr = PostcardOCR(lang=ocr_langs, external_helper=common.external_helper,
-        external_helper_timeout=common.external_helper_timeout)
+        external_helper_timeout=common.external_helper_timeout,
+        engine=settings["ocr_engine"], min_score=settings["ocr_min_score"],
+        paddle_device=settings["paddle_device"])
+    with _ocr_errors():
+        ocr.check_language()   # avant de commencer : moteur ou langue indisponible ?
     ids = split_ids(pcid)
 
     pbar = tqdm(total=len(ids), desc=_("Postcards"))
-    with Model(common.datadir) as model:
+    with Model(common.datadir) as model, _ocr_errors():
         for pci in ids:
             card = model.load_json(pci)
             card['recto_ocr'] = ocr.to_string(os.path.join(common.datadir, "cards", '%s_R.%s'%(pci, common.file_format)))
@@ -646,6 +726,7 @@ def ocr(common, pcid, ocr_langs):
 @click.pass_obj
 def detect(common, pcid, detect_lang, model_name, objects_model_name, objects_threshold,
            max_objects, excluded_objects):
+    from libpostcards.langs import is_english
     from libpostcards.model import Model
     from libpostcards.detection import PostcardDetection
     if pcid is None:
@@ -684,16 +765,180 @@ def detect(common, pcid, detect_lang, model_name, objects_model_name, objects_th
     )
     ids = split_ids(pcid)
 
+    # Langue de traduction indisponible ? On le dit tout de suite (et c'est
+    # dans les logs) : la détection se fait quand même, en anglais.
+    issue = detector.check_language()
+    shown = set()
+    if issue is not None:
+        _echo_issue(issue)
+        shown.add((issue.code, issue.lang))
+
+    untranslated = []
     pbar = tqdm(total=len(ids), desc=_("Postcards"))
     with Model(common.datadir) as model:
         for pci in ids:
             card = model.load_json(pci)
             recto = os.path.join(common.datadir, "cards", '%s_R.%s'%(pci, common.file_format))
-            card['detected_content'] = detector.to_string(recto)
-            card['detected_objects'] = detector.to_objects_string(recto)
+            content = detector.describe(recto)
+            objects = detector.describe_objects(recto)
+            card['detected_content'] = content.text
+            card['detected_content_lang'] = content.lang
+            card['detected_objects'] = objects.text
+            card['detected_objects_lang'] = objects.lang
             model.write_json(card)
+            for new_issue in content.issues + objects.issues:
+                if (new_issue.code, new_issue.lang) not in shown:
+                    shown.add((new_issue.code, new_issue.lang))
+                    _echo_issue(new_issue)
+            if (content.text and is_english(content.lang)
+                    and not is_english(detect_lang)):
+                untranslated.append(pci)
             pbar.update(1)
     pbar.close()
+    if untranslated:
+        click.secho(
+            _("{n} postcard(s) were stored in English (language {lang!r} "
+              "unavailable or translation failed); translate them with: "
+              "kttools detect-translate --lang {lang}").format(
+                n=len(untranslated), lang=detect_lang),
+            fg="yellow", err=True)
+
+@cli.command(name="detect-translate", help=_(
+    "Translate the detection texts (caption and objects) that are still in "
+    "English, using the simpostcards server (external_helper). A text is "
+    "considered untranslated when its language marker is \"en\" (detection "
+    "language unavailable or translation failed at the time); texts of cards "
+    "stored before the markers existed are recognised by a heuristic (see "
+    "--no-guess). Texts edited by hand in ktmanager are never touched."))
+@click.argument('pcid', default=None, nargs=-1)
+@click.option('--collection', default=None,
+              help=_("Only the cards of this collection"))
+@click.option('--lang', default=None,
+              help=_("Target language (e.g. \"fr\"). Defaults to the [tkimport] "
+                     "detect_lang setting in the configuration file, or \"fr\"."))
+@click.option('--dry-run', is_flag=True, default=False,
+              help=_("Only list what would be translated"))
+@click.option('--no-guess', is_flag=True, default=False,
+              help=_("Only translate texts whose marker says \"en\"; do not "
+                     "guess for older cards that have no marker"))
+@click.pass_obj
+def detect_translate(common, pcid, collection, lang, dry_run, no_guess):
+    import requests
+    from libpostcards.langs import (
+        HelperTranslator, LanguageUnavailable, TranslationError,
+        TranslatorUnavailable, is_english)
+    from libpostcards.model import Model
+    from ..libs.detect_translate import translate_cards
+
+    if not common.external_helper:
+        raise click.ClickException(_(
+            "The translation is done by the simpostcards server: set "
+            "external_helper in the configuration file (or use "
+            "--external-helper)."))
+    if not lang:
+        lang = common.conf.get("tkimport", "detect_lang", fallback="fr")
+    if is_english(lang):
+        click.echo(_("The detection texts are already in English: nothing to do."))
+        return
+
+    translator = HelperTranslator(
+        common.external_helper, common.external_helper_timeout,
+        on_wait=lambda delay, n: click.secho(
+            _("The translation service is rate-limiting the server: waiting "
+              "{delay:.0f}s before retrying ({n}/3)...").format(delay=delay, n=n),
+            fg="yellow", err=True))
+    try:
+        code = translator.check_language(lang)
+    except LanguageUnavailable as exc:
+        # Le serveur l'a déjà consigné dans ses logs ; on le consigne aussi
+        # ici et on le dit à l'utilisateur.
+        logging.getLogger("tkpostcards").warning(
+            "detect-translate: language %r unavailable on %s: %s",
+            lang, common.external_helper, exc)
+        raise _language_error(exc)
+    except (TranslatorUnavailable, TranslationError) as exc:
+        raise click.ClickException(str(exc))
+    except requests.RequestException as exc:
+        raise click.ClickException(
+            _("Cannot reach the server {helper}: {exc}").format(
+                helper=common.external_helper, exc=exc))
+
+    if translator.engine is None:
+        # Un serveur plus ancien que ce client : il ne répond pas "engine".
+        # (Sans cela, ses refus de Google ressemblent à ceux d'un serveur à
+        # jour, et on corrige le mauvais côté.)
+        click.secho(_(
+            "WARNING: the server did not report a translation engine: it runs "
+            "an older simpostcards (no local translation engine, no protection "
+            "against Google's refusals). Redeploy it from the latest sources."),
+            fg="yellow", err=True)
+    else:
+        click.echo(_("Translation engine on the server: {engine}").format(
+            engine=translator.engine))
+
+    ids = _select_ids(common, pcid, collection)
+    if not ids:
+        click.echo(_("No card selected"))
+        return
+
+    pbar = tqdm(total=len(ids), desc=_("Translate"), disable=dry_run)
+
+    def _progress(done, total):
+        # ``total`` : cartes ayant quelque chose à traduire, pas toutes
+        pbar.total = total
+        pbar.update(done - pbar.n)
+
+    try:
+        with Model(common.datadir) as model:
+            summary = translate_cards(
+                model, ids, translator, lang, code, guess=not no_guess,
+                dry_run=dry_run,
+                on_progress=_progress)
+    except requests.RequestException as exc:
+        raise click.ClickException(
+            _("Lost the server {helper}: {exc}").format(
+                helper=common.external_helper, exc=exc))
+    finally:
+        pbar.close()
+
+    planned = len(summary.planned)
+    if dry_run:
+        for cid, field, reason in summary.planned:
+            click.echo("%s: %s (%s)" % (cid, field, reason))
+        if summary.unknown_samples:
+            click.echo(_("Examples of texts judged \"unknown\" (left as is):"))
+            for cid, field, text in summary.unknown_samples:
+                click.echo("  %s: %s = %s" % (cid, field, (text or "")[:90]))
+    if summary.error:
+        # Interrompu : dire où on en est (le bilan "0 de 0" d'avant faisait
+        # croire qu'il n'y avait rien à faire).
+        click.echo(_("{done} of {planned} text(s) translated before the "
+                     "interruption").format(done=summary.fields_translated,
+                                            planned=planned))
+    else:
+        verb = _("would be translated") if dry_run else _("translated")
+        click.echo(_("{fields} text(s) in {cards} card(s) {verb} to {lang}").format(
+            fields=summary.fields_translated, cards=summary.cards_changed,
+            verb=verb, lang=code))
+    if summary.skipped:
+        explain = {
+            "empty": _("nothing to translate"),
+            "done": _("already in {lang}").format(lang=code),
+            "manual": _("edited by hand, never touched"),
+            "other": _("marked as another language"),
+            "unknown": _("no language marker and not recognisable as English: "
+                         "assumed already translated (check with --dry-run)"),
+        }
+        click.echo(_("Left as is:"))
+        for reason, count in sorted(summary.skipped.items()):
+            click.echo("  %s: %d (%s)" % (reason, count, explain.get(reason, "")))
+    if summary.missing:
+        click.echo(_("No JSON for: ") + ", ".join(summary.missing))
+    if summary.error:
+        raise click.ClickException(_(
+            "Translation interrupted ({error}). What was done is saved; "
+            "run the command again to continue.").format(error=summary.error))
+
 
 @cli.command(help=_("Redo transparent on postcards"))
 @click.argument('pcid', default=None, nargs=-1)
@@ -709,7 +954,7 @@ def detect(common, pcid, detect_lang, model_name, objects_model_name, objects_th
 @click.pass_obj
 def transparency(common, pcid, profile, white_threshold):
     import cv2
-    from ..libs.transparency import TiffBackgroundRemover
+    from libpostcards.transparency import TiffBackgroundRemover
     from ..libs.scan_profiles import get_active_profile, load_profiles
 
     if profile:
@@ -887,3 +1132,143 @@ def fix_doubles(common, dryrun):
         return 0
 
     fix_doubles(Path(common.datadir), dry_run=dryrun)
+
+
+# ── Masks (pycolmap) ────────────────────────────────────────────────────────
+
+def _select_ids(common, pcid, collection):
+    """Ids explicites (``12 30-40``) et/ou tous ceux d'une collection ;
+    sans aucun des deux, toutes les cartes."""
+    from libpostcards.model import Model
+
+    ids = [str(i) for i in split_ids(pcid)] if pcid else []
+    if collection or not ids:
+        with Model(common.datadir) as model:
+            in_collection = [str(c['id'])
+                             for c in model.list_cards(collection=collection)]
+        if ids:
+            ids = [i for i in ids if i in set(in_collection)]
+        else:
+            ids = in_collection
+    return ids
+
+
+@cli.group(help=_("Masks (stamps, borders) to feed pycolmap"))
+def masks():
+    pass
+
+
+@masks.command(name="generate", help=_(
+    "Generate masks: SAM detects stamps on the recto, the transparent "
+    "background and the card border are masked too. Masks edited by hand "
+    "in ktmanager are never overwritten unless --force-manual."))
+@click.argument('pcid', default=None, nargs=-1)
+@click.option('--collection', default=None,
+              help=_("Only the cards of this collection"))
+@click.option('--side', type=click.Choice(['R', 'V']), default='R',
+              help=_("R = recto (default), V = verso"))
+@click.option('--force', is_flag=True, default=False,
+              help=_("Regenerate existing automatic masks"))
+@click.option('--force-manual', is_flag=True, default=False,
+              help=_("Also overwrite masks edited by hand"))
+@click.option('--no-sam', is_flag=True, default=False,
+              help=_("Skip stamp detection: only mask the transparent "
+                     "background and the border (fast, no torch needed)"))
+@click.option('--sam-model', default=None,
+              help=_("Hugging Face SAM model. Defaults to [masks] sam_model, "
+                     "or facebook/sam-vit-base. Ignored with an external "
+                     "helper: the server's segment_model_name applies."))
+@click.option('--local', is_flag=True, default=False,
+              help=_("Run SAM here even if an external helper is configured "
+                     "([DEFAULT] external_helper or --external-helper)"))
+@click.pass_obj
+def masks_generate(common, pcid, collection, side, force, force_manual,
+                   no_sam, sam_model, local):
+    from libpostcards.masks import (
+        MaskParams, generate_masks, sam_model_from_config)
+
+    ids = _select_ids(common, pcid, collection)
+    if not ids:
+        click.echo(_("No card selected"))
+        return
+    params = MaskParams.from_config(common.conf)
+    model = sam_model or sam_model_from_config(common.conf)
+    helper = None if (local or no_sam) else common.external_helper
+    if helper:
+        click.echo(_("SAM computed by {helper}").format(helper=helper))
+
+    pbar = tqdm(total=len(ids), desc=_("Masks"))
+    notes = []
+
+    def _on_progress(i, total, pid, status, info):
+        pbar.update(1)
+        if status == "done":
+            notes.append("%s: %s" % (pid, _("{n} stamp(s)").format(
+                n=info.get("stamps", 0))))
+        elif status in ("missing", "error"):
+            notes.append("%s: %s %s" % (pid, status, info.get("error", "")))
+
+    try:
+        counts = generate_masks(
+            common.datadir, ids, file_format=common.file_format, side=side,
+            force=force, force_manual=force_manual, use_sam=not no_sam,
+            model=model, device=common.torch_device, params=params,
+            external_helper=helper,
+            external_helper_timeout=common.external_helper_timeout,
+            on_progress=_on_progress)
+    finally:
+        pbar.close()
+    for n in notes:
+        click.echo(n)
+    click.echo(_("{done} generated, {skipped} skipped, {missing} without "
+                 "image, {error} failed").format(**counts))
+
+
+@masks.command(name="status", help=_("How many cards have a mask"))
+@click.option('--collection', default=None)
+@click.option('--side', type=click.Choice(['R', 'V']), default='R')
+@click.argument('pcid', default=None, nargs=-1)
+@click.pass_obj
+def masks_status(common, collection, side, pcid):
+    from libpostcards.masks import MaskStore
+
+    ids = _select_ids(common, pcid, collection)
+    store = MaskStore(common.datadir, common.file_format, side)
+    tally = {None: [], 'auto': [], 'manual': []}
+    for pid in ids:
+        tally[store.source(pid)].append(pid)
+    click.echo(_("{n} cards: {a} automatic, {m} manual, {x} without mask").format(
+        n=len(ids), a=len(tally['auto']), m=len(tally['manual']),
+        x=len(tally[None])))
+    if tally[None]:
+        click.echo(_("Without mask: ") + ", ".join(tally[None]))
+
+
+@masks.command(name="export", help=_(
+    "Write images/ and masks/ ready for pycolmap (mask_path = masks/, "
+    "image_path = images/)"))
+@click.argument('pcid', default=None, nargs=-1)
+@click.option('--collection', default=None,
+              help=_("Only the cards of this collection"))
+@click.option('--side', type=click.Choice(['R', 'V']), default='R')
+@click.option('--out', 'out_dir', required=True,
+              type=click.Path(file_okay=False),
+              help=_("Output directory (images/ and masks/ are created in it)"))
+@click.option('--max-side', default=2000, show_default=True,
+              help=_("Longest side of the exported images, in pixels"))
+@click.pass_obj
+def masks_export(common, pcid, collection, side, out_dir, max_side):
+    from libpostcards.masks import export_colmap
+
+    ids = _select_ids(common, pcid, collection)
+    pbar = tqdm(total=len(ids), desc=_("Export"))
+    try:
+        exported, missing = export_colmap(
+            common.datadir, ids, out_dir, file_format=common.file_format,
+            side=side, max_side=max_side,
+            on_progress=lambda i, t, pid: pbar.update(1))
+    finally:
+        pbar.close()
+    click.echo(_("{n} cards exported to {d}").format(n=exported, d=out_dir))
+    if missing:
+        click.echo(_("Image not found: ") + ", ".join(missing))

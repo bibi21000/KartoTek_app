@@ -168,16 +168,16 @@ class _ClipEmbedder:
         """Voir [simpostcards] gpu_idle_timeout / le docstring du module."""
         self._idle_timer.configure(seconds)
 
-    def _unload(self) -> None:
+    def _unload(self) -> bool:
         """Callback de ``self._idle_timer`` : vide les références au
-        modèle et rend sa mémoire GPU. Sûr même pendant une requête en
-        cours (voir la note sur les références Python dans le
-        docstring du module) : cette requête garde sa propre référence
-        locale au modèle, qui continue de fonctionner normalement
-        jusqu'à ce qu'elle se termine."""
+        modèle (la mémoire est rendue ensuite par ``release_memory()``,
+        voir libs._idle_unload). Renvoie True si un modèle était chargé.
+        Le minuteur ne l'appelle pas pendant une requête (``busy()``) ;
+        si cela arrivait quand même, cette requête garde sa propre
+        référence locale au modèle et se termine normalement."""
         with self._lock:
             if self._model is None:
-                return
+                return False
             self._model = None
             self._preprocess = None
             self._device = None
@@ -185,16 +185,8 @@ class _ClipEmbedder:
             self._pretrained = None
             self._auto_device = None
             self._load_error = None
-        self._empty_cuda_cache()
+        return True
 
-    @staticmethod
-    def _empty_cuda_cache() -> None:
-        try:
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception:
-            pass
 
     def _ensure_loaded(self, model_name: str, pretrained: str, device: str | None,
                         offline: bool) -> None:
@@ -258,6 +250,13 @@ class _ClipEmbedder:
         return emb.squeeze().cpu().tolist()
 
     def compute_embedding(self, image: Image.Image, model_name: str, pretrained: str,
+                           device: str | None, offline: bool = False) -> list[float]:
+        # busy() : pas de déchargement tant que ce calcul (chargement du
+        # modèle compris) n'est pas terminé -- voir libs._idle_unload.
+        with self._idle_timer.busy():
+            return self._compute_embedding(image, model_name, pretrained, device, offline)
+
+    def _compute_embedding(self, image: Image.Image, model_name: str, pretrained: str,
                            device: str | None, offline: bool = False) -> list[float]:
         self._ensure_loaded(model_name, pretrained, device, offline)
         self._idle_timer.touch()

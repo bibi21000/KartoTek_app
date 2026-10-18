@@ -152,6 +152,8 @@ def _translatable_field_labels():  # pragma: no cover
         _("status_active"),
         _("status_exchanged"),
         _("status_trade"),
+        # App._build_fields (storage)
+        _("field_storage"),
         # CoordDialog
         _("coord_lat"),
         _("coord_lon"),
@@ -918,6 +920,7 @@ class GalleryView(tk.Toplevel):
     HDR_H        = 18   # header text height
     BADGE_H      = 14   # R/V badge height
     IMG_PAD      = 3    # padding around the image within the tile
+    NO_COLLECTION = "\0no-collection"   # filter value: cards without collection
 
     def __init__(self, parent: "App", t):
         super().__init__(parent)
@@ -942,6 +945,17 @@ class GalleryView(tk.Toplevel):
         self._cols_var = tk.IntVar(value=4)
         self._sel_id: int | None = (parent._ids[parent._current_idx]
                                     if parent._ids else None)
+
+        # Collection filter (local to the gallery: it narrows down the
+        # cards of the main window's navigation list, it does not change
+        # that list). None = all; NO_COLLECTION = cards in no collection.
+        self._coll_filter: str | None = None
+        self._coll_var = tk.StringVar(value=_("tsearch_all"))
+        self._coll_label_to_name: dict[str, str] = {}
+        # {card id: [collection, …]}, see _load_collection_map()
+        self._card_collections: dict[int, list[str]] = {}
+        self._reload_requested = False
+        self._load_collection_map()
 
         # Map of clickable areas  [(x0,y0,x1,y1, cid), …]
         self._hit_zones: list[tuple] = []
@@ -1009,6 +1023,17 @@ class GalleryView(tk.Toplevel):
                            indicatoron=0, padx=8, pady=3,
                            highlightthickness=0).pack(side=tk.LEFT, padx=2)
 
+        tk.Label(tb, text=_("nav_filter_label"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL).pack(side=tk.LEFT, padx=(20, 4))
+        # The list is rebuilt each time it opens (postcommand): only the
+        # collections present in the cards currently shown, with counts.
+        self._coll_menu = ttk.Combobox(tb, textvariable=self._coll_var,
+                                       values=[_("tsearch_all")], width=22,
+                                       font=FONT_INPUT, state="readonly",
+                                       postcommand=self._refresh_coll_choices)
+        self._coll_menu.pack(side=tk.LEFT)
+        self._coll_menu.bind("<<ComboboxSelected>>", self._on_coll_changed)
+
         tk.Button(tb, text=_("gallery_refresh"), command=self._hard_refresh,
                   bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
                   relief=tk.FLAT, padx=10).pack(side=tk.RIGHT, padx=12)
@@ -1045,15 +1070,21 @@ class GalleryView(tk.Toplevel):
     # ── Background loading ───────────────────────────────────────────────────
     def _start_loading(self):
         if self._loading:
+            # A load is running: when it ends, _poll_queue starts another
+            # one for the cards that became visible in the meantime
+            # (filter changed while loading).
+            self._reload_requested = True
             return
-        to_load = [cid for cid in self._app._ids
+        ids = self._visible_ids()
+        to_load = [cid for cid in ids
                    if (cid, "R") not in self._pil or (cid, "V") not in self._pil]
         # Preload titles too
-        for cid in self._app._ids:
+        for cid in ids:
             if cid not in self._titles:
                 self._titles[cid] = self._read_title(cid)
 
         if not to_load:
+            self._status.set(_("gallery_ready").format(total=len(ids)))
             self._schedule_draw()
             return
         self._loading = True
@@ -1097,7 +1128,10 @@ class GalleryView(tk.Toplevel):
                 if item is None:
                     self._loading = False
                     self._status.set(
-                        _("gallery_ready").format(total=len(self._app._ids)))
+                        _("gallery_ready").format(total=len(self._visible_ids())))
+                    if self._reload_requested:
+                        self._reload_requested = False
+                        self._start_loading()
                 else:
                     cid, side, img, done, total = item
                     self._pil[(cid, side)] = img
@@ -1179,8 +1213,12 @@ class GalleryView(tk.Toplevel):
         hit: list[tuple] = []
         title_hit: list[tuple] = []
         self._cv.delete("all")
+        ids = self._visible_ids()
+        if not ids:
+            self._cv.create_text(cv_w // 2, 60, text=_("gall_empty"),
+                                 fill=FG_LABEL, font=FONT_LABEL)
 
-        for pos, cid in enumerate(self._app._ids):
+        for pos, cid in enumerate(ids):
             row, col_i = divmod(pos, cols)
             x0 = M + col_i * (tile_w + M)
             y0 = M + row   * (tile_h + M)
@@ -1231,7 +1269,7 @@ class GalleryView(tk.Toplevel):
             hit.append((x0, y0, x1, y1, cid))
 
         # Total canvas height
-        n_rows = (len(self._app._ids) + cols - 1) // cols
+        n_rows = (len(ids) + cols - 1) // cols
         total_h = n_rows * (tile_h + M) + M
         self._cv.configure(scrollregion=(0, 0, cv_w, total_h))
 
@@ -1348,12 +1386,94 @@ class GalleryView(tk.Toplevel):
         else:
             self._cv.yview_scroll(3,  "units")
 
+    # ── Collection filter ─────────────────────────────────────────────────────
+    def _load_collection_map(self):
+        """Read the collections of every card once (the filter needs them
+        for each card of the list, and loading every JSON file would be
+        slow)."""
+        try:
+            self._card_collections = {
+                int(c["id"]): [str(x) for x in (c.get("collections") or [])]
+                for c in self._app.model.list_cards()
+            }
+        except Exception:
+            self._card_collections = {}
+
+    def _visible_ids(self) -> list[int]:
+        """Cards shown: the main window's list, narrowed by the filter."""
+        ids = self._app._ids
+        flt = self._coll_filter
+        if flt is None:
+            return ids
+        if flt == self.NO_COLLECTION:
+            return [c for c in ids if not self._card_collections.get(c)]
+        return [c for c in ids if flt in self._card_collections.get(c, ())]
+
+    def _refresh_coll_choices(self):
+        """Fill the combobox with the collections used by the cards of the
+        main window's list, each with its number of cards (configured
+        collections first, in their configured order)."""
+        counts: dict[str, int] = {}
+        none_count = 0
+        for cid in self._app._ids:
+            colls = self._card_collections.get(cid)
+            if not colls:
+                none_count += 1
+            for name in set(colls or ()):
+                counts[name] = counts.get(name, 0) + 1
+        configured = [c for c in self._app.collections if c in counts]
+        extra = sorted((c for c in counts if c not in configured), key=str.casefold)
+
+        self._coll_label_to_name = {}
+        labels = [_("tsearch_all")]
+        for name in configured + extra:
+            label = f"{name} ({counts[name]})"
+            self._coll_label_to_name[label] = name
+            labels.append(label)
+        if none_count:
+            label = f"{_('gall_no_collection')} ({none_count})"
+            self._coll_label_to_name[label] = self.NO_COLLECTION
+            labels.append(label)
+        self._coll_menu.config(values=labels)
+        return counts, none_count
+
+    def _on_coll_changed(self, _event=None):
+        label = self._coll_var.get()
+        if label == _("tsearch_all"):
+            self._coll_filter = None
+        else:
+            if label not in self._coll_label_to_name:
+                # Selected without the list having been opened (keyboard)
+                # or labels out of date: rebuild the label -> name map.
+                self._refresh_coll_choices()
+            self._coll_filter = self._coll_label_to_name.get(
+                label, re.sub(r" \(\d+\)$", "", label))
+        self._cv.yview_moveto(0)
+        self._start_loading()
+        self._schedule_draw()
+
+    def on_ids_changed(self):
+        """Called by the main window when its card list changed (another
+        filter, a deletion…): drop the gallery filter if it no longer
+        matches any card, load the images of the cards that appeared, and
+        redraw."""
+        if self._coll_filter is not None:
+            counts, none_count = self._refresh_coll_choices()
+            still_there = (none_count > 0 if self._coll_filter == self.NO_COLLECTION
+                           else counts.get(self._coll_filter, 0) > 0)
+            if not still_there:
+                self._coll_filter = None
+                self._coll_var.set(_("tsearch_all"))
+        self._start_loading()
+        self._schedule_draw()
+
     # ── Helpers ───────────────────────────────────────────────────────────────
     def _read_title(self, cid: int) -> str:
         data = self._app.model.load_json(cid)
         return data.get("title") or data.get("title2") or ""
 
     def _hard_refresh(self):
+        self._load_collection_map()
         self._pil.clear()
         self._tkimg.clear()
         self._titles.clear()
@@ -1368,7 +1488,11 @@ class GalleryView(tk.Toplevel):
         """Called by the main app after navigation/save."""
         self._sel_id = cid
         self._titles.pop(cid, None)
-        self._titles[cid] = self._read_title(cid)
+        data = self._app.model.load_json(cid)
+        self._titles[cid] = data.get("title") or data.get("title2") or ""
+        # Its collections may have just been edited (affects the filter).
+        self._card_collections[cid] = [
+            str(x) for x in (data.get("collections") or [])]
         for side in ("R", "V"):
             self._pil.pop((cid, side), None)
             # Remove all _tkimg entries for this card (every size)
@@ -2025,6 +2149,7 @@ class App(tk.Tk):
         self._coord: list = []
         self._dirty = False
         self._gallery: GalleryView | None = None
+        self._mask_win = None
         self._search_win: SearchView | None = None
         self._text_search_win: "TextSearchView | None" = None
         self._doubles_win: "DoublesSearchView | None" = None
@@ -2040,6 +2165,12 @@ class App(tk.Tk):
         self._nav_collection: str | None = self._load_last_filter()
         self._nav_no_gps: bool = False
         self._nav_no_poi: bool = False
+        # Filter on one POI: id used for filtering, label shown in the
+        # combobox ("<id> (<n cards>)"), and label -> id map rebuilt each
+        # time the list is opened (see _refresh_poi_choices).
+        self._nav_poi: str | None = None
+        self._nav_poi_label: str | None = None
+        self._poi_label_to_id: dict[str, str] = {}
         self._nav_with_updates: bool = False
         self._nav_doubles: bool = False
         self._nav_status: str | None = None
@@ -2234,6 +2365,10 @@ class App(tk.Tk):
                 cards = [c for c in cards if not c.get("coord")]
             if getattr(self, "_nav_no_poi", False):
                 cards = [c for c in cards if not c.get("poi")]
+            if getattr(self, "_nav_poi", None):
+                wanted = self._nav_poi
+                cards = [c for c in cards
+                         if wanted in {str(p) for p in (c.get("poi") or [])}]
             if getattr(self, "_nav_with_updates", False):
                 update_ids = {
                     str(e.get("card_id"))
@@ -2306,7 +2441,21 @@ class App(tk.Tk):
                     pass
             self._ids = sorted(ids)
 
+        # An open gallery shows this list: let it catch up.
+        gallery = getattr(self, "_gallery", None)
+        if gallery is not None and gallery.winfo_exists():
+            gallery.on_ids_changed()
+
     # ── Dirty / save guard ────────────────────────────────────────────────────
+    def _refresh_storage_values(self):
+        """Recharge la liste déroulante des lieux de stockage depuis la
+        base (valeurs distinctes déjà utilisées par les cartes)."""
+        try:
+            values = self.model.list_storages()
+        except Exception:
+            values = []
+        self._storage_menu.configure(values=values)
+
     def _mark_dirty(self, *_):
         if not self._dirty:
             self._dirty = True
@@ -2422,6 +2571,22 @@ class App(tk.Tk):
         self._nav_missing_menu.pack(side=tk.LEFT)
         self._nav_missing_menu.bind("<<ComboboxSelected>>", self._on_nav_filter_changed)
 
+        # ── Filtre POI ────────────────────────────────────────────────────────
+        # The list is rebuilt every time it is opened (postcommand): only the
+        # POIs used by the cards of the current collection, with their count.
+        poi_filt_frm = tk.Frame(nav, bg=BG_CARD)
+        poi_filt_frm.pack(side=tk.LEFT, padx=8)
+        tk.Label(poi_filt_frm, text=_("nav_poi_filter_label"), bg=BG_CARD,
+                 fg=FG_LABEL, font=FONT_LABEL).pack(side=tk.LEFT, padx=(0, 4))
+        self._nav_poi_var = tk.StringVar(value=_("tsearch_all"))
+        self._nav_poi_menu = ttk.Combobox(poi_filt_frm,
+                                          textvariable=self._nav_poi_var,
+                                          values=[_("tsearch_all")], width=18,
+                                          font=FONT_INPUT, state="readonly",
+                                          postcommand=self._refresh_poi_choices)
+        self._nav_poi_menu.pack(side=tk.LEFT)
+        self._nav_poi_menu.bind("<<ComboboxSelected>>", self._on_nav_filter_changed)
+
         # ── Plus ▾ ────────────────────────────────────────────────────────────
         self._btn_more = tk.Button(nav, text=_("nav_more"),
                                    command=self._open_more_menu,
@@ -2471,7 +2636,18 @@ class App(tk.Tk):
             lbl.pack(padx=10, pady=4)
             lbl.bind("<Button-1>", lambda e, s=side: self._open_viewer(s))
             setattr(self, attr, lbl)
-        tk.Label(parent, bg=BG_CARD).pack(expand=True)
+
+        # Recto mask (COLMAP): only shown while the current card has one, just
+        # under the verso (see _load_mask_thumb). Hidden until then.
+        self._mask_frame = tk.Frame(parent, bg=BG_CARD)
+        self._mask_title = tk.Label(self._mask_frame, bg=BG_CARD, fg=FG_ACCENT,
+                                    font=("Georgia", 10, "bold"))
+        self._mask_title.pack(pady=(14, 2))
+        self._lbl_mask = tk.Label(self._mask_frame, bg=BG_CARD, cursor="hand2")
+        self._lbl_mask.pack(padx=10, pady=4)
+        self._lbl_mask.bind("<Button-1>", lambda e: self._open_mask_viewer())
+        self._thumb_spacer = tk.Label(parent, bg=BG_CARD)
+        self._thumb_spacer.pack(expand=True)
 
     def _build_fields(self, parent):
         self._tw: dict[str, tk.Widget] = {}
@@ -2551,6 +2727,22 @@ class App(tk.Tk):
                                          font=FONT_INPUT, state="readonly", width=20)
         self._status_menu.pack(side=tk.LEFT, pady=5, padx=(0, 10))
         self._status_menu.bind("<<ComboboxSelected>>", lambda _e: self._mark_dirty())
+
+        # Storage (lieu de stockage physique : liste issue de la base,
+        # saisie libre autorisée pour créer une nouvelle valeur)
+        sep(parent)
+        stf = tk.Frame(parent, bg=BG_CARD)
+        stf.pack(fill=tk.X, padx=8, pady=3)
+        tk.Label(stf, text=_("field_storage"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, width=14, anchor=tk.W).pack(side=tk.LEFT, padx=(10, 4), pady=5)
+        self._storage_var = tk.StringVar(value="")
+        self._storage_menu = ttk.Combobox(stf, textvariable=self._storage_var,
+                                          values=[], font=FONT_INPUT,
+                                          state="normal", width=30)
+        self._storage_menu.pack(side=tk.LEFT, pady=5, padx=(0, 10))
+        self._storage_menu.bind("<<ComboboxSelected>>", lambda _e: self._mark_dirty())
+        self._storage_menu.bind("<KeyRelease>", lambda _e: self._mark_dirty())
+        self._storage_menu.bind("<Button-1>", lambda _e: self._refresh_storage_values())
 
         # Doubles (list of integers)
         sep(parent)
@@ -2643,6 +2835,10 @@ class App(tk.Tk):
         # Status
         self._status_var.set(_status_label(self._data.get("status") or DEFAULT_CARD_STATUS))
 
+        # Storage
+        self._refresh_storage_values()
+        self._storage_var.set(self._data.get("storage") or "")
+
         # Doubles
         dbl_val = self._data.get("doubles") or []
         self._lbl_doubles.config(
@@ -2687,6 +2883,55 @@ class App(tk.Tk):
             lbl.config(image="", relief=tk.FLAT,
                        text=_("image_unavailable").format(side=side),
                        fg=FG_LABEL, font=FONT_LABEL)
+        self._load_mask_thumb(cid)
+
+    def _load_mask_thumb(self, cid: int | None = None):
+        """Show the thumbnail of the recto mask under the verso's, or hide
+        the block when the card has none (masks: Plus > Masks, or "kttools
+        masks generate")."""
+        from libpostcards.masks import MaskStore
+        if cid is None and self._ids:
+            cid = self._ids[self._current_idx]
+        store = MaskStore(self.datadir)
+        path = store.mask_path(cid) if cid is not None else None
+        img = load_pil(path, *THUMB_SIZE) if path and path.is_file() else None
+        if img is None:
+            self._mask_frame.pack_forget()
+            return
+        tk_img = pil_to_tk(img.convert("L"))
+        self._thumb_refs[f"{cid}_M"] = tk_img
+        source = store.source(cid)
+        title = _("side_mask")
+        if source:
+            title += " · " + _("mask_src_" + source)
+        self._mask_title.config(text=title)
+        self._lbl_mask.config(image=tk_img, relief=tk.RIDGE, bd=2)
+        if not self._mask_frame.winfo_manager():
+            self._mask_frame.pack(before=self._thumb_spacer)
+
+    def _open_mask_viewer(self):
+        from libpostcards.masks import MaskStore
+        cid = self._ids[self._current_idx]
+        path = MaskStore(self.datadir).mask_path(cid)
+        if not path.is_file():
+            return
+        key = f"{cid}_M"
+        if key in self._viewers:
+            try:
+                self._viewers[key].lift()
+                return
+            except tk.TclError:
+                pass
+        v = ImageViewer(self, path, f"#{cid} — {_('side_mask')}", self._t)
+        v.protocol("WM_DELETE_WINDOW", lambda k=key: self._close_viewer(k))
+        self._viewers[key] = v
+
+    def _on_mask_changed(self, cid=None):
+        """The mask editor saved or regenerated masks: refresh the thumbnail
+        if it concerns the card shown here (``cid`` None = any card)."""
+        current = self._ids[self._current_idx] if self._ids else None
+        if cid is None or str(cid) == str(current):
+            self._load_mask_thumb(current)
 
     def _find_image(self, cid: int, side: str) -> Path | None:
         p = self.images_dir / f"{cid}_{side}.png"
@@ -2799,11 +3044,46 @@ class App(tk.Tk):
             messagebox.showerror(_("error_title"), str(e), parent=self)
             return
         self._refresh_updates(self._ids[self._current_idx])
+    # ── POI filter for navigation ─────────────────────────────────────────────
+    def _refresh_poi_choices(self):
+        """Fill the POI combobox with the POIs used by the cards of the
+        currently selected collection, each with its number of cards
+        (called each time the drop-down list is about to open)."""
+        counts: dict[str, int] = {}
+        try:
+            cards = self.model.list_cards(collection=self._nav_collection or None)
+        except Exception:
+            cards = []
+        for c in cards:
+            for poi_id in {str(p) for p in (c.get("poi") or [])}:
+                counts[poi_id] = counts.get(poi_id, 0) + 1
+        # Keep the active filter selectable even if the collection changed
+        # and it is no longer used there (it would then be listed as 0).
+        if self._nav_poi:
+            counts.setdefault(self._nav_poi, 0)
+
+        self._poi_label_to_id = {}
+        labels = [_("tsearch_all")]
+        for poi_id in sorted(counts, key=str.casefold):
+            label = f"{poi_id} ({counts[poi_id]})"
+            self._poi_label_to_id[label] = poi_id
+            labels.append(label)
+        self._nav_poi_menu.config(values=labels)
+
+    def _poi_id_from_label(self, label: str) -> str | None:
+        """POI id behind a combobox label, or None for "all"."""
+        if not label or label == _("tsearch_all"):
+            return None
+        if label in self._poi_label_to_id:
+            return self._poi_label_to_id[label]
+        return re.sub(r" \(\d+\)$", "", label)   # label no longer in the map
+
     # ── Collection filter for navigation ─────────────────────────────────────
     def _on_nav_filter_changed(self, _event=None):
         all_label = _("tsearch_all")
         if not self._ask_save_if_dirty():
             # Revert all combobox values to the previous state
+            self._nav_poi_var.set(self._nav_poi_label or all_label)
             self._nav_filter_var.set(
                 self._nav_collection if self._nav_collection else all_label)
             if self._nav_no_gps:
@@ -2823,8 +3103,22 @@ class App(tk.Tk):
             return
         choice = self._nav_filter_var.get()
         missing_choice = self._nav_missing_var.get()
+        poi_label = self._nav_poi_var.get()
+        poi_id = self._poi_id_from_label(poi_label)
         current_cid = self._ids[self._current_idx] if self._ids else None
 
+        # "Without POI" and "this POI" contradict each other: the control
+        # the user just touched wins and resets the other one.
+        if poi_id and missing_choice == _("nav_no_poi"):
+            if getattr(_event, "widget", None) is self._nav_missing_menu:
+                poi_id, poi_label = None, all_label
+                self._nav_poi_var.set(all_label)
+            else:
+                missing_choice = all_label
+                self._nav_missing_var.set(all_label)
+
+        self._nav_poi = poi_id
+        self._nav_poi_label = poi_label if poi_id else None
         self._nav_collection = None if (not choice or choice == all_label) else choice
         self._nav_no_gps = (missing_choice == _("nav_no_gps"))
         self._nav_no_poi = (missing_choice == _("nav_no_poi"))
@@ -2844,11 +3138,14 @@ class App(tk.Tk):
             self._nav_collection = None
             self._nav_no_gps = False
             self._nav_no_poi = False
+            self._nav_poi = None
+            self._nav_poi_label = None
             self._nav_with_updates = False
             self._nav_doubles = False
             self._nav_status = None
             self._nav_filter_var.set(all_label)
             self._nav_missing_var.set(all_label)
+            self._nav_poi_var.set(all_label)
             self._scan_ids()
 
         # Try to keep the same card visible if it's still in the filtered list
@@ -2960,6 +3257,7 @@ class App(tk.Tk):
         m.add_command(label=_("nav_travels"), command=self._open_travel_manager,
                       state=tk.NORMAL if self.travel_available() else tk.DISABLED)
         m.add_command(label=_("nav_gallery"), command=self._open_gallery)
+        m.add_command(label=_("nav_masks"), command=self._open_mask_editor)
         m.add_separator()
         m.add_command(label=_("nav_settings"), command=self._open_settings)
 
@@ -3066,6 +3364,26 @@ class App(tk.Tk):
             self._gallery.focus_force()
             return
         self._gallery = GalleryView(self, self._t)
+
+    # ── COLMAP masks ──────────────────────────────────────────────────────────
+    def _open_mask_editor(self):
+        """Edit the COLMAP masks of the cards currently listed, i.e. of the
+        collection selected in the navigation filter (all cards if none)."""
+        if self._mask_win and self._mask_win.winfo_exists():
+            self._mask_win.lift()
+            self._mask_win.focus_force()
+            return
+        if not self._ids:
+            return
+        from .libs.mask_editor import MaskEditorView
+        self._mask_win = MaskEditorView(
+            self, _, self.datadir, list(self._ids),
+            start_id=self._ids[self._current_idx],
+            collection_label=(self._nav_collection or _("tsearch_all"))
+            + (f" / POI {self._nav_poi}" if self._nav_poi else ""),
+            cfg=self.config_parser, external_helper=self.external_helper,
+            external_helper_timeout=self.external_helper_timeout,
+            on_mask_changed=self._on_mask_changed)
 
     # ── URL-based search ──────────────────────────────────────────────────────
     def _open_search(self):
@@ -3209,16 +3527,27 @@ class App(tk.Tk):
             w = self._tw[key]
             val = (w.get().strip() if isinstance(w, tk.Entry)
                    else w.get("1.0", tk.END).rstrip("\n")) or None
+            if (key in ("detected_content", "detected_objects")
+                    and (self._data.get(key) or None) != val):
+                # Edited by hand: whatever its language, kttools
+                # detect-translate must never overwrite it.
+                self._data[key + "_lang"] = "manual"
             self._data[key] = val
 
         self._data["date"]        = self._date_field.get_value()
         self._data["coord"]       = self._coord
         self._data["collections"] = self._data.get("collections") or []
         self._data["status"]      = _status_from_label(self._status_var.get())
+        self._data["storage"]     = self._storage_var.get().strip()
         self._data["doubles"]     = self._data.get("doubles") or []
 
         try:
             self.model.write_json(self._data)
+            # Reprend la valeur normalisée et rend la nouvelle valeur
+            # disponible dans la liste pour les cartes suivantes.
+            self._data["storage"] = self.model.load_json(cid).get("storage", "")
+            self._storage_var.set(self._data["storage"])
+            self._refresh_storage_values()
             self._mark_clean()
             orig = self._btn_save.cget("text")
             self._btn_save.config(text=_("nav_saved"), bg="#1a7a3a")

@@ -6,7 +6,7 @@ tkpostcards/libs/scan_profiles.py
 Regroupe tous les paramètres qui contrôlent la correction d'un scan brut
 lors de l'étape "prepare" (dérotation/rognage, voir
 ``libpostcards.scan_corrector.ScanCorrector``) et la transparence de son
-fond (voir ``tkpostcards.libs.transparency.TiffBackgroundRemover``) dans
+fond (voir ``libpostcards.transparency.TiffBackgroundRemover``) dans
 un seul objet nommé et sauvegardable : un "profil d'import" (classe
 ``ScanProfile``).
 

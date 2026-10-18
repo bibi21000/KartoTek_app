@@ -107,6 +107,11 @@ CREATE TABLE IF NOT EXISTS cards (
     verso_ocr   TEXT,
     detected_content TEXT,
     detected_objects TEXT,
+    -- Langue du texte stocké dans detected_content / detected_objects
+    -- ("fr", "en" = non traduit...) ; NULL = inconnue (cartes antérieures),
+    -- "manual" = modifié à la main (jamais retraduit automatiquement).
+    detected_content_lang TEXT,
+    detected_objects_lang TEXT,
     date        TEXT,
     cdate       INTEGER,
     mdate       INTEGER,
@@ -118,7 +123,8 @@ CREATE TABLE IF NOT EXISTS cards (
     poi         TEXT,       -- JSON array sérialisé
     collections TEXT,       -- JSON array sérialisé
     doubles     TEXT,       -- JSON array sérialisé
-    status      TEXT NOT NULL DEFAULT 'active'  -- active | exchanged | trade
+    status      TEXT NOT NULL DEFAULT 'active', -- active | exchanged | trade
+    storage     TEXT NOT NULL DEFAULT ''        -- lieu de stockage physique ('' = non renseigné)
 );
 """
 
@@ -212,6 +218,8 @@ _CARD_DEFAULTS: dict[str, Any] = {
     "verso_ocr": None,
     "detected_content": None,
     "detected_objects": None,
+    "detected_content_lang": None,
+    "detected_objects_lang": None,
     "date": None,
     "cdate": None,
     "mdate": None,
@@ -223,12 +231,21 @@ _CARD_DEFAULTS: dict[str, Any] = {
     "collections": [],
     "doubles": [],
     "status": DEFAULT_CARD_STATUS,
+    "storage": "",
 }
 
 
 # ---------------------------------------------------------------------------
 # Helpers de (dé)sérialisation
 # ---------------------------------------------------------------------------
+
+def _clean_storage(value: Any) -> str:
+    """Normalise le lieu de stockage physique d'une carte : texte sans
+    espaces superflus (début/fin, répétés), ``""`` si non renseigné."""
+    if value is None:
+        return ""
+    return " ".join(str(value).split())
+
 
 def _card_to_row(card: dict) -> dict:
     """Convertit un dict carte en ligne SQL (champs plats)."""
@@ -242,6 +259,8 @@ def _card_to_row(card: dict) -> dict:
         "verso_ocr": card.get("verso_ocr"),
         "detected_content": card.get("detected_content"),
         "detected_objects": card.get("detected_objects"),
+        "detected_content_lang": card.get("detected_content_lang"),
+        "detected_objects_lang": card.get("detected_objects_lang"),
         "date": card.get("date"),
         "cdate": card.get("cdate"),
         "mdate": card.get("mdate"),
@@ -254,6 +273,7 @@ def _card_to_row(card: dict) -> dict:
         "collections": json.dumps(card.get("collections") or [], ensure_ascii=False),
         "doubles": json.dumps(card.get("doubles") or [], ensure_ascii=False),
         "status": card.get("status") or DEFAULT_CARD_STATUS,
+        "storage": _clean_storage(card.get("storage")),
     }
 
 
@@ -529,11 +549,24 @@ class Model:
             except sqlite3.OperationalError:
                 pass  # colonne déjà présente
 
+            # Ajout défensif de cards.storage (lieu de stockage physique)
+            # sur une base existante créée avant son introduction. Le
+            # DEFAULT '' est appliqué par SQLite aux lignes existantes ;
+            # la valeur réelle est reprise des JSON par sync()/generate().
+            try:
+                self._conn.execute(
+                    "ALTER TABLE cards ADD COLUMN storage TEXT NOT NULL DEFAULT ''"
+                )
+                self._conn.commit()
+            except sqlite3.OperationalError:
+                pass  # colonne déjà présente
+
             # Ajout défensif de cards.detected_content / detected_objects sur
             # une base existante créée avant leur introduction (CREATE TABLE
             # IF NOT EXISTS, ci-dessus, ne modifie pas une table déjà
             # présente sans ces colonnes).
-            for _col in ("detected_content", "detected_objects"):
+            for _col in ("detected_content", "detected_objects",
+                         "detected_content_lang", "detected_objects_lang"):
                 try:
                     self._conn.execute(f"ALTER TABLE cards ADD COLUMN {_col} TEXT")
                     self._conn.commit()
@@ -682,6 +715,7 @@ class Model:
         card["doubles"] = sorted(new_doubles)
         if card.get("status") not in CARD_STATUSES:
             card["status"] = DEFAULT_CARD_STATUS
+        card["storage"] = _clean_storage(card.get("storage"))
         card["mdate"] = int(time.time())
 
         self.cards_dir.mkdir(parents=True, exist_ok=True)
@@ -919,6 +953,18 @@ class Model:
     # ------------------------------------------------------------------
     # Lecture de cartes depuis la base
     # ------------------------------------------------------------------
+
+    def list_storages(self) -> list[str]:
+        """Retourne les lieux de stockage physique distincts présents en
+        base (hors valeur vide), triés sans tenir compte de la casse ni des
+        accents. Sert à construire la liste de sélection de ktmanager."""
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT DISTINCT storage FROM cards "
+            "WHERE storage IS NOT NULL AND TRIM(storage) != ''"
+        )
+        values = [r["storage"] for r in cur.fetchall()]
+        return sorted(values, key=lambda v: (_strip_accents(v), v))
 
     def get_card(self, card_id: str | int) -> dict | None:
         """Retourne une carte depuis la base SQLite, ou None si absente."""

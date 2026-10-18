@@ -1,13 +1,13 @@
 # -*- encoding: utf-8 -*-
 """
-libs.scan_prepare
-------------------
+tkpostcards/libs/scan_prepare.py
+----------------------------------
 
-Mutualizes the "analyze and correct scans" step (dewarp / crop / make the
-white background transparent) that used to live only in
-``tktools scan prepare``. Both ``tktools`` (CLI) and ``tkimport`` (GUI)
-call :func:`prepare_pairs` so the exact same correction is applied whatever
-the front-end.
+Analyse et corrige les scans bruts trouvés dans importdir (étape 1 de
+tkimport / ``tktools scan prepare``) : redressement/rognage
+(``libpostcards.scan_corrector.ScanCorrector``) puis, sauf si le profil
+actif ne le demande explicitement, détourage du fond
+(``libpostcards.transparency.TiffBackgroundRemover``).
 
 Every parameter controlling that correction (white threshold, crop
 margin, ...) is grouped in a named :class:`~.scan_profiles.ScanProfile`
@@ -22,6 +22,19 @@ The raw scans found in ``importdir`` are expected two-by-two (recto then
 verso) and are renamed/corrected into ``<id>_R.<ext>`` / ``<id>_V.<ext>``,
 *staying in importdir* until they are reviewed (tkimport step 2) and added
 to the collection (``tktools scan add`` / tkimport step 3).
+
+Un déploiement peut aussi se passer ENTIÈREMENT de cv2/numpy/
+libpostcards.contour_utils en pointant vers un serveur simpostcards
+distant via ``external_helper`` : le redressement/rognage (+
+détourage du fond, sauf ``profile.skip_transparency``) se fait alors
+côté serveur (POST /api/correct_scan, voir
+simpostcards.blueprints.api.correct_scan_route et
+simpostcards.libs.corrector.correct_scan) -- même principe que
+``external_helper`` sur
+``libpostcards.similar.PostcardSearcher``/``libpostcards.ocr.PostcardOCR``/
+``libpostcards.detection.PostcardDetection``/``libpostcards.travel.ParcoursCartes``.
+Sans effet quand ``profile.skip_processing`` est actif (le fichier est
+de toute façon simplement recopié, voir plus bas).
 """
 import os
 from pathlib import Path
@@ -43,13 +56,15 @@ class PreparedPair(object):
         self.verso_dst = verso_dst
 
 
-def make_corrector(profile=None, white_threshold=None, verbose=False):
+def make_corrector(profile=None, white_threshold=None, verbose=False,
+                    external_helper=None, external_helper_timeout=None):
     """Build the default ``correct(infile, outfile)`` callable.
 
     Uses ``libpostcards.scan_corrector.ScanCorrector`` (dewarp / crop) then
-    :class:`tkpostcards.libs.transparency.TiffBackgroundRemover` to make the
+    ``libpostcards.transparency.TiffBackgroundRemover`` to make the
     white background transparent, exactly like the historical
-    ``tktools scan prepare`` command.
+    ``tktools scan prepare`` command -- locally, or via *external_helper*
+    (see below).
 
     :param profile: :class:`~.scan_profiles.ScanProfile` ("profil
         d'import") controlling every correction parameter. Defaults to
@@ -60,12 +75,26 @@ def make_corrector(profile=None, white_threshold=None, verbose=False):
         itself sets ``transparency_white_threshold``, the transparency
         threshold too). Ignored when ``profile.skip_processing`` is set
         (see below), since no threshold is used in that case.
+    :param external_helper: URI of a remote simpostcards server (see
+        ``[DEFAULT] external_helper`` in postcards.conf) used to
+        delegate the correction (POST /api/correct_scan) instead of a
+        local computation -- lets this run without cv2/numpy/
+        libpostcards.contour_utils installed here. Ignored when
+        ``profile.skip_processing`` is set (nothing is computed at all
+        in that case, see below).
+    :param external_helper_timeout: timeout (seconds) for a single
+        request to *external_helper*. ``None`` (default) uses a
+        built-in default generous enough for a full-resolution scan
+        (deskew + crop + transparency is slower than a single CLIP/OCR
+        call -- see the 120s default below).
 
     If ``profile.skip_processing`` is set (the ``null`` built-in
     profile), the returned ``correct()`` callable does not touch the
     image at all: it byte-for-byte copies *infile* to *outfile* --
-    no crop, no deskew, no transparency. Meant for scans already fully
-    corrected by hand (e.g. in GIMP) before being imported.
+    no crop, no deskew, no transparency, whether or not
+    *external_helper* is given (no reason to make a network round-trip
+    for a no-op). Meant for scans already fully corrected by hand
+    (e.g. in GIMP) before being imported.
 
     If ``profile.skip_transparency`` is set (the ``draft`` built-in
     profile) without ``skip_processing``, crop/deskew still run
@@ -73,21 +102,28 @@ def make_corrector(profile=None, white_threshold=None, verbose=False):
     pixel risks being wrongly turned transparent before a manual
     review/crop.
     """
-    import shutil
-
-    import cv2
-    from libpostcards.scan_corrector import ScanCorrector
-    from .transparency import TiffBackgroundRemover
-
     if profile is None:
         profile = BUILTIN_PROFILES[DEFAULT_PROFILE_NAME]
     if white_threshold is not None:
         profile = profile.with_overrides(white_threshold=white_threshold)
 
     if profile.skip_processing:
+        import shutil
+
         def correct(infile, outfile):
             shutil.copyfile(infile, outfile)
         return correct
+
+    if external_helper:
+        return _make_remote_corrector(profile, external_helper, external_helper_timeout)
+
+    return _make_local_corrector(profile, verbose)
+
+
+def _make_local_corrector(profile, verbose):
+    import cv2
+    from libpostcards.scan_corrector import ScanCorrector
+    from libpostcards.transparency import TiffBackgroundRemover
 
     scanc = ScanCorrector(
         white_threshold=profile.white_threshold,
@@ -149,8 +185,69 @@ def make_corrector(profile=None, white_threshold=None, verbose=False):
     return correct
 
 
+def _make_remote_corrector(profile, external_helper, external_helper_timeout):
+    """Renvoie un ``correct(infile, outfile)`` qui délègue à
+    ``POST {external_helper}/api/correct_scan`` (voir
+    simpostcards.blueprints.api.correct_scan_route) au lieu d'un calcul
+    local -- cv2/numpy/libpostcards.contour_utils ne sont alors pas
+    requis ici.
+
+    Envoie tous les paramètres pertinents de *profile* (déjà résolus,
+    ``effective_transparency_threshold`` compris) en un seul dict
+    réutilisé pour chaque appel ; seul ``output_format`` varie, calé sur
+    l'extension du fichier source (même extension en sortie -- voir
+    prepare_pairs(), qui construit toujours recto_dst/verso_dst avec
+    l'extension du fichier brut correspondant).
+    """
+    import requests
+
+    timeout = 120.0 if external_helper_timeout is None else external_helper_timeout
+    base_url = external_helper.rstrip("/")
+
+    data = {
+        "white_threshold": str(profile.white_threshold),
+        "white_ratio_threshold": str(profile.white_ratio_threshold),
+        "crop_margin": str(profile.crop_margin),
+        "final_crop_margin": str(profile.final_crop_margin),
+        "angle_range": str(profile.angle_range),
+        "use_contour_geometry": str(profile.use_contour_geometry).lower(),
+        "use_quad_geometry": str(profile.use_quad_geometry).lower(),
+        "contour_denoise": str(profile.contour_denoise).lower(),
+        "contour_clahe": str(profile.contour_clahe).lower(),
+        "contour_auto_canny": str(profile.contour_auto_canny).lower(),
+        "skip_transparency": str(profile.skip_transparency).lower(),
+        # Toujours résolu ici (jamais None) : effective_transparency_threshold
+        # retombe déjà sur white_threshold si le profil n'a rien de
+        # spécifique -- pas la peine de reproduire cette logique côté
+        # serveur.
+        "transparency_white_threshold": str(profile.effective_transparency_threshold),
+    }
+    if profile.transparency_band is not None:
+        data["transparency_band"] = str(profile.transparency_band)
+
+    def correct(infile, outfile):
+        ext = Path(infile).suffix.lower()
+        req_data = dict(data)
+        req_data["output_format"] = ext.lstrip(".") or "tiff"
+
+        with open(infile, "rb") as fh:
+            response = requests.post(
+                f"{base_url}/api/correct_scan",
+                files={"image": (Path(infile).name, fh)},
+                data=req_data,
+                timeout=timeout,
+            )
+        response.raise_for_status()
+
+        with open(outfile, "wb") as out:
+            out.write(response.content)
+
+    return correct
+
+
 def prepare_pairs(importdir, next_id, prefix="", profile=None, white_threshold=None,
-                   correct=None, on_pair=None):
+                   correct=None, on_pair=None, external_helper=None,
+                   external_helper_timeout=None):
     """Analyze and correct the raw scans found in *importdir*.
 
     :param importdir: folder containing the raw scans (recto/verso pairs,
@@ -170,6 +267,12 @@ def prepare_pairs(importdir, next_id, prefix="", profile=None, white_threshold=N
         invoked right after each pair has been examined (whether or not
         anything was actually (re)corrected) - handy for a progress bar
         (CLI) or to refresh a review list (GUI).
+    :param external_helper: passed to :func:`make_corrector` when
+        *correct* is not provided (see there) -- URI of a remote
+        simpostcards server used to correct scans instead of a local
+        computation.
+    :param external_helper_timeout: passed to :func:`make_corrector`
+        together with *external_helper* (see there).
     :return: the list of :class:`PreparedPair` seen, in order (not just
         the ones actually (re)corrected).
 
@@ -186,7 +289,9 @@ def prepare_pairs(importdir, next_id, prefix="", profile=None, white_threshold=N
     """
     importdir = Path(importdir)
     if correct is None:
-        correct = make_corrector(profile=profile, white_threshold=white_threshold)
+        correct = make_corrector(profile=profile, white_threshold=white_threshold,
+                                  external_helper=external_helper,
+                                  external_helper_timeout=external_helper_timeout)
 
     fl2 = group_raw_scans(importdir, prefix=prefix)
 
