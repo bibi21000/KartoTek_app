@@ -16,7 +16,7 @@
             {% if travel.cards %}
             <div class="travel-card-thumb">
                 <img src="{{ url_for('home.images', filename='size_div10/' + (travel.cards[0].id | string) + '_R.png') }}"
-                     alt="{{ travel.title or travel.id }}"
+                     alt="{{ _("Carte postale") }} - {{ travel.title or travel.id }}"
                      loading="lazy">
             </div>
             {% endif %}

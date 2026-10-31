@@ -8,6 +8,7 @@ from __future__ import annotations
 from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 from flask_babel import gettext
 
+from flpostcards.alt_text import build_recto_alt
 from flpostcards.images import SIZE_SMALL, card_images, image_dimensions
 from flpostcards.osm_static_map import get_or_generate_map_image
 
@@ -112,26 +113,15 @@ def cards_json():
             continue
 
         images = card_images(card["id"], SIZE_SMALL)
-        # Texte alternatif du recto : les informations disponibles
-        # (titre, titre secondaire, description, contenu détecté
-        # automatiquement par BLIP), une par ligne, sans libellé ni
-        # mention "Recto de la carte x" (voir card_detail() dans
-        # blueprints/home pour la même logique sur la fiche carte).
-        recto_alt_parts = [
-            part for part in (
-                card.get("title"),
-                card.get("title2"),
-                card.get("description"),
-                card.get("detected_content"),
-            ) if part
-        ]
+        # Texte alternatif du recto, introduit par « Carte postale » :
+        # voir flpostcards.alt_text (même logique que la fiche carte).
         items.append(
             {
                 "id": card["id"],
                 "title": card.get("title"),
                 "coord": coord,
                 "recto": images["recto"],
-                "recto_alt": "\n".join(recto_alt_parts),
+                "recto_alt": build_recto_alt(card),
             }
         )
 

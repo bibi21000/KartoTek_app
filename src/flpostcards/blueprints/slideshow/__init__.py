@@ -12,6 +12,7 @@ import random
 from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 from flask_babel import gettext
 
+from flpostcards.alt_text import build_recto_alt
 from flpostcards.extensions import cache
 from flpostcards.images import SIZE_SMALL, card_images, image_dimensions
 
@@ -152,6 +153,7 @@ def api_slideshow_cards():
                 "verso_small": images_small["verso"],
                 "cdate": card.get("cdate"),
                 "detected_content": card.get("detected_content"),
+                "recto_alt": build_recto_alt(card),
             }
         )
 

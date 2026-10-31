@@ -175,20 +175,28 @@ class _DetectionModels:
             self._device = resolved_device
             self._caption_model_name = model_name
 
-    def caption(self, image: Image.Image, model_name: str, device: str | None) -> str:
+    def caption(self, image: Image.Image, model_name: str, device: str | None,
+                prompt: str | None = None) -> str:
         # busy() : voir libs._idle_unload (pas de déchargement en plein calcul).
         with self._caption_idle_timer.busy():
-            return self._caption(image, model_name, device)
+            return self._caption(image, model_name, device, prompt)
 
-    def _caption(self, image: Image.Image, model_name: str, device: str | None) -> str:
+    def _caption(self, image: Image.Image, model_name: str, device: str | None,
+                 prompt: str | None = None) -> str:
         import torch
 
         self._ensure_caption(model_name, device)
         self._caption_idle_timer.touch()
 
-        inputs = self._processor(image, return_tensors="pt").to(self._device)
+        if prompt:
+            # Légende conditionnée : BLIP complète ``prompt`` (ex : "a postcard of").
+            inputs = self._processor(image, text=prompt, return_tensors="pt").to(self._device)
+            gen_kwargs = {"max_new_tokens": 40, "num_beams": 3}
+        else:
+            inputs = self._processor(image, return_tensors="pt").to(self._device)
+            gen_kwargs = {}
         with torch.no_grad():
-            out = self._model.generate(**inputs)
+            out = self._model.generate(**inputs, **gen_kwargs)
 
         raw = self._processor.decode(out[0], skip_special_tokens=True)
         self._caption_idle_timer.touch()
@@ -263,6 +271,7 @@ def compute_caption(
     image: Image.Image,
     model_name: str = DEFAULT_MODEL_NAME,
     device: str | None = None,
+    prompt: str | None = None,
 ) -> str:
     """
     Génère une légende (en anglais, non traduite) décrivant *image*
@@ -270,7 +279,8 @@ def compute_caption(
     installés -- voir CAPTION_AVAILABLE ; l'appelant est responsable de
     ne pas appeler cette fonction sinon.
     """
-    return _models.caption(image, model_name=model_name, device=device)
+    return _models.caption(image, model_name=model_name, device=device,
+                           prompt=prompt)
 
 
 def compute_objects(

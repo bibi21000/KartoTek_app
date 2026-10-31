@@ -9,6 +9,7 @@ from flask import Blueprint, Response, current_app, render_template, request, ur
 from flask_babel import gettext
 
 from flpostcards.gallery_og_image import get_or_render_collage
+from flpostcards.alt_text import build_recto_alt
 from flpostcards.images import SIZE_THUMB, card_images
 
 bp = Blueprint("gallery", __name__, template_folder="../../templates")
@@ -109,19 +110,8 @@ def index():
     items = []
     for card in cards:
         images = card_images(card["id"], SIZE_THUMB)
-        # Texte alternatif du recto : les informations disponibles
-        # (titre, titre secondaire, description, contenu détecté
-        # automatiquement par BLIP), une par ligne, sans libellé ni
-        # mention "Recto de la carte x" (voir card_detail() pour la
-        # même logique sur la fiche carte).
-        recto_alt_parts = [
-            part for part in (
-                card.get("title"),
-                card.get("title2"),
-                card.get("description"),
-                card.get("detected_content"),
-            ) if part
-        ]
+        # Texte alternatif du recto, introduit par « Carte postale » :
+        # voir flpostcards.alt_text (même logique que la fiche carte).
         items.append(
             {
                 "id": card["id"],
@@ -130,7 +120,7 @@ def index():
                 "recto": images["recto"],
                 "verso": images["verso"],
                 "detected_content": card.get("detected_content"),
-                "recto_alt": "\n".join(recto_alt_parts),
+                "recto_alt": build_recto_alt(card),
             }
         )
 

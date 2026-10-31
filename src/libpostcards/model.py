@@ -20,6 +20,7 @@ cp en place (écrasement du contenu d'un fichier déjà ouvert par une connexion
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import logging
@@ -365,6 +366,66 @@ def _poi_to_row(poi: dict) -> dict:
     }
 
 
+# Colonnes parcourues par la recherche textuelle (voir _text_search_condition).
+# Les deux dernières : contenu détecté automatiquement (BLIP + DETR sur le
+# recto, voir libpostcards.detection), inclus au même titre que les champs
+# saisis/OCR'isés manuellement.
+_TEXT_SEARCH_COLUMNS = (
+    "title", "title2", "description", "verso_text", "recto_text",
+    "address", "poi", "detected_content", "detected_objects",
+)
+
+
+# Version mémorisée de _strip_accents pour la recherche textuelle : la
+# normalisation (NFKD) domine le coût d'une recherche, or les mêmes champs
+# sont relus à chaque frappe ("lou", "louh", "louha"...). Le cache est indexé
+# par la valeur du champ, donc jamais périmé quand une carte est modifiée.
+_fold_cached = functools.lru_cache(maxsize=200_000)(_strip_accents)
+
+
+def _search_match(words: str, *fields: Any) -> int:
+    """Fonction SQL ``search_match(mots, champ1, champ2, ...)``.
+
+    ``words`` : mots recherchés, déjà normalisés (sans accents, minuscules)
+    et séparés par ``\\x00``. Renvoie 1 si CHAQUE mot est contenu dans au
+    moins un des champs (ET entre les mots, OU entre les champs), 0 sinon.
+    Un seul appel Python par carte, quel que soit le nombre de mots.
+    """
+    folded = [_fold_cached(f if isinstance(f, str) else str(f))
+              for f in fields if f]
+    for word in words.split("\x00"):
+        if not any(word in f for f in folded):
+            return 0
+    return 1
+
+
+def _text_search_condition(search: str | None) -> tuple[str, list[str]]:
+    """Condition SQL (et ses paramètres) de la recherche textuelle.
+
+    La saisie est découpée en MOTS (séparés par des espaces) : une carte
+    correspond si CHAQUE mot se trouve (sans tenir compte des accents ni
+    de la casse) dans au moins une des colonnes de ``_TEXT_SEARCH_COLUMNS``
+    -- ET entre les mots, OU entre les colonnes. L'ordre des mots et les
+    mots intercalés n'ont pas d'importance : "louhans seille" trouve
+    "Louhans la Seille" comme "Louhans, le port sur la Seille". Les mots
+    peuvent aussi être répartis entre plusieurs champs (ex : "louhans"
+    dans le titre, "seille" dans la description).
+
+    Chaque mot est cherché comme sous-chaîne (comme avant pour la saisie
+    entière : "seil" trouve "Seille"). Renvoie ``("", [])`` si ``search``
+    ne contient aucun mot (vide ou espaces).
+
+    La condition appelle la fonction SQL ``search_match`` (enregistrée par
+    ``Model._get_conn``) : un seul appel Python par carte.
+    """
+    words = [_strip_accents(w) for w in (search or "").split()]
+    words = [w for w in words if w]
+    if not words:
+        return "", []
+    sql = "search_match(?, %s) = 1" % ", ".join(_TEXT_SEARCH_COLUMNS)
+    return sql, ["\x00".join(words)]
+
+
 def _status_condition(
     status: str | None,
     exclude_status: str | list[str] | None,
@@ -583,6 +644,14 @@ class Model:
             except sqlite3.NotSupportedError:
                 # SQLite build too old to support the `deterministic` flag
                 self._conn.create_function("unaccent_lower", 1, _strip_accents)
+
+            # Recherche textuelle multi-mots (voir _text_search_condition).
+            try:
+                self._conn.create_function(
+                    "search_match", -1, _search_match, deterministic=True
+                )
+            except sqlite3.NotSupportedError:
+                self._conn.create_function("search_match", -1, _search_match)
 
         return self._conn
 
@@ -1026,23 +1095,10 @@ class Model:
             params.extend(status_params)
 
         if search:
-            like = f"%{search}%"
-            conditions.append(
-                "(unaccent_lower(title) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(title2) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(description) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(verso_text) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(recto_text) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(address) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
-                # Contenu détecté automatiquement (BLIP + DETR sur le
-                # recto, voir libpostcards.detection) : inclus dans
-                # la recherche textuelle au même titre que les champs
-                # saisis/OCR'isés manuellement.
-                " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(detected_objects) LIKE unaccent_lower(?))"
-            )
-            params.extend([like] * 9)
+            search_sql, search_params = _text_search_condition(search)
+            if search_sql:
+                conditions.append(search_sql)
+                params.extend(search_params)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         limit_clause = f"LIMIT {int(limit)}" if limit is not None else ""
@@ -1079,23 +1135,10 @@ class Model:
             params.extend(status_params)
 
         if search:
-            like = f"%{search}%"
-            conditions.append(
-                "(unaccent_lower(title) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(title2) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(description) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(verso_text) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(recto_text) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(address) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
-                # Contenu détecté automatiquement (BLIP + DETR sur le
-                # recto, voir libpostcards.detection) : inclus dans
-                # la recherche textuelle au même titre que les champs
-                # saisis/OCR'isés manuellement.
-                " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(detected_objects) LIKE unaccent_lower(?))"
-            )
-            params.extend([like] * 9)
+            search_sql, search_params = _text_search_condition(search)
+            if search_sql:
+                conditions.append(search_sql)
+                params.extend(search_params)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         sql = f"SELECT COUNT(*) FROM cards {where}"
@@ -1278,23 +1321,10 @@ class Model:
             params.extend(status_params)
 
         if search:
-            like = f"%{search}%"
-            conditions.append(
-                "(unaccent_lower(title) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(title2) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(description) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(verso_text) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(recto_text) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(address) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
-                # Contenu détecté automatiquement (BLIP + DETR sur le
-                # recto, voir libpostcards.detection) : inclus dans
-                # la recherche textuelle au même titre que les champs
-                # saisis/OCR'isés manuellement.
-                " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(detected_objects) LIKE unaccent_lower(?))"
-            )
-            params.extend([like] * 9)
+            search_sql, search_params = _text_search_condition(search)
+            if search_sql:
+                conditions.append(search_sql)
+                params.extend(search_params)
 
         where = f"WHERE {' AND '.join(conditions)}"
         limit_clause = f"LIMIT {int(limit)}" if limit is not None else ""
@@ -1405,23 +1435,10 @@ class Model:
             params.extend(status_params)
 
         if search:
-            like = f"%{search}%"
-            conditions.append(
-                "(unaccent_lower(title) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(title2) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(description) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(verso_text) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(recto_text) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(address) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(poi) LIKE unaccent_lower(?)"
-                # Contenu détecté automatiquement (BLIP + DETR sur le
-                # recto, voir libpostcards.detection) : inclus dans
-                # la recherche textuelle au même titre que les champs
-                # saisis/OCR'isés manuellement.
-                " OR unaccent_lower(detected_content) LIKE unaccent_lower(?)"
-                " OR unaccent_lower(detected_objects) LIKE unaccent_lower(?))"
-            )
-            params.extend([like] * 9)
+            search_sql, search_params = _text_search_condition(search)
+            if search_sql:
+                conditions.append(search_sql)
+                params.extend(search_params)
 
         where = f"WHERE {' AND '.join(conditions)}"
         sql = f"SELECT COUNT(*) FROM cards {where}"

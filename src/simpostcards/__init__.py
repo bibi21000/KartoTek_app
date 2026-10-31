@@ -83,6 +83,12 @@ Six points d'entrée API (voir ``simpostcards.blueprints.api``) :
     SAM) et rend leur mémoire GPU et RAM ; ils se rechargent seuls à la
     prochaine requête.
 
+  /sync/v1/*  (blueprint ``simpostcards.blueprints.sync``, DÉSACTIVÉ par défaut)
+    Réception de fichiers par HTTPS pour le transport ``protocol = https``
+    de ``tkpostcards.libs.remotesync`` (publication de la collection), avec
+    redémarrage optionnel de l'appli web après transfert. Voir [simpostcards]
+    sync_enabled et la docstring du blueprint pour le protocole.
+
 Sur un serveur GPU partagé avec d'autres usages, voir [simpostcards]
 gpu_idle_timeout : libère automatiquement la mémoire (GPU et RAM) de
 chaque modèle (CLIP, BLIP, DETR, SAM) resté inactif trop longtemps -- voir
@@ -211,6 +217,17 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["SEGMENT_ENABLED"] = parser.getboolean(
                     "simpostcards", "segment_enabled"
                 )
+            elif key == "sync_enabled":
+                # Blueprint de réception HTTPS (voir blueprints.sync) :
+                # désactivé par défaut -- c'est un point d'entrée en
+                # ÉCRITURE sur le disque, il doit être voulu.
+                app.config["SYNC_ENABLED"] = parser.getboolean(
+                    "simpostcards", "sync_enabled"
+                )
+            elif key == "sync_restart_delay":
+                app.config["SYNC_RESTART_DELAY"] = parser.getfloat(
+                    "simpostcards", "sync_restart_delay"
+                )
             elif key == "gpu_idle_timeout":
                 # Voir libs._idle_unload : délai (secondes) d'inactivité
                 # au-delà duquel un modèle GPU (CLIP, BLIP, DETR) est
@@ -292,6 +309,19 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     # et le docstring du module ci-dessus.
     app.config.setdefault("GPU_IDLE_TIMEOUT", 0)
     app.config.setdefault("CORRECT_SCAN_ENABLED", True)
+    # Réception HTTPS de fichiers (blueprints.sync) : OFF par défaut. Les
+    # valeurs vides du fichier de conf sont normalisées en None.
+    app.config.setdefault("SYNC_ENABLED", False)
+    app.config.setdefault("SYNC_URL_PREFIX", "/sync/v1")
+    app.config.setdefault("SYNC_RESTART_DELAY", 0.5)
+    for _k in ("SYNC_TOKEN", "SYNC_BASE_DIR", "SYNC_RESTART_COMMAND",
+               "SYNC_RESTART_PIDFILE", "SYNC_RESTART_SIGNAL",
+               "SYNC_RESTART_URL", "SYNC_RESTART_TOKEN",
+               "SYNC_TRUSTED_PROXIES"):
+        app.config[_k] = str(app.config.get(_k) or "").strip() or None
+    app.config["SYNC_URL_PREFIX"] = (
+        "/" + str(app.config["SYNC_URL_PREFIX"]).strip("/")
+    ).rstrip("/") or "/sync/v1"
     # SAM (/api/compute_segments, masques COLMAP) : actif par défaut, sans
     # effet si transformers/torch ne sont pas installés.
     app.config.setdefault("PADDLEOCR_ENABLED", True)
@@ -346,5 +376,12 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
 
     from simpostcards.blueprints.api import bp as api_bp
     app.register_blueprint(api_bp)
+
+    if app.config.get("SYNC_ENABLED"):
+        from simpostcards.blueprints.sync import bp as sync_bp, validate_config
+        validate_config(app)  # RuntimeError explicite si jeton/base_dir invalides
+        app.register_blueprint(sync_bp, url_prefix=app.config["SYNC_URL_PREFIX"])
+        app.logger.info("sync : réception HTTPS active sur %s (base=%s)",
+                        app.config["SYNC_URL_PREFIX"], app.config["SYNC_BASE_DIR"])
 
     return app

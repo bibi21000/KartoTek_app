@@ -186,7 +186,7 @@
         // texte générique avec l'id) : exposé en aria-label/role="img" sur
         // le calque affiché, celui-ci étant un fond CSS (background-image)
         // et non une balise <img>, qui ne supporte donc pas alt="".
-        var altText = card.title || card.detected_content ||
+        var altText = card.recto_alt || card.title || card.detected_content ||
             ((config.rectoAltLabel || "") + " " + card.id);
 
         return preload(rectoUrl).then(function () {

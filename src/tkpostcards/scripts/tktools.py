@@ -1272,3 +1272,104 @@ def masks_export(common, pcid, collection, side, out_dir, max_side):
     click.echo(_("{n} cards exported to {d}").format(n=exported, d=out_dir))
     if missing:
         click.echo(_("Image not found: ") + ", ".join(missing))
+
+
+@cli.group(help=_("Delcampe tools (website, no paid API account needed)"))
+def delcampe():
+    pass
+
+
+@delcampe.command("watchlist", help=_(
+    "Watched items grouped by seller, with time left and the seller's payment "
+    "methods. Uses the session cookie of your browser ([delcampe] cookie / "
+    "cookie_file in postcards.conf, or $DELCAMPE_COOKIE)."))
+@click.option('--type', 'list_type', default='open',
+              type=click.Choice(['open', 'open_with_offer', 'closed', 'all']),
+              show_default=True, help=_("Which watched items to list"))
+@click.option('--order', default='end', show_default=True,
+              type=click.Choice(['end', 'name', 'count']),
+              help=_("Sellers order: soonest ending item, name, or number of items"))
+@click.option('--format', 'fmt', default='text', show_default=True,
+              type=click.Choice(['text', 'json', 'csv']), help=_("Output format"))
+@click.option('--no-payments', is_flag=True, default=False,
+              help=_("Do not look up payment methods (a single request in total)"))
+@click.option('--refresh', is_flag=True, default=False,
+              help=_("Ignore the seller cache and look payment methods up again"))
+@click.option('--max-pages', type=int, default=None,
+              help=_("Stop after this many pages of the list"))
+@click.option('--delay', type=float, default=None,
+              help=_("Seconds between two requests (default [delcampe] delay, 1.0)"))
+@click.option('--cookie', default=None, envvar='DELCAMPE_COOKIE',
+              help=_("Session cookie header copied from your browser"))
+@click.option('-o', '--output', type=click.Path(), default=None,
+              help=_("Write the result to this file instead of stdout"))
+@click.pass_obj
+def delcampe_watchlist(common, list_type, order, fmt, no_payments, refresh,
+                       max_pages, delay, cookie, output):
+    try:
+        from tkpostcards.libs import delcampe as dc
+    except ImportError as exc:
+        raise click.ClickException(
+            _("Missing dependency ({e}). Install: pip install requests beautifulsoup4"
+              ).format(e=exc))
+
+    def opt(name, default=""):
+        return common.conf.get('delcampe', name, fallback=default) \
+            if common.conf.has_section('delcampe') else default
+
+    cookies = dc.load_cookies(cookie or opt('cookie'), opt('cookie_file'))
+    if not cookies:
+        raise click.ClickException(_(
+            "No session cookie. In your browser, logged in to Delcampe, open the "
+            "developer tools > Network, click any delcampe.net request and copy "
+            "its 'Cookie' header, then either put it in postcards.conf "
+            "([delcampe] cookie = ...), or export DELCAMPE_COOKIE, or pass "
+            "--cookie. It works like a password: keep it private."))
+
+    client = dc.DelcampeClient(
+        cookies,
+        lang=opt('lang', 'fr'),
+        base_url=opt('base_url', dc.BASE_URL),
+        delay=delay if delay is not None else float(opt('delay', '1.0')),
+        user_agent=opt('user_agent', dc.DEFAULT_UA),
+    )
+    cache = dc.SellerCache(opt('cache_file') or None, float(opt('cache_days', '7')))
+    pbar = {'bar': None}
+
+    def on_page(page, pages, got, total):
+        click.echo(_("Page {p}/{n}: {g} item(s) so far").format(p=page, n=pages, g=got), err=True)
+
+    try:
+        items = client.fetch_watching_list(list_type, size=int(opt('page_size', '480')),
+                                           max_pages=max_pages, on_page=on_page)
+        if not items:
+            click.echo(_("No watched item."), err=True)
+        n_sellers = len({i.seller_id for i in items})
+        pbar['bar'] = tqdm(total=n_sellers, desc=_("Sellers"), leave=False,
+                           disable=no_payments)
+        sellers = dc.build_sellers(
+            items, None if no_payments else client, cache, refresh=refresh,
+            on_seller=lambda s: pbar['bar'].update(1))
+    except dc.DelcampeAuthError as exc:
+        raise click.ClickException(str(exc))
+    except dc.DelcampeError as exc:
+        raise click.ClickException(str(exc))
+    finally:
+        if pbar['bar'] is not None:
+            pbar['bar'].close()
+
+    groups = dc.group_by_seller(items, sellers, order)
+    if fmt == 'json':
+        import json
+        text = json.dumps(dc.to_jsonable(groups), ensure_ascii=False, indent=2)
+    elif fmt == 'csv':
+        text = dc.render_csv(groups)
+    else:
+        text = dc.render_text(groups)
+    if output:
+        with open(output, 'w', encoding='utf-8', newline='') as f:
+            f.write(text + ("\n" if not text.endswith("\n") else ""))
+        click.echo(_("Written to {f}").format(f=output), err=True)
+    else:
+        click.echo(text)
+    click.echo(_("{n} request(s) made to Delcampe").format(n=client.requests_made), err=True)

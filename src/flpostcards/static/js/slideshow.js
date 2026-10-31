@@ -122,7 +122,9 @@
     }
 
     function buildAltText(card) {
-        return card.title || card.detected_content ||
+        // recto_alt (calculé côté serveur, flpostcards.alt_text) commence
+        // toujours par « Carte postale » ; le reste n'est qu'un repli.
+        return card.recto_alt || card.title || card.detected_content ||
             ((config.rectoAltLabel || "") + " " + card.id);
     }
 

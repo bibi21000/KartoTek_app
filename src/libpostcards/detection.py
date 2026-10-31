@@ -197,6 +197,13 @@ class PostcardDetection:
         # régulièrement certains motifs de cartes postales anciennes
         # avec des "tie"). Comparaison insensible à la casse.
         excluded_objects=None,
+        # Début de légende imposé à BLIP ("conditional captioning") :
+        # le modèle COMPLÈTE ce texte au lieu de partir de zéro, ce qui
+        # garantit que la légende commence par "a postcard of ..." (et
+        # non "a photo of ..." ou rien). Chaîne vide/None : légende
+        # libre, comme avant.
+        # ~ caption_prompt="a postcard of",
+        caption_prompt="",
         debug=False,
         external_helper=None,
         external_helper_timeout=None,
@@ -206,6 +213,7 @@ class PostcardDetection:
         self.lang = lang
         self.objects_threshold = objects_threshold
         self.max_objects = max_objects
+        self.caption_prompt = (caption_prompt or "").strip() or None
         self.debug = debug
         # Libellés (dans self.lang, ex: "cravate" en français, ou déjà
         # en anglais, ex: "tie") à toujours exclure des résultats de
@@ -422,7 +430,9 @@ class PostcardDetection:
         que le calcul soit local ou distant.
         """
         if self.external_helper:
-            payload = self._post_to_helper(image, caption="true", objects="false")
+            payload = self._post_to_helper(
+                image, caption="true", objects="false",
+                **self._prompt_fields())
             return payload["caption"]
 
         self._ensure_model()
@@ -430,13 +440,27 @@ class PostcardDetection:
         import torch
 
         img = self._load_image(image)
-        inputs = self.processor(img, return_tensors="pt").to(self.device)
+        if self.caption_prompt:
+            inputs = self.processor(
+                img, text=self.caption_prompt, return_tensors="pt"
+            ).to(self.device)
+            # Le prompt consomme une partie du budget de tokens par
+            # défaut (20) : on l'élargit pour ne pas tronquer la légende.
+            gen_kwargs = {"max_new_tokens": 40, "num_beams": 3}
+        else:
+            inputs = self.processor(img, return_tensors="pt").to(self.device)
+            gen_kwargs = {}
 
         with torch.no_grad():
-            out = self.model.generate(**inputs)
+            out = self.model.generate(**inputs, **gen_kwargs)
 
         raw = self.processor.decode(out[0], skip_special_tokens=True)
         return _strip_blip_artifacts(raw)
+
+    def _prompt_fields(self):
+        """Champ de formulaire ``prompt`` envoyé à ``external_helper``
+        (ignoré par un serveur plus ancien : légende libre alors)."""
+        return {"prompt": self.caption_prompt} if self.caption_prompt else {}
 
     # --------------------------------------------------
 
@@ -594,7 +618,8 @@ class PostcardDetection:
         lang = lang or self.lang
         if self.external_helper:
             payload = self._post_to_helper(
-                image, caption="true", objects="false", **self._lang_fields(lang))
+                image, caption="true", objects="false",
+                **self._prompt_fields(), **self._lang_fields(lang))
             return self._from_payload(
                 payload["caption"], payload, lang, lambda t: t.get("caption"))
         return self._translate_local(self.caption(image), lang)

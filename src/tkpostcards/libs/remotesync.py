@@ -1,18 +1,56 @@
 """
 remotesync.py — Bibliothèque de synchronisation de fichiers vers un serveur distant.
-Protocoles supportés : FTP, FTPS, FTP/TLS, SFTP (SSH).
+Protocoles supportés : FTP, FTPS, FTP/TLS, SFTP (SSH), HTTPS.
 Configuration via fichier INI.
+
+Transport HTTPS
+---------------
+``protocol = https`` envoie les fichiers au blueprint « sync » de flpostcards
+(voir ``flpostcards.blueprints.sync`` pour le protocole et sa sécurité). Pour
+une publication de dizaines de milliers de fichiers, il s'inspire de ce qui
+rend SFTP rapide -- connexions persistantes, plusieurs en parallèle -- et va
+plus loin en supprimant la plupart des allers-retours :
+
+  * inventaire distant complet en UNE requête (``GET /list``) ; la comparaison
+    taille/mtime se fait localement, sans stat par fichier ;
+  * fichiers petits regroupés en LOTS (``batch_mb`` / ``batch_files``) : une
+    requête transporte des centaines de fichiers ; les répertoires sont créés
+    côté serveur ;
+  * gros fichiers (postcards.sqlite) découpés en parties (``part_mb``) envoyées
+    en parallèle, puis assemblés ; chaque fichier est installé atomiquement
+    (jamais lu à moitié écrit par l'appli web) avec le mtime du poste ;
+  * compression zlib des seuls types compressibles (json/sqlite/pkl/texte),
+    CRC32 vérifié, reprise automatique (3 essais) sur erreur réseau/502/503/504.
+
+Deux accès possibles à un même serveur, via deux sections du .ini :
+  * depuis le LAN, directement sur flpostcards : ``host = http://flpostcards:5000``
+    + ``allow_http = true`` (réseau de confiance, pas de TLS) ;
+  * depuis Internet, par la passerelle : ``host = https://tools.example.com``
+    + ``api_key`` (clé de niveau « hébergement », vérifiée par la passerelle ;
+    le jeton ``token`` reste vérifié par flpostcards lui-même).
+
+L'appli web distante peut être redémarrée après le transfert
+(``restart_remote = true``, voir :meth:`RemoteSync.trigger_restart`).
 """
 
 from __future__ import annotations
 
 import configparser
 import ftplib
+import gzip
 import hashlib
+import http.client
+import json
 import logging
 import os
+import ssl
 import stat
+import struct
 import threading
+import time
+import urllib.parse
+import uuid
+import zlib
 from abc import ABC, abstractmethod
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from dataclasses import dataclass, field
@@ -33,6 +71,7 @@ class Protocol(str, Enum):
     FTPS  = "ftps"
     FTPTLS = "ftptls"
     SFTP  = "sftp"
+    HTTPS = "https"
 
 
 @dataclass
@@ -70,6 +109,35 @@ class SyncConfig:
     # peut par exemple appeler l'API en local (127.0.0.1) ou redémarrer
     # un service système directement. Vide = pas de commande (défaut).
     restart_command: str = ""
+    # --- protocole https uniquement (voir _HTTPSBackend) --------------------
+    # ``host`` peut être un nom d'hôte ou une URL https://hôte[:port][/sous-chemin]
+    # (derrière un reverse proxy servant flpostcards sous un sous-chemin).
+    # Chemin du blueprint côté serveur ([flask] sync_url_prefix).
+    url_prefix: str = "/api/v1/sync"
+    # Jeton partagé ([flask] sync_token du serveur). À défaut, ``password``.
+    token: str = ""
+    verify_tls: bool = True        # False = n'authentifie pas le serveur (déconseillé)
+    ca_bundle: str = ""            # CA/certificat à accepter (serveur à certificat privé)
+    batch_bytes: int = 4 * 1024 * 1024   # taille cible d'un lot de petits fichiers
+    batch_files: int = 500               # nombre max de fichiers par lot
+    part_bytes: int = 8 * 1024 * 1024    # taille max d'une partie de gros fichier
+    # Demande au serveur de redémarrer l'appli web une fois la publication
+    # terminée (POST <url_prefix>/restart ; la commande/le signal/l'URL exécuté
+    # est fixé par la config DU SERVEUR : [flask] sync_allow_restart).
+    restart_remote: bool = False
+    # Autorise ``host = http://...`` (sans TLS) : pour un serveur joint
+    # DIRECTEMENT sur un réseau local de confiance. Le jeton circule alors en
+    # clair -- à ne jamais activer pour une cible joignable depuis Internet.
+    allow_http: bool = False
+    # Clé API exigée par une passerelle placée devant flpostcards (ex :
+    # toolspostcards derrière nginx), envoyée dans l'en-tête ``api_key_header``
+    # EN PLUS du jeton ci-dessus (que flpostcards vérifie toujours lui-même).
+    api_key: str = ""
+    api_key_header: str = "X-API-Key"
+    # Taille maximale d'une requête acceptée par la chaîne de proxys (nginx :
+    # client_max_body_size, 1 Mo par défaut !). 0 = pas de plafond propre ;
+    # sinon lots et parties sont ajustés pour ne jamais le dépasser.
+    max_request_bytes: int = 0
 
     @classmethod
     def from_ini(cls, path: str | Path, section: str = "remotesync") -> "SyncConfig":
@@ -85,7 +153,8 @@ class SyncConfig:
             raise ValueError(f"Protocole inconnu : {proto_str!r}. Valeurs acceptées : {[p.value for p in Protocol]}")
 
         default_ports = {Protocol.FTP: 21, Protocol.FTPS: 990,
-                         Protocol.FTPTLS: 21, Protocol.SFTP: 22}
+                         Protocol.FTPTLS: 21, Protocol.SFTP: 22,
+                         Protocol.HTTPS: 443}
         port = int(s.get("port", default_ports[protocol]))
 
         return cls(
@@ -110,6 +179,18 @@ class SyncConfig:
             restart_url=s.get("restart_url", ""),
             restart_token=s.get("restart_token", ""),
             restart_command=s.get("restart_command", ""),
+            url_prefix=s.get("url_prefix", "/api/v1/sync"),
+            token=s.get("token", ""),
+            verify_tls=s.getboolean("verify_tls", True),
+            ca_bundle=s.get("ca_bundle", ""),
+            batch_bytes=max(1, int(float(s.get("batch_mb", 4)) * 1024 * 1024)),
+            batch_files=max(1, int(s.get("batch_files", 500))),
+            part_bytes=max(1, int(float(s.get("part_mb", 8)) * 1024 * 1024)),
+            restart_remote=s.getboolean("restart_remote", False),
+            allow_http=s.getboolean("allow_http", False),
+            api_key=s.get("api_key", ""),
+            api_key_header=s.get("api_key_header", "X-API-Key"),
+            max_request_bytes=max(0, int(float(s.get("max_request_mb", 0)) * 1024 * 1024)),
         )
 
 
@@ -910,6 +991,407 @@ class _SFTPBackend(_BaseBackend):
 
 
 # ---------------------------------------------------------------------------
+# Backend HTTPS (blueprint « sync » de flpostcards)
+# ---------------------------------------------------------------------------
+
+_FRAME_HDR = struct.Struct(">I")
+_FRAME_END = _FRAME_HDR.pack(0)
+_BODY_MARGIN = 128 * 1024       # place laissée aux en-têtes de trame sous MAX_CONTENT_LENGTH
+_MIN_COMPRESS = 512             # sous cette taille, la compression ne rapporte rien
+_WARNED_PLAIN_HTTP: set[str] = set()   # un avertissement « sans TLS » par hôte
+_MTIME_TOLERANCE = 2.0          # s : précision d'horodatage des FS (FAT = 2 s)
+_COMPRESSIBLE_EXT = frozenset({
+    ".json", ".sqlite", ".db", ".pkl", ".txt", ".csv", ".xml", ".html", ".htm",
+    ".css", ".js", ".svg", ".md", ".po", ".pot", ".ini", ".conf", ".yaml", ".yml",
+    ".log",
+})
+
+
+def _make_frame(rel: str, data: bytes, mtime: float, offset: int, total: int,
+                compress: bool) -> bytes:
+    """Encode un fichier (ou une partie de fichier) en trame du protocole
+    (voir la docstring de ``flpostcards.blueprints.sync``)."""
+    stored, z = data, 0
+    if (compress and len(data) >= _MIN_COMPRESS
+            and os.path.splitext(rel)[1].lower() in _COMPRESSIBLE_EXT):
+        packed = zlib.compress(data, 6)
+        if len(packed) < len(data) * 0.9:   # on ne garde que si le gain est net
+            stored, z = packed, 1
+    hdr = json.dumps(
+        {"p": rel, "m": mtime, "o": offset, "t": total, "u": len(data),
+         "s": len(stored), "z": z, "c": zlib.crc32(data) & 0xFFFFFFFF},
+        separators=(",", ":"), ensure_ascii=False,
+    ).encode("utf-8")
+    return _FRAME_HDR.pack(len(hdr)) + hdr + stored
+
+
+@dataclass
+class _HTTPSLimits:
+    """Tailles effectives, après négociation avec ``GET /info``."""
+    max_body: int
+    part_bytes: int
+    batch_bytes: int
+    batch_files: int
+
+
+class _HTTPSBackend(_BaseBackend):
+    """
+    Une connexion HTTPS persistante (keep-alive) vers le blueprint sync.
+
+    Comme les autres backends, une instance = une connexion, non partagée
+    entre threads : chaque worker de ``sync_directory`` ouvre la sienne et
+    la garde pour tous ses lots (pas de poignée de main TLS par fichier).
+
+    Uniquement la bibliothèque standard (``http.client``/``ssl``) : ``requests``
+    n'est pas une dépendance du poste qui publie.
+    """
+
+    USER_AGENT = "remotesync-https/1"
+
+    def __init__(self, cfg: SyncConfig):
+        super().__init__(cfg)
+        self._conn: Optional[http.client.HTTPConnection] = None
+        self._ctx: Optional[ssl.SSLContext] = None
+        self._host, self._port, self._prefix, self._scheme = self._parse_endpoint(cfg)
+        self.limits: Optional[_HTTPSLimits] = None
+
+    # -- configuration ------------------------------------------------------
+
+    @staticmethod
+    def _parse_endpoint(cfg: SyncConfig) -> tuple[str, int, str, str]:
+        """``(hôte, port, sous-chemin + url_prefix, schéma)``. Un nom d'hôte seul
+        signifie https ; ``http://`` n'est accepté qu'avec ``allow_http``."""
+        host = cfg.host.strip()
+        port = cfg.port
+        subpath = ""
+        scheme = "https"
+        if "://" in host:
+            u = urllib.parse.urlsplit(host)
+            scheme = u.scheme.lower()
+            if scheme == "http" and not cfg.allow_http:
+                raise ValueError(
+                    f"{host!r} : http:// refusé -- le jeton circulerait en clair. "
+                    "Utilisez https://, ou allow_http = true pour un serveur sur "
+                    "un réseau local de confiance"
+                )
+            if scheme not in ("http", "https"):
+                raise ValueError(f"schéma non supporté : {host!r} (https:// ou http://)")
+            hostname = u.hostname or ""
+            # port 443 = valeur par défaut de [section] port, pas un choix explicite
+            port = u.port or (80 if scheme == "http" and port == 443 else port)
+            subpath = u.path.rstrip("/")
+        else:
+            hostname = host
+        if not hostname:
+            raise ValueError("host manquant pour le protocole https")
+        prefix = (subpath + "/" + cfg.url_prefix.strip("/")).rstrip("/")
+        return hostname, port, prefix, scheme
+
+    def _make_context(self) -> ssl.SSLContext:
+        if not self.cfg.verify_tls:
+            logger.warning("HTTPS : vérification du certificat DÉSACTIVÉE (verify_tls=false)")
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            return ctx
+        return ssl.create_default_context(cafile=self.cfg.ca_bundle or None)
+
+    # -- cycle de vie -------------------------------------------------------
+
+    def connect(self) -> None:
+        if self._scheme == "https":
+            self._ctx = self._make_context()
+        elif self._host not in _WARNED_PLAIN_HTTP:
+            _WARNED_PLAIN_HTTP.add(self._host)
+            logger.warning("HTTP SANS TLS vers %s : le jeton circule en clair "
+                           "(allow_http = true) -- réseau local de confiance uniquement",
+                           self._host)
+        self._conn = self._new_conn()
+        self._conn.connect()  # échoue tout de suite (TLS, DNS...) plutôt qu'à la 1re requête
+        logger.info("%s connecté à %s:%s%s", self._scheme.upper(),
+                    self._host, self._port, self._prefix)
+
+    def disconnect(self) -> None:
+        self._drop()
+
+    def _new_conn(self) -> http.client.HTTPConnection:
+        if self._scheme == "http":
+            return http.client.HTTPConnection(
+                self._host, self._port, timeout=self.cfg.timeout)
+        if self._ctx is None:
+            self._ctx = self._make_context()
+        return http.client.HTTPSConnection(
+            self._host, self._port, timeout=self.cfg.timeout, context=self._ctx
+        )
+
+    def _drop(self) -> None:
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
+
+    # -- requêtes -----------------------------------------------------------
+
+    def _request(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        params: Optional[dict] = None,
+        body: Optional[bytes] = None,
+        content_type: Optional[str] = None,
+        ok: tuple[int, ...] = (200,),
+        sink: Optional[Path] = None,
+        retries: int = 3,
+    ):
+        """
+        Envoie une requête sur la connexion persistante ; retourne
+        ``(status, réponse, corps)``.
+
+        Reconnexion automatique si le serveur/proxy a fermé la connexion
+        inactive, et jusqu'à ``retries`` nouveaux essais (attente
+        exponentielle) sur erreur réseau ou 502/503/504. Toutes les
+        requêtes du protocole sont idempotentes (écrire deux fois le même
+        fichier donne le même résultat), donc rejouables sans risque.
+        Un certificat refusé n'est PAS rejoué.
+
+        Avec ``sink``, le corps de la réponse est écrit dans ce fichier
+        (téléchargement) au lieu d'être gardé en mémoire.
+        """
+        url = self._prefix + endpoint
+        if params:
+            url += "?" + urllib.parse.urlencode(params)
+        headers = {
+            "Authorization": "Bearer " + (self.cfg.token or self.cfg.password),
+            "Accept-Encoding": "gzip",
+            "User-Agent": self.USER_AGENT,
+        }
+        if self.cfg.api_key:
+            headers[self.cfg.api_key_header or "X-API-Key"] = self.cfg.api_key
+        if content_type:
+            headers["Content-Type"] = content_type
+
+        for attempt in range(retries + 1):
+            try:
+                if self._conn is None:
+                    self._conn = self._new_conn()
+                self._conn.request(method, url, body=body, headers=headers)
+                resp = self._conn.getresponse()
+                if sink is not None and resp.status in ok:
+                    with open(sink, "wb") as fh:
+                        while True:
+                            chunk = resp.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            fh.write(chunk)
+                    payload = b""
+                else:
+                    payload = resp.read()
+            except ssl.SSLCertVerificationError:
+                self._drop()
+                raise
+            except (http.client.HTTPException, OSError) as exc:
+                self._drop()
+                if attempt >= retries:
+                    raise
+                delay = 0.5 * (2 ** attempt)
+                logger.warning("HTTPS %s %s : %s -- nouvel essai dans %.1fs",
+                               method, endpoint, exc, delay)
+                time.sleep(delay)
+                continue
+
+            if (resp.getheader("Connection") or "").lower() == "close":
+                self._drop()
+            if resp.status in (502, 503, 504) and attempt < retries:
+                self._drop()
+                delay = 0.5 * (2 ** attempt)
+                logger.warning("HTTPS %s %s : HTTP %d -- nouvel essai dans %.1fs",
+                               method, endpoint, resp.status, delay)
+                time.sleep(delay)
+                continue
+            break
+
+        if resp.getheader("Content-Encoding") == "gzip" and payload:
+            payload = gzip.decompress(payload)
+        if resp.status in ok:
+            return resp.status, resp, payload
+
+        try:
+            message = json.loads(payload).get("error") or payload.decode("utf-8", "replace")
+        except Exception:
+            message = payload[:200].decode("utf-8", "replace") or resp.reason
+        if resp.status in (401, 403):
+            raise PermissionError(
+                f"HTTP {resp.status} sur {endpoint} : {message} "
+                "(jeton, ou clé API refusée par la passerelle ? "
+                "vérifier token / api_key et son niveau d'accès)")
+        if resp.status == 413:
+            raise RuntimeError(
+                f"HTTP 413 sur {endpoint} : requête refusée car trop volumineuse "
+                "(client_max_body_size du reverse proxy ?). Réglez max_request_mb "
+                "sur la limite de la chaîne de proxys (ou baissez batch_mb/part_mb)")
+        if resp.status == 404:
+            raise FileNotFoundError(message)
+        if resp.status == 409:
+            raise FileExistsError(message)
+        raise RuntimeError(f"HTTP {resp.status} sur {method} {endpoint} : {message}")
+
+    def _json(self, method: str, endpoint: str, **kw) -> dict:
+        _, _, payload = self._request(method, endpoint, **kw)
+        return json.loads(payload) if payload else {}
+
+    def _post_json(self, endpoint: str, obj: dict, **kw) -> dict:
+        return self._json("POST", endpoint, body=json.dumps(obj).encode("utf-8"),
+                          content_type="application/json", **kw)
+
+    # -- négociation --------------------------------------------------------
+
+    def get_limits(self) -> _HTTPSLimits:
+        """Tailles de lot/partie effectives : les réglages du client, bornés
+        par le MAX_CONTENT_LENGTH annoncé par le serveur (résultat mis en
+        cache ; les workers le reçoivent déjà calculé via ``limits``)."""
+        if self.limits is None:
+            info = self._json("GET", "/info")
+            if info.get("protocol") != 1:
+                raise RuntimeError(
+                    f"Version de protocole sync non supportée : {info.get('protocol')!r}"
+                )
+            max_body = int(info.get("max_body") or 16 * 1024 * 1024)
+            if self.cfg.max_request_bytes:
+                max_body = min(max_body, self.cfg.max_request_bytes)
+            room = max(64 * 1024, max_body - _BODY_MARGIN)
+            self.limits = _HTTPSLimits(
+                max_body=max_body,
+                part_bytes=max(64 * 1024, min(self.cfg.part_bytes, room)),
+                batch_bytes=max(64 * 1024, min(self.cfg.batch_bytes, room)),
+                batch_files=max(1, self.cfg.batch_files),
+            )
+        return self.limits
+
+    # -- transfert en masse -------------------------------------------------
+
+    def list_tree(self, remote_dir: str) -> dict[str, tuple[int, float]]:
+        """Inventaire récursif ``{chemin relatif : (taille, mtime)}`` en UNE requête."""
+        data = self._json("GET", "/list", params={"path": remote_dir})
+        return {rel: (int(v[0]), float(v[1])) for rel, v in data.get("files", {}).items()}
+
+    def put_frames(self, root: str, session: str, frames: list[bytes]) -> dict[str, str]:
+        """
+        Envoie un lot de trames ; retourne ``{chemin : message}`` pour les
+        fichiers REFUSÉS (vide = tout est accepté). Lève si la requête
+        elle-même échoue (le lot entier est alors à considérer en échec).
+        """
+        body = b"".join(frames) + _FRAME_END
+        data = self._json("POST", "/put", params={"root": root, "session": session},
+                          body=body, content_type="application/octet-stream")
+        return {p: msg for p, msg in data.get("errors", [])}
+
+    def commit(self, root: str, session: str, files: list[dict] = (),
+               delete: list[str] = (), done: bool = False) -> dict:
+        """Assemble les fichiers en parties (``files``), supprime ``delete``,
+        et, avec ``done``, libère l'espace de staging de la session."""
+        return self._post_json("/commit", {
+            "root": root, "session": session, "files": list(files),
+            "delete": list(delete), "done": done,
+        })
+
+    def request_restart(self) -> str:
+        """Demande au serveur de redémarrer l'appli web ; retourne la méthode
+        qu'il utilise (``command``/``pidfile``/``url``)."""
+        try:
+            data = self._json("POST", "/restart", ok=(202,))
+        except RuntimeError as exc:
+            if "HTTP 501" in str(exc):
+                raise RuntimeError(
+                    "le serveur refuse le redémarrage à distance "
+                    "([flask] sync_allow_restart = false)"
+                ) from exc
+            raise
+        return data.get("method", "?")
+
+    # -- interface _BaseBackend --------------------------------------------
+
+    def upload_file(self, local_path: Path, remote_path: str, ensure_dir: bool = True) -> None:
+        """Fichier isolé (``sync_file``) : même protocole que le mode lot ;
+        les répertoires manquants sont créés par le serveur (``ensure_dir``
+        est donc sans objet)."""
+        rel = remote_path.lstrip("/")
+        limits = self.get_limits()
+        st = os.stat(local_path)
+        size, mtime = st.st_size, st.st_mtime
+        session = uuid.uuid4().hex
+        compress = self.cfg.compression
+
+        if size <= limits.part_bytes:
+            with open(local_path, "rb") as fh:
+                data = fh.read()
+            frame = _make_frame(rel, data, mtime, 0, len(data), compress)
+            errs = self.put_frames("", session, [frame])
+            if errs:
+                raise RuntimeError(errs.get(rel) or next(iter(errs.values())))
+            return
+
+        with open(local_path, "rb") as fh:
+            for offset in range(0, size, limits.part_bytes):
+                fh.seek(offset)
+                data = fh.read(min(limits.part_bytes, size - offset))
+                errs = self.put_frames(
+                    "", session, [_make_frame(rel, data, mtime, offset, size, compress)])
+                if errs:
+                    self.commit("", session, done=True)
+                    raise RuntimeError(next(iter(errs.values())))
+        res = self.commit("", session, files=[{"p": rel, "t": size, "m": mtime}], done=True)
+        if res.get("errors"):
+            raise RuntimeError(res["errors"][0][1])
+
+    def remote_mtime(self, remote_path: str) -> Optional[float]:
+        try:
+            st = self._json("GET", "/stat", params={"path": remote_path})
+        except Exception:
+            return None
+        return float(st["mtime"]) if st.get("exists") and not st.get("is_dir") else None
+
+    def remote_exists(self, remote_path: str) -> bool:
+        return bool(self._json("GET", "/stat", params={"path": remote_path}).get("exists"))
+
+    def makedirs(self, remote_dir: str) -> None:
+        self._post_json("/mkdir", {"path": remote_dir})
+
+    def mkdir_leaf(self, remote_dir: str) -> None:
+        self._post_json("/mkdir", {"path": remote_dir})
+
+    def list_remote(self, remote_dir: str) -> list[str]:
+        base = remote_dir.rstrip("/")
+        return [base + "/" + rel for rel in self.list_tree(remote_dir)]
+
+    def list_dir_entries(self, remote_dir: str) -> list[tuple[str, bool, Optional[float]]]:
+        data = self._json("GET", "/ls", params={"path": remote_dir})
+        return [(name, bool(is_dir), mtime) for name, is_dir, mtime in data.get("entries", [])]
+
+    def create_empty_file(self, remote_path: str) -> None:
+        """Création exclusive côté serveur (O_CREAT|O_EXCL) : atomique, contrairement
+        à l'émulation FTP. ``FileExistsError`` si le verrou existe déjà."""
+        self._request("PUT", "/lock", params={"path": remote_path}, ok=(201,))
+
+    def download_file(self, remote_path: str, local_path: Path) -> None:
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = local_path.with_name(local_path.name + ".part")
+        try:
+            self._request("GET", "/file", params={"path": remote_path}, sink=tmp)
+            os.replace(tmp, local_path)
+        finally:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+
+    def delete_remote(self, remote_path: str) -> None:
+        self._request("DELETE", "/file", params={"path": remote_path})
+
+
+# ---------------------------------------------------------------------------
 # Exceptions publiques
 # ---------------------------------------------------------------------------
 
@@ -1250,6 +1732,12 @@ class RemoteSync:
         # plusieurs répertoires.
         local_files = _scan_local_files(local, max_workers=max(workers * 2, 8))
 
+        # Transport HTTPS : chemin dédié, par lots (pas de pré-création de
+        # répertoires ni de balayage distant répertoire par répertoire : le
+        # serveur s'en charge, voir _sync_directory_https).
+        if self.config.protocol == Protocol.HTTPS:
+            return self._sync_directory_https(local, remote_dir, workers, local_files)
+
         # ── 2. Pré-création des répertoires distants (sérialisée) ─────────────
         # On crée l'arborescence avant le lancement des workers pour éviter
         # les conditions de course sur makedirs entre threads.
@@ -1549,8 +2037,21 @@ class RemoteSync:
         2. ``restart_url`` (+ ``restart_token`` optionnel) : appel HTTP
            POST direct à cet endpoint, voir flpostcards ci-dessous.
 
-        No-op silencieux (retourne False, sans lever d'exception) si ni
-        l'un ni l'autre n'est configuré : une publication ne doit jamais
+        3. ``restart_remote = true`` (protocole https uniquement) : demande
+           ``POST <url_prefix>/restart`` au blueprint sync de flpostcards,
+           qui redémarre alors L'APPLI QUI RÉPOND (rechargement des workers
+           gunicorn, purge du cache JSON) ; le client ne peut rien
+           exécuter d'autre, et l'administrateur du serveur peut le refuser
+           (``[flask] sync_allow_restart = false``). Tient lieu de ``restart_url`` : rien à exposer
+           en plus du blueprint sync, déjà authentifié par le même jeton.
+           Prioritaire sur ``restart_url`` si les deux sont définis.
+
+        À appeler APRÈS le dernier transfert (c'est ce que fait
+        ``PostcardPublish.publish``) : le serveur redémarre l'appli web
+        0,5 s après avoir répondu.
+
+        No-op silencieux (retourne False, sans lever d'exception) si aucune
+        de ces voies n'est configurée : une publication ne doit jamais
         échouer à cause de ce mécanisme optionnel. Une erreur
         réseau/SSH/HTTP est journalisée puis avalée de la même façon.
 
@@ -1559,6 +2060,8 @@ class RemoteSync:
         """
         if self.config.restart_command and self.config.protocol == Protocol.SFTP:
             return self._trigger_restart_ssh(timeout=timeout)
+        if self.config.restart_remote and self.config.protocol == Protocol.HTTPS:
+            return self._trigger_restart_https()
         if self.config.restart_url:
             return self._trigger_restart_http(timeout=timeout)
         return False
@@ -1598,6 +2101,26 @@ class RemoteSync:
             f" -- stderr: {err.strip()}" if err.strip() else "",
         )
         return False
+
+    def _trigger_restart_https(self) -> bool:
+        """Demande le redémarrage via le blueprint sync (voir
+        :meth:`trigger_restart`). Toute erreur est journalisée puis avalée :
+        une publication déjà transférée ne doit pas échouer pour ça."""
+        backend = self._build_backend()
+        try:
+            backend.connect()
+            method = backend.request_restart()
+        except Exception as exc:
+            logger.warning("Redémarrage via HTTPS (%s) : %s", self.config.host, exc)
+            return False
+        finally:
+            try:
+                backend.disconnect()
+            except Exception:
+                pass
+        logger.info("Redémarrage déclenché via HTTPS sur %s (méthode serveur : %s)",
+                    self.config.host, method)
+        return True
 
     def _trigger_restart_http(self, timeout: float = 10.0) -> bool:
         """
@@ -1649,6 +2172,276 @@ class RemoteSync:
         return False
 
     # ------------------------------------------------------------------
+    # Synchronisation de répertoire en masse (protocole https)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _stat_local_parallel(
+        local: Path, rels: list[str], workers: int
+    ) -> dict[str, tuple[int, float]]:
+        """``{rel : (taille, mtime)}`` ; les fichiers illisibles sont absents."""
+        root = str(local)
+
+        def stat_slice(sl: list[str]) -> dict[str, tuple[int, float]]:
+            out: dict[str, tuple[int, float]] = {}
+            for rel in sl:
+                try:
+                    st = os.stat(os.path.join(root, rel))
+                except OSError:
+                    continue
+                out[rel] = (st.st_size, st.st_mtime)
+            return out
+
+        n = max(1, min(workers * 4, len(rels) // 200 or 1))
+        result: dict[str, tuple[int, float]] = {}
+        with ThreadPoolExecutor(max_workers=n) as pool:
+            for part in pool.map(stat_slice, [rels[i::n] for i in range(n)]):
+                result.update(part)
+        return result
+
+    def _sync_directory_https(
+        self, local: Path, remote_dir: str, workers: int, local_files: set[str]
+    ) -> SyncResult:
+        """
+        Équivalent HTTPS de la boucle de :meth:`sync_directory`, sans les
+        allers-retours par fichier / par répertoire :
+
+        1. un seul ``GET /list`` donne tout l'inventaire distant (taille,
+           mtime) ; la décision envoyer/ignorer se prend localement ;
+        2. les fichiers à envoyer sont regroupés en lots (``batch_bytes`` /
+           ``batch_files``), les gros fichiers découpés en parties
+           (``part_bytes``) -- chaque lot/partie = UNE requête POST /put ;
+        3. ``max_workers`` threads, chacun avec sa connexion persistante,
+           envoient lots et parties en parallèle ;
+        4. les fichiers en parties sont assemblés par ``POST /commit`` (qui
+           supprime aussi les orphelins si ``delete_orphans``).
+
+        Règle de saut : fichier ignoré si sa taille est identique ET son
+        mtime local n'est pas postérieur (à 2 s près) au mtime distant. Le
+        serveur appliquant le mtime du poste à ce qu'il reçoit, un second
+        passage sans modification n'envoie rien.
+        """
+        cfg = self.config
+        result = SyncResult()
+        lock = threading.Lock()
+        root = remote_dir
+        rbase = remote_dir.rstrip("/")
+        sorted_files = sorted(local_files)
+
+        # ── 1. stat local + inventaire distant ───────────────────────────────
+        local_stats = self._stat_local_parallel(local, sorted_files, workers)
+        try:
+            with self._build_backend() as probe:
+                limits = probe.get_limits()
+                remote = probe.list_tree(root)
+        except Exception as exc:
+            logger.exception("Erreur lors du balayage distant")
+            result.errors.append(f"Balayage distant : {exc}")
+            return result
+
+        # ── 2. décision (locale, aucun appel réseau) ─────────────────────────
+        need: list[str] = []
+        for rel in sorted_files:
+            st = local_stats.get(rel)
+            if st is None:
+                result.errors.append(f"{rbase}/{rel}: fichier local illisible")
+                continue
+            r = remote.get(rel)
+            if r is not None and r[0] == st[0] and st[1] <= r[1] + _MTIME_TOLERANCE:
+                result.skipped.append(f"{rbase}/{rel}")
+            else:
+                need.append(rel)
+
+        orphans: list[str] = []
+        if cfg.delete_orphans:
+            if remote and not local_files:
+                # _scan_local_files renvoie un ensemble vide si le répertoire
+                # est illisible : sans ce garde-fou, on viderait le serveur.
+                result.errors.append(
+                    "Suppression des orphelins annulée : aucun fichier local trouvé "
+                    f"alors que {len(remote)} fichier(s) existent côté serveur"
+                )
+            else:
+                orphans = sorted(rel for rel in remote if rel not in local_files)
+
+        if cfg.dry_run:
+            for rel in need:
+                logger.info("[DRY-RUN] %s → %s/%s", local / rel, rbase, rel)
+                result.uploaded.append(f"{rbase}/{rel}")
+            result.deleted.extend(f"{rbase}/{rel}" for rel in orphans)
+            return result
+
+        # ── 3. découpage en tâches : lots de petits fichiers / parties ───────
+        # Un élément = (rel, offset, longueur, taille totale du fichier).
+        tasks: list[list[tuple[str, int, int, int]]] = []
+        multipart: dict[str, int] = {}      # rel -> nombre de parties
+        cur: list[tuple[str, int, int, int]] = []
+        cur_bytes = 0
+        for rel in need:
+            size = local_stats[rel][0]
+            if size > limits.part_bytes:
+                if cur:
+                    tasks.append(cur)
+                    cur, cur_bytes = [], 0
+                offsets = range(0, size, limits.part_bytes)
+                multipart[rel] = len(offsets)
+                for off in offsets:
+                    tasks.append([(rel, off, min(limits.part_bytes, size - off), size)])
+                continue
+            if cur and (cur_bytes + size > limits.batch_bytes
+                        or len(cur) >= limits.batch_files):
+                tasks.append(cur)
+                cur, cur_bytes = [], 0
+            cur.append((rel, 0, size, size))
+            cur_bytes += size
+        if cur:
+            tasks.append(cur)
+
+        session = uuid.uuid4().hex
+        failed: set[str] = set()
+        parts_ok: dict[str, int] = {rel: 0 for rel in multipart}
+        thread_local = threading.local()
+        connections: list[_BaseBackend] = []
+        connections_lock = threading.Lock()
+
+        def get_backend() -> _HTTPSBackend:
+            backend = getattr(thread_local, "backend", None)
+            if backend is None:
+                backend = self._build_backend()
+                backend.limits = limits          # déjà négocié : pas de /info par worker
+                backend.connect()
+                thread_local.backend = backend
+                with connections_lock:
+                    connections.append(backend)
+            return backend
+
+        def fail(rel: str, msg: str) -> None:
+            # appelé sous ``lock``
+            if rel not in failed:
+                failed.add(rel)
+                result.errors.append(f"{rbase}/{rel}: {msg}")
+                logger.error("[ERROR]  %s/%s: %s", rbase, rel, msg)
+
+        def run_task(items: list[tuple[str, int, int, int]]) -> None:
+            pending: list[tuple[bytes, str, bool]] = []   # (trame, rel, fichier complet ?)
+            pending_bytes = 0
+
+            def post() -> None:
+                nonlocal pending, pending_bytes
+                if not pending:
+                    return
+                batch, pending, pending_bytes = pending, [], 0
+                err_all: Optional[str] = None
+                errs: dict[str, str] = {}
+                try:
+                    errs = get_backend().put_frames(root, session, [f for f, _, _ in batch])
+                except Exception as exc:
+                    err_all = str(exc) or type(exc).__name__
+                logger.info("[UPLOAD] lot de %d trame(s), %.1f Ko → %s",
+                            len(batch), sum(len(f) for f, _, _ in batch) / 1024, rbase or "/")
+                with lock:
+                    for _, rel, whole in batch:
+                        if err_all is not None:
+                            fail(rel, err_all)
+                        elif rel in errs:
+                            fail(rel, errs[rel])
+                        elif whole:
+                            result.uploaded.append(f"{rbase}/{rel}")
+                        else:
+                            parts_ok[rel] += 1
+
+            for rel, off, length, total in items:
+                whole = off == 0 and length == total
+                try:
+                    with open(local / rel, "rb") as fh:
+                        if whole:
+                            data = fh.read()
+                            mtime = os.fstat(fh.fileno()).st_mtime
+                        else:
+                            fh.seek(off)
+                            data = fh.read(length)
+                            mtime = local_stats[rel][1]
+                            if len(data) != length:
+                                raise OSError("fichier modifié pendant le transfert")
+                    frame = _make_frame(rel, data, mtime, off,
+                                        len(data) if whole else total, cfg.compression)
+                except OSError as exc:
+                    with lock:
+                        fail(rel, f"lecture locale : {exc}")
+                    continue
+                if pending and pending_bytes + len(frame) > limits.max_body - 4096:
+                    post()
+                pending.append((frame, rel, whole))
+                pending_bytes += len(frame)
+            post()
+
+        # ── 4. envoi parallèle (une connexion persistante par thread) ────────
+        try:
+            if tasks:
+                with ThreadPoolExecutor(max_workers=max(1, min(workers, len(tasks)))) as pool:
+                    futures = {pool.submit(run_task, t): t for t in tasks}
+                    for future in as_completed(futures):
+                        exc = future.exception()
+                        if exc:
+                            with lock:
+                                for rel, *_ in futures[future]:
+                                    fail(rel, f"erreur inattendue : {exc}")
+        finally:
+            for backend in connections:
+                try:
+                    backend.disconnect()
+                except Exception:
+                    pass
+
+        # ── 5. assemblage des gros fichiers + suppression des orphelins ──────
+        to_commit = [rel for rel, n in multipart.items()
+                     if rel not in failed and parts_ok[rel] == n]
+        for rel in multipart:
+            if rel not in failed and rel not in to_commit:
+                fail(rel, "parties manquantes, fichier non assemblé")
+
+        if multipart or orphans:
+            try:
+                with self._build_backend() as backend:
+                    chunk = 500
+                    ops: list[tuple[list[str], list[str]]] = [
+                        (to_commit[i:i + chunk], []) for i in range(0, len(to_commit), chunk)
+                    ] + [([], orphans[i:i + chunk]) for i in range(0, len(orphans), chunk)]
+                    if not ops:
+                        ops = [([], [])]
+                    for n, (files, dels) in enumerate(ops):
+                        res = backend.commit(
+                            root, session,
+                            files=[{"p": rel, "t": local_stats[rel][0],
+                                    "m": local_stats[rel][1]} for rel in files],
+                            delete=dels,
+                            done=(n == len(ops) - 1),
+                        )
+                        errs = {p: msg for p, msg in res.get("errors", [])}
+                        for rel in files:
+                            if rel in errs:
+                                fail(rel, errs[rel])
+                            else:
+                                result.uploaded.append(f"{rbase}/{rel}")
+                        for rel in dels:
+                            if rel in errs:
+                                result.errors.append(f"{rbase}/{rel}: {errs[rel]}")
+                            else:
+                                result.deleted.append(f"{rbase}/{rel}")
+                                logger.info("[DELETED] %s/%s", rbase, rel)
+            except Exception as exc:
+                logger.exception("Erreur lors de l'assemblage/suppression distants")
+                result.errors.append(f"Assemblage distant : {exc}")
+
+        logger.info(
+            "sync_directory (https) terminé — workers=%d | ↑%d uploadé(s) | ↷%d ignoré(s) | "
+            "✗%d supprimé(s) | ⚠%d erreur(s)",
+            workers, len(result.uploaded), len(result.skipped),
+            len(result.deleted), len(result.errors),
+        )
+        return result
+
+    # ------------------------------------------------------------------
     # Méthodes internes
     # ------------------------------------------------------------------
 
@@ -1666,6 +2459,8 @@ class RemoteSync:
         """Instancie un nouveau backend (nouvelle connexion) à chaque appel."""
         if self.config.protocol == Protocol.SFTP:
             return _SFTPBackend(self.config)
+        if self.config.protocol == Protocol.HTTPS:
+            return _HTTPSBackend(self.config)
         return _FTPBackend(self.config)
 
     def _scan_remote_parallel(self, remote_dir: str, max_workers: int) -> dict[str, Optional[float]]:

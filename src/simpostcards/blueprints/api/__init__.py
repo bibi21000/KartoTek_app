@@ -1059,7 +1059,12 @@ def compute_detection_route():
     lang = (request.values.get("lang") or "").strip()
 
     if want_caption:
-        result["caption"] = compute_caption(image, model_name=model_name, device=device)
+        # Début de légende optionnel (ex : "a postcard of"), voir
+        # PostcardDetection.caption_prompt côté client. Borné pour éviter
+        # qu'une requête n'injecte un prompt démesuré.
+        prompt = (request.values.get("prompt") or "").strip()[:80] or None
+        result["caption"] = compute_caption(image, model_name=model_name, device=device,
+                                            prompt=prompt)
 
     if want_objects:
         detections = compute_objects(image, model_name=objects_model_name, device=device,

@@ -20,7 +20,7 @@ maintainers = [
   {name = "bibi21000", email = "bibi21000@gmail.com"}
 ]
 description = "Scan, manage and publish your postcards collection"
-version = "4.2.0"
+version = "4.2.2"
 requires-python = ">=3.9"
 dependencies = [
     "pillow",
@@ -60,6 +60,8 @@ ktmanager = [
     "tqdm",
     "pyzstd",
     "paramiko",
+    "requests",          # kttools delcampe watchlist
+    "beautifulsoup4",    # kttools delcampe watchlist
 ]
 ktimport = [
     "click",

@@ -20,6 +20,7 @@ from flask import (
     url_for,
 )
 
+from flpostcards.alt_text import build_recto_alt
 from flpostcards.images import (
     SIZE_SMALL,
     SIZE_THUMB,
@@ -325,9 +326,7 @@ def sitemap():
         # que le recto (og:image), pas le verso.
         recto_path = card_images(card["id"])["recto"]
         image_loc = url_for("home.images", filename=recto_path, _external=True)
-        image_caption = (
-            card.get("title") or card.get("detected_content") or None
-        )
+        image_caption = build_recto_alt(card).replace("\n", " - ")
         add(
             url_for("home.card_detail", card_id=card["id"], _external=True),
             lastmod=card.get("mdate"),
@@ -421,21 +420,10 @@ def card_detail(card_id: str):
     dims = image_dimensions(current_app.config["DATADIR"], images["recto"])
     og_image_width, og_image_height = dims if dims else (None, None)
 
-    # Texte alternatif du recto : on concatène, une par ligne, les
-    # informations disponibles (titre, titre secondaire, description,
-    # contenu détecté automatiquement par BLIP - voir
-    # libpostcards.detection), sans libellé ni mention "Recto de la
-    # carte x", pour un alt à la fois concis, descriptif, utile pour
-    # l'accessibilité et le référencement (recherche d'images).
-    recto_alt_parts = [
-        part for part in (
-            card.get("title"),
-            card.get("title2"),
-            card.get("description"),
-            card.get("detected_content"),
-        ) if part
-    ]
-    recto_alt = "\n".join(recto_alt_parts)
+    # Texte alternatif du recto (titre, titre secondaire, description,
+    # contenu détecté par BLIP), toujours introduit par « Carte postale »
+    # : voir flpostcards.alt_text, commun à toutes les vues.
+    recto_alt = build_recto_alt(card)
 
     # URL canonique sans le paramètre ?back= (état de navigation interne,
     # pas une variation de contenu) : évite tout signal de contenu dupliqué
@@ -531,6 +519,7 @@ def card_detail(card_id: str):
         back_url=back_url,
         back_label=back_label,
         recto_alt=recto_alt,
+        og_image_alt=recto_alt.replace("\n", " - "),
         canonical_url=canonical_url,
         points_of_interest=points_of_interest,
         og_title=card_title,

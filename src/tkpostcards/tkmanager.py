@@ -6070,6 +6070,15 @@ class TextSearchView(tk.Toplevel):
         self._img_coords: dict = {}
         self._draw_gen = 0
 
+        # Search runs off the UI thread: typing only (re)arms a short timer
+        # (debounce), the query + result building happen in a worker thread,
+        # and the main thread applies the result via ``_poll_search_queue``.
+        # ``_search_gen`` identifies the latest request; results of older
+        # ones are dropped.
+        self._search_gen = 0
+        self._search_after: str | None = None
+        self._search_queue: "queue.Queue" = queue.Queue()
+
         # Used to measure how many characters fit per title line so long
         # titles wrap onto at most 2 lines with an ellipsis instead of
         # overflowing into the thumbnail below.
@@ -6081,6 +6090,7 @@ class TextSearchView(tk.Toplevel):
         self._cv.bind("<Configure>", self._on_cv_configure)
         self._run_search()
         self._poll_img_queue()
+        self._poll_search_queue()
 
     # ── Construction ─────────────────────────────────────────────────────────
     def _build_form(self):
@@ -6094,7 +6104,7 @@ class TextSearchView(tk.Toplevel):
         tk.Label(row, text=_("tsearch_label"), bg=BG_CARD, fg=FG_LABEL,
                  font=FONT_LABEL).pack(side=tk.LEFT, padx=(0, 6))
         self._query_var = tk.StringVar()
-        self._query_var.trace_add("write", lambda *_: self._run_search())
+        self._query_var.trace_add("write", lambda *_: self._schedule_search())
         e = tk.Entry(row, textvariable=self._query_var, width=36,
                      bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
                      font=FONT_INPUT, relief=tk.FLAT)
@@ -6153,10 +6163,35 @@ class TextSearchView(tk.Toplevel):
                  anchor=tk.W, padx=8).pack(fill=tk.X)
 
     # ── Search ────────────────────────────────────────────────────────────────
+    # Delay (ms) after the last keystroke before the search actually runs.
+    SEARCH_DEBOUNCE_MS = 300
+
+    def _schedule_search(self):
+        """Called on every keystroke: wait until typing pauses."""
+        if self._search_after is not None:
+            try:
+                self.after_cancel(self._search_after)
+            except Exception:
+                pass
+        self._search_after = self.after(self.SEARCH_DEBOUNCE_MS, self._run_search)
+
     def _run_search(self):
+        if self._search_after is not None:
+            try:
+                self.after_cancel(self._search_after)
+            except Exception:
+                pass
+            self._search_after = None
+        if not self.winfo_exists():
+            return
+
         query = self._query_var.get().strip()
         coll_filter = self._coll_var.get()
         all_label   = _("tsearch_all")
+
+        # Any newer request invalidates the results of a search in flight.
+        self._search_gen += 1
+        gen = self._search_gen
 
         # Avoid hitting the DB and loading thumbnails on every keystroke,
         # and avoid showing anything at all when the window first opens:
@@ -6172,58 +6207,87 @@ class TextSearchView(tk.Toplevel):
             return
 
         collection = None if (not coll_filter or coll_filter == all_label) else coll_filter
-        search = query or None
+        threading.Thread(
+            target=self._search_worker,
+            args=(gen, query or None, collection, self._with_doubles_var.get()),
+            daemon=True,
+        ).start()
 
+    def _search_worker(self, gen: int, search, collection, with_doubles: bool):
+        """Background thread: DB query + result list (no Tk calls here)."""
         try:
             cards = self._app.model.list_cards(collection=collection, search=search)
-        except Exception as e:
-            self._status.set(f"Error: {e}")
-            return
+            results: list[dict] = []
+            seen: set[int] = set()
 
-        self._results = []
-        seen: set[int] = set()
-
-        for data in cards:
-            try:
-                cid = int(data.get("id"))
-            except (TypeError, ValueError):
-                continue
-
-            entries = [(cid, data)]
-
-            # If "include doubles" is checked, add linked doubles too
-            if self._with_doubles_var.get():
-                for did_raw in (data.get("doubles") or []):
-                    try:
-                        did = int(did_raw)
-                    except (TypeError, ValueError):
-                        continue
-                    if did not in seen:
-                        ddata = self._app.model.get_card(did)
-                        if ddata:
-                            entries.append((did, ddata))
-
-            for entry_cid, entry_data in entries:
-                if entry_cid in seen:
+            for data in cards:
+                if gen != self._search_gen:      # superseded: stop early
+                    return
+                try:
+                    cid = int(data.get("id"))
+                except (TypeError, ValueError):
                     continue
-                seen.add(entry_cid)
-                title = entry_data.get("title") or entry_data.get("title2") or ""
-                colls = ", ".join(entry_data.get("collections") or [])
-                doubles = entry_data.get("doubles") or []
-                dlink = cid if (doubles and entry_cid != cid) else None
-                self._results.append({
-                    "cid": entry_cid, "title": title,
-                    "colls": colls, "dlink": dlink,
-                })
 
-        n = len(self._results)
-        self._status.set(_("tsearch_results").format(n=n))
+                entries = [(cid, data)]
 
-        # Fresh search: drop old thumbnails/coords and redraw from scratch.
-        self._tkimg.clear()
-        self._img_coords = {}
-        self._draw_gen += 1
-        self._draw()
+                # If "include doubles" is checked, add linked doubles too
+                if with_doubles:
+                    for did_raw in (data.get("doubles") or []):
+                        try:
+                            did = int(did_raw)
+                        except (TypeError, ValueError):
+                            continue
+                        if did not in seen:
+                            ddata = self._app.model.get_card(did)
+                            if ddata:
+                                entries.append((did, ddata))
+
+                for entry_cid, entry_data in entries:
+                    if entry_cid in seen:
+                        continue
+                    seen.add(entry_cid)
+                    title = entry_data.get("title") or entry_data.get("title2") or ""
+                    colls = ", ".join(entry_data.get("collections") or [])
+                    doubles = entry_data.get("doubles") or []
+                    dlink = cid if (doubles and entry_cid != cid) else None
+                    # Resolve the thumbnail path here (filesystem lookups)
+                    # so drawing on the UI thread does no disk access.
+                    path = self._app._find_gallery_image(entry_cid, "R")
+                    if path is not None and not path.exists():
+                        path = None
+                    results.append({
+                        "cid": entry_cid, "title": title,
+                        "colls": colls, "dlink": dlink, "path": path,
+                    })
+        except Exception as e:
+            self._search_queue.put((gen, None, str(e)))
+            return
+        self._search_queue.put((gen, results, None))
+
+    def _poll_search_queue(self):
+        """Main thread: apply the result of the latest search, drop stale ones."""
+        if not self.winfo_exists():
+            return
+        latest = None
+        try:
+            while True:
+                latest = self._search_queue.get_nowait()
+        except queue.Empty:
+            pass
+        if latest is not None:
+            gen, results, error = latest
+            if gen == self._search_gen:
+                if error is not None:
+                    self._status.set(f"Error: {error}")
+                else:
+                    self._results = results
+                    self._status.set(_("tsearch_results").format(n=len(results)))
+                    # Fresh search: drop old thumbnails/coords, redraw.
+                    self._tkimg.clear()
+                    self._img_coords = {}
+                    self._draw_gen += 1
+                    self._draw()
+        self.after(40, self._poll_search_queue)
 
     def _clear(self):
         self._query_var.set("")
@@ -6281,7 +6345,7 @@ class TextSearchView(tk.Toplevel):
             title = item["title"]
             colls = item["colls"]
             dlink = item["dlink"]
-            path  = self._app._find_gallery_image(cid, "R")
+            path  = item.get("path")
 
             row, col = divmod(pos, cols)
             x0 = M + col * (tile_w + M)
@@ -6359,7 +6423,7 @@ class TextSearchView(tk.Toplevel):
             return
         tag = f"imgph{pos}"
         self._cv.create_rectangle(x0, y0, x1, y1, fill="#0a0a1a", outline="", tags=(tag,))
-        if path is None or not path.exists():
+        if path is None:      # existence already checked by _search_worker
             self._cv.create_text((x0 + x1) // 2, (y0 + y1) // 2,
                                  text="—", fill=FG_LABEL, font=("Courier", 9), tags=(tag,))
             return

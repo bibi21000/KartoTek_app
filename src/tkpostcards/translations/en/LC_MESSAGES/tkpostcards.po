@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tkpostcards 2.0.0\n"
 "Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
-"POT-Creation-Date: 2026-10-18 22:32+0200\n"
+"POT-Creation-Date: 2026-10-30 20:00+0100\n"
 "PO-Revision-Date: 2026-07-24 22:03+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -792,9 +792,9 @@ msgstr ""
 #: src/tkpostcards/tkmanager.py:2564 src/tkpostcards/tkmanager.py:2581
 #: src/tkpostcards/tkmanager.py:2584 src/tkpostcards/tkmanager.py:3066
 #: src/tkpostcards/tkmanager.py:3075 src/tkpostcards/tkmanager.py:3083
-#: src/tkpostcards/tkmanager.py:3382 src/tkpostcards/tkmanager.py:6109
-#: src/tkpostcards/tkmanager.py:6110 src/tkpostcards/tkmanager.py:6159
-#: src/tkpostcards/tkmanager.py:6230
+#: src/tkpostcards/tkmanager.py:3382 src/tkpostcards/tkmanager.py:6119
+#: src/tkpostcards/tkmanager.py:6120 src/tkpostcards/tkmanager.py:6190
+#: src/tkpostcards/tkmanager.py:6294
 msgid "tsearch_all"
 msgstr ""
 
@@ -1024,7 +1024,7 @@ msgstr ""
 #: src/tkpostcards/tkmanager.py:5613 src/tkpostcards/tkmanager.py:5634
 #: src/tkpostcards/tkmanager.py:5816 src/tkpostcards/tkmanager.py:5823
 #: src/tkpostcards/tkmanager.py:5846 src/tkpostcards/tkmanager.py:5990
-#: src/tkpostcards/tkmanager.py:5996 src/tkpostcards/tkmanager.py:6444
+#: src/tkpostcards/tkmanager.py:5996 src/tkpostcards/tkmanager.py:6508
 msgid "info_title"
 msgstr ""
 
@@ -1038,7 +1038,7 @@ msgstr ""
 
 #: src/tkpostcards/tkmanager.py:3181 src/tkpostcards/tkmanager.py:3185
 #: src/tkpostcards/tkmanager.py:4055 src/tkpostcards/tkmanager.py:4492
-#: src/tkpostcards/tkmanager.py:5614 src/tkpostcards/tkmanager.py:6445
+#: src/tkpostcards/tkmanager.py:5614 src/tkpostcards/tkmanager.py:6509
 msgid "goto_not_found"
 msgstr ""
 
@@ -1133,7 +1133,7 @@ msgid "search_btn_clipboard"
 msgstr ""
 
 #: src/tkpostcards/tkmanager.py:3705 src/tkpostcards/tkmanager.py:4227
-#: src/tkpostcards/tkmanager.py:6128
+#: src/tkpostcards/tkmanager.py:6138
 msgid "search_clear"
 msgstr ""
 
@@ -1163,7 +1163,7 @@ msgid "search_done"
 msgstr ""
 
 #: src/tkpostcards/tkmanager.py:3891 src/tkpostcards/tkmanager.py:4348
-#: src/tkpostcards/tkmanager.py:6268
+#: src/tkpostcards/tkmanager.py:6332
 msgid "search_empty"
 msgstr ""
 
@@ -1456,23 +1456,23 @@ msgstr ""
 msgid "tsearch_title"
 msgstr ""
 
-#: src/tkpostcards/tkmanager.py:6094
+#: src/tkpostcards/tkmanager.py:6104
 msgid "tsearch_label"
 msgstr ""
 
-#: src/tkpostcards/tkmanager.py:6107
+#: src/tkpostcards/tkmanager.py:6117
 msgid "tsearch_coll_filter"
 msgstr ""
 
-#: src/tkpostcards/tkmanager.py:6119
+#: src/tkpostcards/tkmanager.py:6129
 msgid "tsearch_with_doubles"
 msgstr ""
 
-#: src/tkpostcards/tkmanager.py:6170
+#: src/tkpostcards/tkmanager.py:6205
 msgid "tsearch_type_more"
 msgstr ""
 
-#: src/tkpostcards/tkmanager.py:6220
+#: src/tkpostcards/tkmanager.py:6284
 msgid "tsearch_results"
 msgstr ""
 
@@ -1695,6 +1695,65 @@ msgstr ""
 
 #: src/tkpostcards/tkscan.py:1502
 msgid "Finishing scan before closing..."
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:406
+#, python-brace-format
+msgid "Network error on {url}: {exc}"
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:421
+#, python-brace-format
+msgid ""
+"HTTP {code} from Delcampe: session refused or anti-bot protection. Copy a"
+" fresh cookie from your browser (and its User-Agent, see [delcampe] "
+"user_agent)."
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:427
+msgid "Delcampe redirected to the login page: session expired."
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:455
+msgid "Not logged in: the cookie is missing, wrong or expired."
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:577
+msgid "ended"
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:595
+#, python-brace-format
+msgid "{n} watched item(s), {s} seller(s)"
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:602
+#, python-brace-format
+msgid "{n} item(s)"
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:608
+msgid "none listed"
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:609
+msgid "Payment"
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:612
+msgid "bid"
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:612
+msgid "fixed"
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:613
+msgid "[LEADING]"
+msgstr ""
+
+#: src/tkpostcards/libs/delcampe.py:613
+msgid "[outbid?]"
 msgstr ""
 
 #: src/tkpostcards/libs/mask_editor.py:110
@@ -2359,6 +2418,90 @@ msgstr ""
 
 #: src/tkpostcards/scripts/tktools.py:1274
 msgid "Image not found: "
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1277
+msgid "Delcampe tools (website, no paid API account needed)"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1283
+msgid ""
+"Watched items grouped by seller, with time left and the seller's payment "
+"methods. Uses the session cookie of your browser ([delcampe] cookie / "
+"cookie_file in postcards.conf, or $DELCAMPE_COOKIE)."
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1288
+msgid "Which watched items to list"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1291
+msgid "Sellers order: soonest ending item, name, or number of items"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1293
+msgid "Output format"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1295
+msgid "Do not look up payment methods (a single request in total)"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1297
+msgid "Ignore the seller cache and look payment methods up again"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1299
+msgid "Stop after this many pages of the list"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1301
+msgid "Seconds between two requests (default [delcampe] delay, 1.0)"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1303
+msgid "Session cookie header copied from your browser"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1305
+msgid "Write the result to this file instead of stdout"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1313
+#, python-brace-format
+msgid "Missing dependency ({e}). Install: pip install requests beautifulsoup4"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1323
+msgid ""
+"No session cookie. In your browser, logged in to Delcampe, open the "
+"developer tools > Network, click any delcampe.net request and copy its "
+"'Cookie' header, then either put it in postcards.conf ([delcampe] cookie "
+"= ...), or export DELCAMPE_COOKIE, or pass --cookie. It works like a "
+"password: keep it private."
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1340
+#, python-brace-format
+msgid "Page {p}/{n}: {g} item(s) so far"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1346
+msgid "No watched item."
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1348
+msgid "Sellers"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1372
+#, python-brace-format
+msgid "Written to {f}"
+msgstr ""
+
+#: src/tkpostcards/scripts/tktools.py:1375
+#, python-brace-format
+msgid "{n} request(s) made to Delcampe"
 msgstr ""
 
 #~ msgid "travel_title_field"

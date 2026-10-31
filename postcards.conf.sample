@@ -193,6 +193,45 @@ secret_key = change-me-please
 # endpoint (404). Generate a random value the same way as secret_key.
 ;restart_token = change-me-please
 
+# --- File reception for publishing (sync blueprint) ------------------------
+# Lets a client publish its collection to THIS server with
+# "protocol = https" in its [sync_default] (see tkpostcards/libs/
+# remotesync.py). Files are written straight into [DEFAULT] datadir, and the
+# web app can be restarted through the same channel once the transfer is
+# done. DISABLED by default: this is a WRITE entry point.
+#
+# Two ways in: the LAN straight to this server (plain HTTP is fine on a
+# trusted network), and the Internet through TLS (nginx -> gateway ->
+# here). The token is sent with every request, so never expose plain HTTP
+# to the Internet. As this is also the public website, make the reverse
+# proxy in front of it let only the gateway (or the LAN) reach
+# sync_url_prefix; trusted_proxies (below) must match the number of proxies
+# in front, since failed tokens are throttled per client IP (10/min).
+# Gateway: let GET/POST/PUT/DELETE through, keep Content-Length, allow
+# bodies of at least sync_max_body_mb (nginx: client_max_body_size, 1 MB by
+# default -- or set max_request_mb on the client) and give POST
+# <sync_url_prefix>/restart a stricter access level than the rest.
+;sync_enabled = false
+# REQUIRED when enabled (16+ chars; the server refuses to start otherwise):
+#   python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+;sync_token = change-me-please
+;sync_url_prefix = /api/v1/sync
+# Largest request body accepted by the sync endpoints, in MB. The client
+# adapts its batch/part sizes to it automatically.
+;sync_max_body_mb = 32
+# Never read, written, deleted nor listed (so never taken for "orphans" by
+# a publish): refresh_tokens.sqlite* (user sessions), push_watch_state.json,
+# indexnow_watch_state.json and the cache directory are ALWAYS protected.
+# Comma-separated fnmatch patterns on the first path component add to them.
+;sync_protected = 
+# Allow the client to restart the web app (restart_remote = true in its
+# [sync_default]). Under gunicorn, the master gets SIGHUP: every worker is
+# replaced progressively, with no downtime (with --preload, gunicorn does not
+# re-run the app code on HUP, so this config is not re-read). Without
+# gunicorn, this worker gets SIGTERM and your supervisor (Docker, systemd)
+# must start it again. The JSON cache is purged either way. false = 501.
+;sync_allow_restart = true
+
 # Public URL of THIS server. Stored both verbatim (as PUBLIC_URL, unused
 # elsewhere) and as SERVER_PUBLIC_URL, which is sent to the master in the
 # payload of /api/v1/push/notify -- informative only, NOT used for
@@ -615,6 +654,33 @@ max_content_length_mb = 25
 ;gpu_idle_timeout = 600
 
 
+[delcampe]
+# "kttools delcampe watchlist": your watched items grouped by seller, with the
+# time left and the seller's payment methods. It reads the Delcampe website
+# with YOUR browser session (no paid API account needed).
+#
+# Cookie: logged in to Delcampe in your browser, open the developer tools >
+# Network, click any request to www.delcampe.net and copy the value of its
+# "Cookie" request header. It works like a password: keep this file private
+# (chmod 600). When it expires the command says so; copy a new one.
+# Alternatives: the DELCAMPE_COOKIE environment variable, --cookie, or
+# cookie_file = a text file holding that header, or a Netscape cookies.txt
+# exported by a browser extension.
+;cookie =
+;cookie_file = ~/.config/postcards/delcampe-cookie.txt
+# Site language of the URLs (and of the payment method names).
+;lang = fr
+# Seconds between two requests: the site is read one page at a time, gently.
+;delay = 1.0
+# If Delcampe refuses the requests (HTTP 403), send the same User-Agent as
+# the browser the cookie comes from.
+;user_agent = Mozilla/5.0 (X11; Linux x86_64) ...
+# Payment methods are a property of the seller: they are looked up once per
+# seller and kept this many days (--refresh forces a new lookup).
+;cache_days = 7
+;cache_file = ~/.cache/kttools/delcampe_sellers.json
+;page_size = 480
+
 [tkmanager]
 # Desktop GUI (KartoTek App / tkmanager.py) settings.
 
@@ -730,7 +796,9 @@ excluded_objects = cravate
 # manage several remote targets (e.g. a staging vs. a production site).
 
 # "ftp", "ftps" (implicit TLS, port 990), "ftptls" (explicit TLS,
-# port 21), or "sftp" (SSH, port 22).
+# port 21), "sftp" (SSH, port 22), or "https" (port 443: posts files to the
+# sync blueprint of a flpostcards server -- see "[flask] sync_*" above and
+# the https options at the end of this section).
 protocol = sftp
 host = your-server.example.com
 # Defaults to the protocol's standard port if omitted (21/990/21/22).
@@ -796,6 +864,57 @@ max_workers = 5
 ;restart_url = https://your-server.example.com/api/v1/admin/restart
 ;restart_token = change-me-please
 #
-# Leaving both empty (default) skips this step entirely; a
+# restart_remote (protocol = https only): ask the flpostcards server to
+# restart its web app once the publish is complete (workers reloaded, JSON
+# cache purged -- see [flask] sync_allow_restart, which lets the server
+# refuse). Takes priority over restart_url if both are set. Replaces
+# restart_url when you do not want to expose /api/v1/admin/restart: the sync
+# endpoint is already protected by the same token as the transfer.
+;restart_remote = false
+#
+# Leaving all of these empty (default) skips this step entirely; a
 # network/SSH/HTTP failure here only logs a warning, it never fails
 # the publish.
+
+# --- protocol = https only -------------------------------------------------
+# With https, "host" is a host name, or a full URL when flpostcards is
+# served under a sub-path of a reverse proxy: https://example.com/postcards.
+# The default port is 443; remote_base_dir is relative to the server's
+# sync_base_dir ("/" = sync_base_dir itself).
+#
+# Two ways to reach the same server = two sections, e.g.:
+#   [sync_lan]       host = http://flpostcards:5000    (direct, no TLS)
+#                    allow_http = true
+#   [sync_internet]  host = https://tools.example.com  (nginx + gateway)
+#                    api_key = <key of the "hosting" level>
+# Plain http:// is refused unless allow_http = true: the token then travels
+# in clear, so only for a trusted local network, never over the Internet.
+;allow_http = false
+# API key required by a gateway in front of flpostcards (toolspostcards).
+# Sent in api_key_header IN ADDITION to the token below, which flpostcards
+# always checks itself (the gateway must forward "Authorization" untouched).
+;api_key = 
+;api_key_header = X-API-Key
+# Largest request the proxy chain accepts, in MB (nginx: client_max_body_size,
+# only 1 MB by default!). Batches and parts are sized to stay under it.
+# 0 = no limit of its own (the server's sync_max_body_mb still applies).
+;max_request_mb = 0
+#
+# Shared secret = [flask] sync_token of the server. Falls back to
+# "password" if unset.
+;token = change-me-please
+# Path of the sync blueprint ([flask] sync_url_prefix on the server).
+;url_prefix = /api/v1/sync
+# Server certificate check. For a private/self-signed certificate, give it
+# (or its CA) in ca_bundle rather than switching verification off.
+;verify_tls = true
+;ca_bundle = /home/you/.config/postcards/server.pem
+# Transfer tuning. Small files are sent many per request (up to batch_mb
+# megabytes / batch_files files), files bigger than part_mb are cut into
+# parts sent in parallel (max_workers connections above). Both are capped
+# automatically by the server's sync_max_body_mb. "compression" (above)
+# also controls the zlib compression of compressible files (json, sqlite,
+# pkl, text -- never JPEG).
+;batch_mb = 4
+;batch_files = 500
+;part_mb = 8

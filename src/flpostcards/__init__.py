@@ -100,6 +100,11 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["SECRET_KEY"] = value
             elif key == "restart_token":
                 app.config["RESTART_TOKEN"] = value or None
+            elif key in ("sync_enabled", "sync_allow_restart"):
+                # Réception de fichiers par HTTP(S) (blueprints/sync).
+                app.config[key.upper()] = parser.getboolean("flask", key)
+            elif key == "sync_max_body_mb":
+                app.config["SYNC_MAX_BODY_MB"] = parser.getfloat("flask", key)
             elif key == "recent_days":
                 app.config["RECENT_DAYS"] = parser.getint("flask", "recent_days")
             elif key == "recent_fallback_count":
@@ -287,6 +292,19 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     # (404) -- comportement par défaut tant que [flask] restart_token
     # n'est pas explicitement défini.
     app.config.setdefault("RESTART_TOKEN", None)
+
+    # Réception de fichiers par HTTP(S) (flpostcards/blueprints/sync, voir sa
+    # docstring) : OFF par défaut, c'est un point d'entrée en ÉCRITURE sur le
+    # datadir. Les valeurs vides de la conf sont normalisées en None.
+    app.config.setdefault("SYNC_ENABLED", False)
+    app.config.setdefault("SYNC_ALLOW_RESTART", True)
+    app.config.setdefault("SYNC_MAX_BODY_MB", 32.0)
+    app.config.setdefault("SYNC_URL_PREFIX", "/api/v1/sync")
+    app.config["SYNC_TOKEN"] = str(app.config.get("SYNC_TOKEN") or "").strip() or None
+    app.config["SYNC_PROTECTED"] = str(app.config.get("SYNC_PROTECTED") or "").strip() or None
+    app.config["SYNC_URL_PREFIX"] = (
+        "/" + str(app.config["SYNC_URL_PREFIX"]).strip("/")
+    ).rstrip("/") or "/api/v1/sync"
 
     # Notifications push — ce serveur ne fait plus qu'un relais vers le
     # master centralisé (voir flpostcards.push.notify_master et
@@ -641,6 +659,17 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
 
     from flpostcards.blueprints.api import bp as api_bp
     app.register_blueprint(api_bp)
+
+    if app.config.get("SYNC_ENABLED"):
+        from flpostcards.blueprints.sync import bp as sync_bp, validate_config
+
+        validate_config(app)  # RuntimeError explicite si jeton/datadir invalides
+        app.register_blueprint(sync_bp, url_prefix=app.config["SYNC_URL_PREFIX"])
+        app.logger.warning(
+            "sync : réception de fichiers ACTIVE sur %s (datadir=%s, restart=%s)",
+            app.config["SYNC_URL_PREFIX"], app.config["DATADIR"],
+            "oui" if app.config["SYNC_ALLOW_RESTART"] else "non",
+        )
 
     from flpostcards.blueprints.contact import bp as contact_bp
     app.register_blueprint(contact_bp)
