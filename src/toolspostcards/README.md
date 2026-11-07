@@ -3,6 +3,150 @@
 Serveur de clés API distantes, conçu pour un **redémarrage 100% autonome**
 (aucune intervention humaine requise, y compris après un reboot du serveur).
 
+## Passerelle et niveaux de clés API
+
+toolspostcards est l'**interface publique de simpostcards** (et la porte
+d'entrée de la publication vers flpostcards) : chaque clé API porte un
+**niveau**, et chaque route relayée exige une **capacité** que ce niveau doit
+accorder.
+
+```
+Internet --TLS--> nginx --X-API-Key--> toolspostcards --> simpostcards  (image, ocr, détection, travels)
+                                                     \--> flpostcards    (publication web)
+```
+
+### Niveaux par défaut
+
+| Niveau  | Hérite de | Capacités ajoutées | Routes |
+|---------|-----------|--------------------|--------|
+| guest   | —         | `publish`          | publication web (cartes + thème) : `/api/v1/sync/*` (flpostcards), `/sync/v1/*` (simpostcards) |
+| basic   | guest     | `image`            | `/api/correct_scan`, `/api/compute_hashes`, `/api/compute_hashes_only` |
+| premium | basic     | `ocr`, `detection`, `translate` | `/api/compute_ocr`, `/api/ocr_languages`, `/api/compute_detection`, `/api/compute_segments`, `/api/translate` |
+| gold    | premium   | `travel`, `backup`, `publish:restart` | `/api/compute_travel`, `/backup/*` (réservé), `POST …/sync/restart` |
+
+Les niveaux ne sont **pas** dans le code : copiez `api_levels.json.example`
+vers `KV_LEVELS_FILE` et modifiez-le (ajouter un niveau, déplacer une
+capacité d'un niveau à l'autre, `extends` pour l'héritage, `rank` pour
+l'ordre). Le fichier remplace entièrement les niveaux par défaut. Les
+**routes** et leur capacité sont dans `app/routes.py` : toute route de
+simpostcards non déclarée est refusée (404), donc jamais exposée par
+inadvertance.
+
+`/api/unload_models` demande la capacité `admin`, qu'aucun niveau n'accorde :
+il faut une clé avec `"scopes": ["admin"]`.
+
+### Créer une clé
+
+```bash
+python3 scripts/generate_api_key.py --name acme --level basic \
+    --expires 2027-01-31 --clients-file /opt/kartotek_vault/secrets/api_clients.json
+```
+
+Le script affiche la clé brute (à donner au client, jamais stockée) et ajoute
+son hash au fichier des clients. Un client (`api_clients.json`) accepte :
+`name`, `level`, `scopes` (droits supplémentaires, ex. une clé guest qui a en
+plus `travel`), `expires_at` (ISO), `disabled`. Les fichiers clients et
+niveaux sont **rechargés automatiquement** quand ils changent : ajouter,
+suspendre ou faire monter de niveau une clé ne demande pas de redémarrage.
+Les clés « techniques » du coffre de secrets (`scopes` seuls, sans `level`)
+continuent de fonctionner comme avant.
+
+### Côté client
+
+* `GET /v1/me` renvoie le niveau et les capacités de la clé : une appli
+  cliente peut ainsi griser les fonctions qu'elle ne peut pas appeler.
+* Niveau insuffisant : `403` avec `{"error", "required_capability",
+  "required_level", "your_level"}` (de quoi proposer une montée en gamme).
+* Clé absente/invalide/désactivée/expirée : `401`.
+* Publication (remotesync) : `api_key = …` dans la section `[sync_…]`,
+  `host = https://tools.example.com`. L'en-tête `Authorization` (jeton propre à
+  flpostcards/simpostcards) est relayé tel quel et reste vérifié par eux.
+
+### Compteurs d'appels
+
+Chaque appel relayé est compté par jour, par clé et par capacité dans
+`KV_STATS_DB_PATH` (SQLite, distincte de `secrets.db`) : appels, erreurs
+(réponse ≥ 400 ou serveur injoignable), **refus** (niveau insuffisant : ce sont
+les clients qui butent sur une capacité qu'ils pourraient acheter), octets
+envoyés/reçus (d'après `Content-Length`, donc approximatifs pour un flux sans
+longueur). Un échec de comptage est journalisé mais ne bloque jamais la
+requête. Chaque client voit sa consommation des 30 derniers jours dans
+`GET /v1/me` (champ `usage`).
+
+### Sites flpostcards rattachés aux clés
+
+Une clé peut porter `"site": "acme"` (`keys create/set --site acme`,
+`requests approve --site acme`). Ses publications sont alors relayées vers le
+flpostcards de ce site, décrit dans `KV_SITES_FILE` (voir
+`api_sites.json.example`), et le manager mesure l'espace occupé par ses
+données. Une clé sans `site` utilise `KV_FLPOSTCARDS_URL`. Une clé dont le site
+n'existe pas dans le fichier reçoit un **501** : elle ne retombe jamais sur le
+site par défaut, ce qui la ferait publier chez un autre client.
+
+Mesure de l'espace disque, selon ce que contient l'entrée du site :
+* `datadir` (recommandé) : le répertoire de données de flpostcards, monté dans
+  le conteneur de la passerelle (lecture seule suffit). Donne la taille des
+  fichiers et l'espace réellement alloué sur le disque, sans aucun secret.
+* `sync_token` : à défaut de volume, interroge `GET <url>/api/v1/sync/usage`
+  de flpostcards (voir ci-dessous : mesure mise en cache 4 h et invalidée à
+  chaque synchronisation, taille et espace alloué). Avec un flpostcards sans ce
+  point d'entrée, repli sur `/list` (somme des tailles seulement). Oblige à
+  confier à la passerelle le jeton de synchronisation, qu'elle n'est pas
+  censée connaître.
+
+Côté flpostcards, `GET /api/v1/sync/usage` (même jeton que le reste du sync)
+renvoie `bytes`, `disk_bytes`, `files`, `measured_at`, `cached`, `ttl_s`. Le
+parcours du datadir étant coûteux, il est mis en cache `[flask]
+disk_usage_cache_ttl_s` secondes (4 h par défaut), et invalidé par toute
+écriture authentifiée du sync (`put`, `commit`, `mkdir`, `lock`, `DELETE /file`,
+`restart`) ; `?refresh=1` force un nouveau parcours.
+
+### Manager
+
+À lancer dans le conteneur (là où sont les fichiers de configuration) :
+
+```bash
+docker exec -it kartotek-vault-api python -m app.manage keys list --disk
+```
+
+| Commande | Effet |
+|----------|-------|
+| `keys list [--all] [--level L] [--disk] [--json]` | clés, statut, site, **compteurs** (aujourd'hui, 30 jours, total, erreurs, refus, octets) ; `--disk` ajoute l'espace occupé par le site rattaché |
+| `keys show REF` | détail, espace disque du site, compteurs par capacité (aujourd'hui, 30 jours, total) |
+| `sites [--json]` | par site : clés rattachées, appels sur 30 jours, taille des données, espace alloué, nombre de fichiers |
+| `keys create --name N --level L [--site S] [--expires D] [--email E] [--scope S]` | crée une clé, affichée **une seule fois** |
+| `keys revoke REF [--reason T]` / `keys enable REF` | révoque (immédiat, réversible) / réactive |
+| `keys set REF [--level L] [--site S \| --no-site] [--expires D \| --no-expiry] [--add-scope S] [--remove-scope S]` | change niveau, site, expiration, droits |
+| `keys rotate REF [--keep-old]` | nouvelle clé aux mêmes droits (site compris), ancienne révoquée |
+| `keys delete REF --yes` | supprime (l'historique d'usage est conservé) |
+| `usage [--days N] [--key REF] [--json]` | compteurs par clé, ou par jour pour une clé |
+| `requests list / show ID / approve ID --level L [--site S] / reject ID` | demandes de clé |
+
+`REF` = identifiant à 12 caractères (6 suffisent s'ils sont uniques) ou nom
+exact. Les changements sont pris en compte sans redémarrer la passerelle. La
+mesure du disque parcourt le répertoire à chaque appel : sur une grosse
+collection, `keys list` sans `--disk` reste instantané.
+
+### Page de demande de clé
+
+`GET /request-key` (publique, FR/EN selon le navigateur, `?lang=en`) présente
+les niveaux et un formulaire. La demande est **seulement enregistrée** : le
+manager la traite (`requests list`, puis `requests approve ID --level basic`
+qui crée la clé et affiche l'email à qui la transmettre). Aucun email n'est
+envoyé par le serveur. Protections : champ piège, longueurs bornées,
+`KV_REQUEST_RATE_PER_HOUR` demandes par IP et par heure, plafond
+`KV_REQUESTS_MAX_PENDING`, doublon d'email en attente ignoré, IP conservée
+hachée, HTML échappé. Derrière nginx, activez `KV_TRUST_FORWARDED_FOR=true`
+(sinon toutes les demandes ont l'IP du proxy et partagent la même limite) et
+exposez `/request-key` sans clé API. `KV_REQUESTS_ENABLED=false` désactive la page.
+
+### Réglages (`api.env.example`)
+
+`KV_SIMPOSTCARDS_URL`, `KV_FLPOSTCARDS_URL`, `KV_SITES_FILE`, `KV_BACKUP_URL`,
+`KV_LEVELS_FILE`, `KV_UPSTREAM_TIMEOUT`, `KV_MAX_BODY_MB`. Pour nginx :
+`client_max_body_size` ≥ `KV_MAX_BODY_MB`, `proxy_request_buffering off`,
+`proxy_read_timeout` ≥ `KV_UPSTREAM_TIMEOUT`.
+
 ## Pourquoi pas HashiCorp Vault ?
 
 La première version de ce projet utilisait Vault. Mais le modèle de sécurité

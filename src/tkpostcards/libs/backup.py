@@ -90,7 +90,7 @@ class PostcardBackup:
                     )
                     files.append((full_path, arcname))
 
-        for f in [conffile, 'travels.json', 'pois.json']:
+        for f in [conffile, 'travels.json', 'pois.json', 'links.json']:
             fname = os.path.join(source_dir, f)
             if os.path.isfile(fname):
                 files.append((fname, f))

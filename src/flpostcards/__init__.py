@@ -141,6 +141,10 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
                 app.config["TRUSTED_PROXIES"] = parser.getint(
                     "flask", "trusted_proxies"
                 )
+            elif key == "disk_usage_cache_ttl_s":
+                app.config["DISK_USAGE_CACHE_TTL_S"] = parser.getint(
+                    "flask", "disk_usage_cache_ttl_s"
+                )
             elif key == "json_cache_ttl_s":
                 app.config["CACHE_DEFAULT_TIMEOUT"] = parser.getint(
                     "flask", "json_cache_ttl_s"
@@ -299,6 +303,9 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     app.config.setdefault("SYNC_ENABLED", False)
     app.config.setdefault("SYNC_ALLOW_RESTART", True)
     app.config.setdefault("SYNC_MAX_BODY_MB", 32.0)
+    # GET <sync_url_prefix>/usage : durée de vie (s) de la taille des données
+    # en cache, invalidée par toute écriture sync. 0 = pas de cache.
+    app.config.setdefault("DISK_USAGE_CACHE_TTL_S", 4 * 3600)
     app.config.setdefault("SYNC_URL_PREFIX", "/api/v1/sync")
     app.config["SYNC_TOKEN"] = str(app.config.get("SYNC_TOKEN") or "").strip() or None
     app.config["SYNC_PROTECTED"] = str(app.config.get("SYNC_PROTECTED") or "").strip() or None

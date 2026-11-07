@@ -28,6 +28,7 @@ import secrets
 import sqlite3
 import time
 import unicodedata
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -124,6 +125,7 @@ CREATE TABLE IF NOT EXISTS cards (
     poi         TEXT,       -- JSON array sérialisé
     collections TEXT,       -- JSON array sérialisé
     doubles     TEXT,       -- JSON array sérialisé
+    links       TEXT,       -- JSON array sérialisé d'identifiants de liens (table links)
     status      TEXT NOT NULL DEFAULT 'active', -- active | exchanged | trade
     storage     TEXT NOT NULL DEFAULT ''        -- lieu de stockage physique ('' = non renseigné)
 );
@@ -156,7 +158,20 @@ CREATE TABLE IF NOT EXISTS pois (
     id          TEXT PRIMARY KEY,
     description TEXT,
     coord_lat   REAL,
-    coord_lon   REAL
+    coord_lon   REAL,
+    links       TEXT,       -- JSON array sérialisé d'identifiants de liens (table links)
+    mdate       INTEGER     -- timestamp UNIX de dernière modification (description/coord/liens)
+);
+"""
+
+_DDL_LINKS = """
+CREATE TABLE IF NOT EXISTS links (
+    id          TEXT PRIMARY KEY,
+    title       TEXT,
+    description TEXT,
+    url         TEXT NOT NULL,
+    check_date  TEXT,       -- date ISO (AAAA-MM-JJ) de la dernière vérification du lien
+    mdate       INTEGER     -- timestamp UNIX de dernière modification (titre/description/url)
 );
 """
 
@@ -231,6 +246,7 @@ _CARD_DEFAULTS: dict[str, Any] = {
     "poi": [],
     "collections": [],
     "doubles": [],
+    "links": [],
     "status": DEFAULT_CARD_STATUS,
     "storage": "",
 }
@@ -246,6 +262,19 @@ def _clean_storage(value: Any) -> str:
     if value is None:
         return ""
     return " ".join(str(value).split())
+
+
+def _clean_id_list(values: Any) -> list[str]:
+    """Normalise une liste d'identifiants (ex : ``links`` d'une carte) :
+    chaînes sans espaces superflus, sans vides ni doublons, ordre conservé."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in (values or []):
+        value = str(value).strip()
+        if value and value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
 
 
 def _card_to_row(card: dict) -> dict:
@@ -273,6 +302,7 @@ def _card_to_row(card: dict) -> dict:
         "poi": json.dumps(card.get("poi") or [], ensure_ascii=False),
         "collections": json.dumps(card.get("collections") or [], ensure_ascii=False),
         "doubles": json.dumps(card.get("doubles") or [], ensure_ascii=False),
+        "links": json.dumps(_clean_id_list(card.get("links")), ensure_ascii=False),
         "status": card.get("status") or DEFAULT_CARD_STATUS,
         "storage": _clean_storage(card.get("storage")),
     }
@@ -283,7 +313,7 @@ def _row_to_card(row: sqlite3.Row) -> dict:
     d = dict(row)
     lat, lon = d.pop("coord_lat", None), d.pop("coord_lon", None)
     d["coord"] = [lat, lon] if (lat is not None and lon is not None) else None
-    for field in ("address", "poi", "collections", "doubles"):
+    for field in ("address", "poi", "collections", "doubles", "links"):
         raw = d.get(field)
         d[field] = json.loads(raw) if raw else []
     return d
@@ -363,7 +393,57 @@ def _poi_to_row(poi: dict) -> dict:
         "description": poi.get("description"),
         "coord_lat": coord[0] if len(coord) > 0 else None,
         "coord_lon": coord[1] if len(coord) > 1 else None,
+        "links": json.dumps(_clean_id_list(poi.get("links")), ensure_ascii=False),
+        "mdate": _clean_mdate(poi.get("mdate")),
     }
+
+
+def _clean_mdate(value: Any) -> int | None:
+    """Normalise un timestamp UNIX de modification : ``None`` si vide ou
+    invalide."""
+    try:
+        return int(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _clean_check_date(value: Any) -> str | None:
+    """Normalise la date de vérification d'un lien : ``None`` si vide,
+    sinon une date ISO ``AAAA-MM-JJ`` (les heures éventuelles sont
+    ignorées). Lève ``ValueError`` si la valeur n'est pas une date."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text[:10]).isoformat()
+    except ValueError:
+        raise ValueError(
+            f"Date de vérification invalide (attendu AAAA-MM-JJ) : {text!r}"
+        ) from None
+
+
+def _link_to_row(link: dict) -> dict:
+    """Convertit un dict lien en ligne SQL (champs plats)."""
+    url = str(link.get("url") or "").strip()
+    if not url:
+        raise ValueError("L'URL d'un lien ne peut pas être vide.")
+    title = str(link.get("title") or "").strip() or None
+    description = str(link.get("description") or "").strip() or None
+    return {
+        "id": str(link["id"]).strip(),
+        "title": title,
+        "description": description,
+        "url": url,
+        "check_date": _clean_check_date(link.get("check_date")),
+        "mdate": _clean_mdate(link.get("mdate")),
+    }
+
+
+def _row_to_link(row: sqlite3.Row) -> dict:
+    """Convertit une ligne SQL en dict lien."""
+    return dict(row)
 
 
 # Colonnes parcourues par la recherche textuelle (voir _text_search_condition).
@@ -457,6 +537,8 @@ def _row_to_poi(row: sqlite3.Row) -> dict:
     d = dict(row)
     lat, lon = d.pop("coord_lat", None), d.pop("coord_lon", None)
     d["coord"] = [lat, lon] if (lat is not None and lon is not None) else None
+    raw = d.get("links")
+    d["links"] = json.loads(raw) if raw else []
     return d
 
 
@@ -479,6 +561,7 @@ class Model:
         self.cards_dir = self.datadir / "cards"
         self.db_path = self.datadir / "postcards.sqlite"
         self.pois_json     = self.datadir / "pois.json"
+        self.links_json    = self.datadir / "links.json"
         self.collections_json = self.datadir / "collections.json"
         self.updates_json  = self.datadir / "updates.json"
         self.travels_json  = self.datadir / "travels.json"
@@ -562,7 +645,7 @@ class Model:
             # recrée tout le fichier sqlite à partir des JSON de cards/ —
             # ces tables n'en font pas partie et seraient sinon perdues à
             # la prochaine régénération sans cette création défensive.
-            self._conn.executescript(_DDL_AUTHS + _DDL_COLLECTIONS)
+            self._conn.executescript(_DDL_AUTHS + _DDL_COLLECTIONS + _DDL_LINKS)
             self._conn.commit()
 
             # Migration défensive, une fois : une base existante générée
@@ -621,6 +704,32 @@ class Model:
                 self._conn.commit()
             except sqlite3.OperationalError:
                 pass  # colonne déjà présente
+
+            # Ajout défensif de cards.links (liste JSON d'identifiants de
+            # liens, voir la table links / links.json) sur une base
+            # existante créée avant son introduction. Les lignes
+            # existantes restent à NULL (lu comme une liste vide) jusqu'à
+            # ce que la carte soit réécrite par write_json/sync().
+            try:
+                self._conn.execute("ALTER TABLE cards ADD COLUMN links TEXT")
+                self._conn.commit()
+            except sqlite3.OperationalError:
+                pass  # colonne déjà présente
+
+            # Ajout défensif de pois.links / pois.mdate et links.mdate
+            # (liens d'un POI, horodatage de modification utilisé pour le
+            # sitemap et IndexNow) sur une base existante créée avant leur
+            # introduction. Les lignes existantes restent à NULL (liste
+            # vide / jamais modifié) jusqu'à leur prochaine écriture.
+            for _table, _col, _type in (("pois", "links", "TEXT"),
+                                        ("pois", "mdate", "INTEGER"),
+                                        ("links", "mdate", "INTEGER")):
+                try:
+                    self._conn.execute(
+                        f"ALTER TABLE {_table} ADD COLUMN {_col} {_type}")
+                    self._conn.commit()
+                except sqlite3.OperationalError:
+                    pass  # colonne déjà présente
 
             # Ajout défensif de cards.detected_content / detected_objects sur
             # une base existante créée avant leur introduction (CREATE TABLE
@@ -785,6 +894,7 @@ class Model:
         if card.get("status") not in CARD_STATUSES:
             card["status"] = DEFAULT_CARD_STATUS
         card["storage"] = _clean_storage(card.get("storage"))
+        card["links"] = _clean_id_list(card.get("links"))
         card["mdate"] = int(time.time())
 
         self.cards_dir.mkdir(parents=True, exist_ok=True)
@@ -993,7 +1103,7 @@ class Model:
         self.datadir.mkdir(parents=True, exist_ok=True)
 
         conn = self._get_conn()
-        conn.executescript(_DDL_CARDS + _DDL_TRAVELS + _DDL_POIS + _DDL_COLLECTIONS + _DDL_AUTHS + _DDL_INDEXES)
+        conn.executescript(_DDL_CARDS + _DDL_TRAVELS + _DDL_POIS + _DDL_LINKS + _DDL_COLLECTIONS + _DDL_AUTHS + _DDL_INDEXES)
         conn.commit()
         logger.info("Base créée : %s", self.db_path)
 
@@ -1002,6 +1112,7 @@ class Model:
         # puisse ignorer les ids déjà pleinement décrits dans pois.json)
         self.sync_collections()
         self.sync_pois()
+        self.sync_links()
 
         if not self.cards_dir.exists():
             logger.warning("cards_dir introuvable : %s", self.cards_dir)
@@ -1799,9 +1910,27 @@ class Model:
     def write_poi(self, poi: dict) -> None:
         """Write (INSERT OR REPLACE) a POI in SQLite and in pois.json.
 
+        ``poi`` : ``{id, description, coord, links}``. ``links`` est la
+        liste des identifiants de liens du POI (table ``links``) ; si la
+        clé est absente, les liens déjà enregistrés sont conservés.
+
+        ``mdate`` (timestamp UNIX) n'est rafraîchi que si la description,
+        les coordonnées ou les liens ont réellement changé : il sert à
+        dater les pages des cartes qui référencent ce POI dans le
+        sitemap et pour IndexNow (voir :meth:`effective_mdates`).
+
         The JSON file is updated atomically after the SQLite write.
         """
+        existing = self.get_poi(str(poi["id"]))
+        poi = dict(poi)
+        if "links" not in poi and existing is not None:
+            poi["links"] = existing.get("links")
         row = _poi_to_row(poi)
+        if existing is not None and self._poi_fingerprint(existing) == \
+                self._poi_fingerprint(poi):
+            row["mdate"] = existing.get("mdate")
+        else:
+            row["mdate"] = int(time.time())
         cols = ", ".join(row.keys())
         placeholders = ", ".join(f":{k}" for k in row)
         sql = f"INSERT OR REPLACE INTO pois ({cols}) VALUES ({placeholders})"
@@ -1815,6 +1944,17 @@ class Model:
             "SELECT * FROM pois WHERE id = ?", (str(poi["id"]),)
         ).fetchone())
         self._write_pois_json(pois)
+
+    @staticmethod
+    def _poi_fingerprint(poi: dict) -> tuple:
+        """Contenu d'un POI qui, une fois modifié, change l'affichage des
+        cartes qui le référencent (sert à décider si ``mdate`` avance)."""
+        coord = poi.get("coord") or []
+        return (
+            poi.get("description") or None,
+            (coord[0], coord[1]) if len(coord) > 1 else None,
+            tuple(_clean_id_list(poi.get("links"))),
+        )
 
     def delete_poi(self, poi_id: str) -> bool:
         """Delete a POI from SQLite and from pois.json.
@@ -1870,6 +2010,7 @@ class Model:
             "id": new_id,
             "description": old_poi.get("description"),
             "coord": old_poi.get("coord"),
+            "links": old_poi.get("links"),
         })
         self.delete_poi(old_id)
 
@@ -1933,6 +2074,282 @@ class Model:
         conn.commit()
         logger.info("sync_pois : %d POI(s) synchronisé(s)", count)
         return count
+
+    # ------------------------------------------------------------------
+    # Links
+    # ------------------------------------------------------------------
+    # Même principe que les POIs : la table SQLite ``links`` sert aux
+    # lectures (et est publiée avec postcards.sqlite), ``links.json``
+    # en est la source persistante qui permet de reconstruire la base
+    # (voir sync_links(), appelée par generate()). Une carte référence
+    # ses liens par identifiant dans son champ ``links``.
+
+    def _read_links_json(self) -> dict:
+        """Read links.json and return the dict {link_id: {...}}.
+
+        Returns an empty dict if the file is absent or unreadable.
+        """
+        try:
+            with self.links_json.open(encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                return data
+        except (OSError, json.JSONDecodeError):
+            pass
+        return {}
+
+    def _write_links_json(self, links: dict) -> None:
+        """Atomically write {link_id: {...}} to links.json."""
+        self.datadir.mkdir(parents=True, exist_ok=True)
+        tmp = self.links_json.with_suffix(".json.tmp")
+        with tmp.open("w", encoding="utf-8") as fh:
+            json.dump(links, fh, ensure_ascii=False, indent=2, sort_keys=True)
+        tmp.replace(self.links_json)
+
+    def get_link(self, link_id: str) -> dict | None:
+        """Return a link from SQLite, or None if absent."""
+        conn = self._get_conn()
+        cur = conn.execute("SELECT * FROM links WHERE id = ?", (str(link_id),))
+        row = cur.fetchone()
+        return _row_to_link(row) if row else None
+
+    def list_links(self) -> list[dict]:
+        """Return the list of all links (from SQLite), sorted by id."""
+        conn = self._get_conn()
+        cur = conn.execute("SELECT * FROM links ORDER BY id")
+        return [_row_to_link(r) for r in cur.fetchall()]
+
+    def write_link(self, link: dict) -> None:
+        """Write (INSERT OR REPLACE) a link in SQLite and in links.json.
+
+        ``link`` : ``{id, title, description, url, check_date}``. ``id``
+        et ``url`` sont obligatoires (``ValueError`` sinon) ;
+        ``check_date`` est une date ISO ``AAAA-MM-JJ`` (ou vide).
+        The JSON file is updated atomically after the SQLite write.
+        """
+        link_id = str(link.get("id") or "").strip()
+        if not link_id:
+            raise ValueError("L'identifiant d'un lien ne peut pas être vide.")
+        row = _link_to_row({**link, "id": link_id})
+        # ``mdate`` n'avance que si ce qui s'affiche (titre, description,
+        # URL) change : une simple revérification (``check_date``) ne doit
+        # pas déclencher de nouvelle soumission sitemap/IndexNow.
+        existing = self.get_link(link_id)
+        shown = ("title", "description", "url")
+        if existing is not None and all(existing.get(k) == row[k] for k in shown):
+            row["mdate"] = existing.get("mdate")
+        else:
+            row["mdate"] = int(time.time())
+        cols = ", ".join(row.keys())
+        placeholders = ", ".join(f":{k}" for k in row)
+        conn = self._get_conn()
+        conn.execute(
+            f"INSERT OR REPLACE INTO links ({cols}) VALUES ({placeholders})", row)
+        conn.commit()
+
+        links = self._read_links_json()
+        links[link_id] = dict(row)
+        self._write_links_json(links)
+
+    def delete_link(self, link_id: str) -> int:
+        """Delete a link from SQLite and from links.json, and remove its
+        id from the ``links`` field of every card referencing it (cards
+        are rewritten through ``write_json``, like for ``rename_poi``).
+
+        Returns the number of cards updated.
+        """
+        link_id = str(link_id)
+        conn = self._get_conn()
+        conn.execute("DELETE FROM links WHERE id = ?", (link_id,))
+        conn.commit()
+
+        links = self._read_links_json()
+        if link_id in links:
+            del links[link_id]
+            self._write_links_json(links)
+
+        updated = 0
+        for card_id in self._cards_referencing_link(link_id):
+            card = self.load_json(card_id)
+            current = _clean_id_list(card.get("links"))
+            if link_id not in current:
+                continue
+            card["links"] = [x for x in current if x != link_id]
+            self.write_json(card)
+            updated += 1
+
+        # Même nettoyage pour les POIs qui référencent ce lien.
+        for poi_id in self._pois_referencing_link(link_id):
+            poi = self.get_poi(poi_id)
+            if poi is None:
+                continue
+            poi["links"] = [x for x in poi.get("links") or [] if x != link_id]
+            self.write_poi(poi)
+
+        logger.info(
+            "delete_link : lien %s supprimé (%d carte(s) mise(s) à jour)",
+            link_id, updated,
+        )
+        return updated
+
+    def _pois_referencing_link(self, link_id: str) -> list[str]:
+        """Ids des POIs dont le champ ``links`` contient ``link_id``."""
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT id FROM pois WHERE EXISTS ("
+            "  SELECT 1 FROM json_each(pois.links)"
+            "  WHERE CAST(json_each.value AS TEXT) = ?"
+            ")",
+            (str(link_id),),
+        )
+        return [row["id"] for row in cur.fetchall()]
+
+    def _cards_referencing_link(self, link_id: str) -> list[str]:
+        """Ids des cartes dont le champ ``links`` contient ``link_id``."""
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT id FROM cards WHERE EXISTS ("
+            "  SELECT 1 FROM json_each(cards.links)"
+            "  WHERE CAST(json_each.value AS TEXT) = ?"
+            ")",
+            (str(link_id),),
+        )
+        return [row["id"] for row in cur.fetchall()]
+
+    def rename_link(self, old_id: str, new_id: str) -> int:
+        """Renomme un lien et met à jour les cartes qui le référencent.
+
+        Lève ``ValueError`` si ``new_id`` est vide, si ``old_id`` n'existe
+        pas, ou si un lien ``new_id`` distinct existe déjà.
+
+        Retourne le nombre de cartes mises à jour.
+        """
+        old_id = str(old_id).strip()
+        new_id = str(new_id).strip()
+
+        if not new_id:
+            raise ValueError("L'identifiant du lien ne peut pas être vide.")
+        if new_id == old_id:
+            return 0
+
+        old_link = self.get_link(old_id)
+        if old_link is None:
+            raise ValueError(f"Lien introuvable : {old_id}")
+        if self.get_link(new_id) is not None:
+            raise ValueError(f"Un lien avec l'identifiant « {new_id} » existe déjà.")
+
+        self.write_link({**old_link, "id": new_id})
+        # Les cartes sont mises à jour avant la suppression de l'ancien
+        # lien : delete_link() ne doit plus en trouver à nettoyer.
+        updated = 0
+        for card_id in self._cards_referencing_link(old_id):
+            card = self.load_json(card_id)
+            new_list = _clean_id_list(
+                new_id if x == old_id else x for x in (card.get("links") or [])
+            )
+            card["links"] = new_list
+            self.write_json(card)
+            updated += 1
+        for poi_id in self._pois_referencing_link(old_id):
+            poi = self.get_poi(poi_id)
+            if poi is None:
+                continue
+            poi["links"] = _clean_id_list(
+                new_id if x == old_id else x for x in (poi.get("links") or [])
+            )
+            self.write_poi(poi)
+        self.delete_link(old_id)
+
+        logger.info(
+            "Lien renommé : %s -> %s (%d carte(s) mise(s) à jour)",
+            old_id, new_id, updated,
+        )
+        return updated
+
+    def sync_links(self) -> int:
+        """Synchronise links.json → SQLite.
+
+        Insère ou remplace dans SQLite chaque lien présent dans
+        links.json (les entrées invalides, sans URL par exemple, sont
+        ignorées avec un avertissement). Retourne le nombre de liens
+        écrits.
+        """
+        links = self._read_links_json()
+        if not links:
+            return 0
+        conn = self._get_conn()
+        count = 0
+        for link_id, link_data in links.items():
+            try:
+                row = _link_to_row({**link_data, "id": link_id})
+            except ValueError as exc:
+                logger.warning("sync_links : lien %s ignoré (%s)", link_id, exc)
+                continue
+            cols = ", ".join(row.keys())
+            placeholders = ", ".join(f":{k}" for k in row)
+            conn.execute(
+                f"INSERT OR REPLACE INTO links ({cols}) VALUES ({placeholders})",
+                row,
+            )
+            count += 1
+        conn.commit()
+        logger.info("sync_links : %d lien(s) synchronisé(s)", count)
+        return count
+
+    # ------------------------------------------------------------------
+    # Liens affichés / dates effectives d'une carte
+    # ------------------------------------------------------------------
+
+    def resolve_card_links(self, card: dict) -> list[dict]:
+        """Liste à plat, sans distinction d'origine, des liens à afficher
+        pour une carte : ceux de la carte (``card["links"]``) puis ceux de
+        chacun de ses POIs (``poi["links"]``), dans cet ordre, sans
+        doublon (un même lien référencé deux fois n'apparaît qu'une fois).
+
+        Chaque élément est le dict du lien (``{id, title, description,
+        url, check_date, mdate}``). Les identifiants inconnus sont
+        ignorés. Un POI est pris en compte même s'il n'a pas d'autre
+        carte associée.
+        """
+        ids: list[str] = list(_clean_id_list(card.get("links")))
+        for poi_id in card.get("poi") or []:
+            poi = self.get_poi(str(poi_id))
+            if poi is not None:
+                ids.extend(poi.get("links") or [])
+        result = []
+        for link_id in _clean_id_list(ids):
+            link = self.get_link(link_id)
+            if link is not None:
+                result.append(link)
+        return result
+
+    def effective_mdates(self, cards: list[dict]) -> dict[str, int]:
+        """Date de dernière modification *visible* de chaque carte
+        (``{card_id: timestamp}``) : le plus récent de son propre
+        ``mdate`` et des ``mdate`` des liens de la carte, de ses POIs et
+        des liens de ces POIs.
+
+        Ajouter ou modifier un lien/POI change la page des cartes qui le
+        référencent sans toucher à leur JSON : cette date sert donc de
+        ``<lastmod>`` au sitemap et de seuil de détection à IndexNow
+        (flpostcards.indexnow_watch).
+        """
+        link_md = {l["id"]: int(l.get("mdate") or 0) for l in self.list_links()}
+        pois = {p["id"]: p for p in self.list_pois()}
+        result: dict[str, int] = {}
+        for card in cards:
+            md = int(card.get("mdate") or 0)
+            for link_id in card.get("links") or []:
+                md = max(md, link_md.get(str(link_id), 0))
+            for poi_id in card.get("poi") or []:
+                poi = pois.get(str(poi_id))
+                if poi is None:
+                    continue
+                md = max(md, int(poi.get("mdate") or 0))
+                for link_id in poi.get("links") or []:
+                    md = max(md, link_md.get(str(link_id), 0))
+            result[str(card["id"])] = md
+        return result
 
     # ------------------------------------------------------------------
     # Auths

@@ -24,6 +24,7 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import messagebox, ttk
 
+from libpostcards.linkmeta import fetch_link_metadata, normalize_url, suggest_link_id
 from libpostcards.model import CARD_STATUSES, DEFAULT_CARD_STATUS, Model
 
 from . import cli
@@ -147,6 +148,32 @@ def _translatable_field_labels():  # pragma: no cover
         # App.LIST_FIELDS
         _("field_address"),
         _("field_poi"),
+        _("field_links"),
+        # LinkForm rows (label looked up through a variable)
+        _("link_id"),
+        _("link_url"),
+        _("link_check_date"),
+        # RenamePoiDialog (texts passed as keys: POI and link variants)
+        _("poi_rename_title"),
+        _("poi_rename_hint"),
+        _("poi_id_required"),
+        _("link_rename_title"),
+        _("link_rename_hint"),
+        _("link_id_required"),
+        # Keys looked up through a variable / table (not extractable otherwise)
+        _("travel_title_field"),
+        _("map_legend_postcard"),
+        _("map_legend_poi"),
+        # libs/mask_editor.py
+        _("mask_tool_brush_off"),
+        _("mask_tool_brush_on"),
+        _("mask_tool_rect_off"),
+        _("mask_tool_rect_on"),
+        _("mask_src_none"),
+        _("mask_src_auto"),
+        _("mask_src_manual"),
+        _("mask_need_libs"),
+        _("mask_need_libs_remote"),
         # App._build_fields (status)
         _("field_status"),
         _("status_active"),
@@ -2049,6 +2076,7 @@ class App(tk.Tk):
     LIST_FIELDS: list[tuple] = [
         ("address", "field_address"),
         ("poi",     "field_poi"),
+        ("links",   "field_links"),
     ]
 
     def __init__(self, datadir: Path, conf_file: Path = Path("postcards.conf")):
@@ -2154,6 +2182,7 @@ class App(tk.Tk):
         self._text_search_win: "TextSearchView | None" = None
         self._doubles_win: "DoublesSearchView | None" = None
         self._poi_win: "PoiManagerView | None" = None
+        self._link_win: "LinkManagerView | None" = None
         self._auth_win: "AuthManagerView | None" = None
         self._travel_win: "TravelManagerView | None" = None
         self._settings_win: "SettingsView | None" = None
@@ -3253,6 +3282,7 @@ class App(tk.Tk):
         m.add_command(label=_("nav_doubles"), command=self._open_doubles_search,
                       state=tk.NORMAL if self.similarity_available() else tk.DISABLED)
         m.add_command(label=_("nav_pois"), command=self._open_poi_manager)
+        m.add_command(label=_("nav_links"), command=self._open_link_manager)
         m.add_command(label=_("nav_auths"), command=self._open_auth_manager)
         m.add_command(label=_("nav_travels"), command=self._open_travel_manager,
                       state=tk.NORMAL if self.travel_available() else tk.DISABLED)
@@ -3417,6 +3447,14 @@ class App(tk.Tk):
             return
         self._poi_win = PoiManagerView(self, self._t)
 
+    # ── Link manager ──────────────────────────────────────────────────────────
+    def _open_link_manager(self):
+        if self._link_win and self._link_win.winfo_exists():
+            self._link_win.lift()
+            self._link_win.focus_force()
+            return
+        self._link_win = LinkManagerView(self, self._t)
+
     # ── Auth manager ──────────────────────────────────────────────────────────
     def _open_auth_manager(self):
         if self._auth_win and self._auth_win.winfo_exists():
@@ -3499,6 +3537,8 @@ class App(tk.Tk):
             self._mark_dirty()
         if key == "poi":
             win = PoiListEditor(self, _(label_key), lines, on_save, self.model, self._t)
+        elif key == "links":
+            win = LinkListEditor(self, _(label_key), lines, on_save, self.model, self._t)
         else:
             win = ListEditor(self, _(label_key), lines, on_save, self._t)
         self._field_dialogs.append(win)
@@ -4559,6 +4599,7 @@ class PoiManagerView(tk.Toplevel):
         self._visible_pois: list[dict] = []
         self._selected_id: str | None = None
         self._coord: list | None = None
+        self._links: list[str] = []
         self._is_new = False
 
         self._build_ui()
@@ -4644,6 +4685,21 @@ class PoiManagerView(tk.Toplevel):
                                  undo=True)
         self._desc_txt.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
         context_menu(self._desc_txt)
+
+        # Links (several allowed; ids of the links table, see LinkListEditor)
+        lf = tk.Frame(right, bg=BG_CARD)
+        lf.pack(fill=tk.X, padx=10, pady=4)
+        tk.Label(lf, text=_("field_links"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, anchor=tk.W).pack(anchor=tk.W)
+        links_row = tk.Frame(lf, bg=BG_CARD)
+        links_row.pack(fill=tk.X, pady=(2, 0))
+        self._lbl_links = tk.Label(links_row, text="", bg=BG_INPUT, fg=FG_TEXT,
+                                   font=FONT_INPUT, anchor=tk.W, relief=tk.FLAT,
+                                   padx=6, wraplength=200, justify=tk.LEFT)
+        self._lbl_links.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(links_row, text=_("btn_edit"), command=self._edit_links,
+                  bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=8, cursor="hand2").pack(side=tk.RIGHT, padx=(4, 0))
 
         # GPS
         gf = tk.Frame(right, bg=BG_CARD)
@@ -4751,6 +4807,8 @@ class PoiManagerView(tk.Toplevel):
         self._desc_txt.insert("1.0", poi.get("description") or "")
         self._coord = poi.get("coord")
         self._refresh_coord()
+        self._links = list(poi.get("links") or [])
+        self._refresh_links()
         self._btn_rename.config(state=tk.NORMAL)
 
     def _new(self):
@@ -4762,6 +4820,8 @@ class PoiManagerView(tk.Toplevel):
         self._desc_txt.delete("1.0", tk.END)
         self._coord = None
         self._refresh_coord()
+        self._links = []
+        self._refresh_links()
         self._id_entry.focus_set()
         self._btn_rename.config(state=tk.DISABLED)
 
@@ -4778,6 +4838,16 @@ class PoiManagerView(tk.Toplevel):
             self._refresh_coord()
         CoordDialog(self, list(self._coord or []), on_save, self._t)
 
+    def _refresh_links(self):
+        self._lbl_links.config(text=" / ".join(self._links))
+
+    def _edit_links(self):
+        def on_save(new_ids):
+            self._links = list(new_ids)
+            self._refresh_links()
+        LinkListEditor(self, _("field_links"), list(self._links), on_save,
+                       self._app.model, self._t)
+
     # ── Save / Delete ─────────────────────────────────────────────────────────
     def _save(self):
         poi_id = self._id_var.get().strip()
@@ -4792,6 +4862,7 @@ class PoiManagerView(tk.Toplevel):
                 "id": poi_id,
                 "description": description,
                 "coord": self._coord,
+                "links": self._links,
             })
         except Exception as e:
             messagebox.showerror(_("error_title"), str(e), parent=self)
@@ -4854,16 +4925,20 @@ class PoiManagerView(tk.Toplevel):
 class RenamePoiDialog(tk.Toplevel):
     """Petite boîte de dialogue pour saisir le nouvel id d'un POI."""
 
-    def __init__(self, parent, old_id: str, on_confirm, t):
+    def __init__(self, parent, old_id: str, on_confirm, t,
+                 title_key: str = "poi_rename_title",
+                 hint_key: str = "poi_rename_hint",
+                 required_key: str = "poi_id_required"):
         super().__init__(parent)
-        self.title(_("poi_rename_title"))
+        self.title(_(title_key))
         self.configure(bg=BG_MAIN)
         self._on_confirm = on_confirm
         self._t = t
+        self._required_key = required_key
 
         pad = dict(padx=14, pady=7)
 
-        tk.Label(self, text=_("poi_rename_hint").format(id=old_id), bg=BG_MAIN,
+        tk.Label(self, text=_(hint_key).format(id=old_id), bg=BG_MAIN,
                  fg=FG_LABEL, font=FONT_LABEL, wraplength=320,
                  justify=tk.LEFT).grid(row=0, column=0, padx=14, pady=(14, 6))
 
@@ -4896,11 +4971,678 @@ class RenamePoiDialog(tk.Toplevel):
     def _confirm(self):
         new_id = self._new_id_var.get().strip()
         if not new_id:
-            messagebox.showwarning(_("info_title"), _("poi_id_required"), parent=self)
+            messagebox.showwarning(_("info_title"), _(self._required_key), parent=self)
             return
         self.destroy()
         self._on_confirm(new_id)
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Links (URLs attached to postcards): form, manager, card field editor
+# ─────────────────────────────────────────────────────────────────────────────
+class LinkForm(tk.Frame):
+    """Edit form for one link (id, url, title, description, check date).
+
+    Shared by LinkManagerView (right-hand pane) and LinkEditDialog
+    (quick create/edit from a card). When an URL is entered (focus out
+    or Return), an id is proposed from it (new links only) and the
+    title/description fields are filled from the page's OpenGraph
+    metadata -- only the ones still empty, so nothing typed by hand is
+    ever overwritten. A successful fetch also sets the check date to
+    today (the link answered). The download runs in a thread.
+    """
+
+    def __init__(self, parent, model: Model, on_status=None, bg=BG_CARD):
+        super().__init__(parent, bg=bg)
+        self._model = model
+        self._on_status = on_status or (lambda _msg: None)
+        self._bg = bg
+        self._is_new = True
+        self._last_fetched_url = ""
+        self._auto_id = ""
+        self._auto_title = ""
+        self._auto_desc = ""
+        self._token = 0
+
+        def row(label_key):
+            f = tk.Frame(self, bg=bg)
+            f.pack(fill=tk.X, padx=10, pady=4)
+            tk.Label(f, text=_(label_key), bg=bg, fg=FG_LABEL, font=FONT_LABEL,
+                     width=12, anchor=tk.W).pack(side=tk.LEFT)
+            return f
+
+        def entry(frame, var):
+            e = tk.Entry(frame, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
+                         insertbackground=FG_TEXT, font=FONT_INPUT, relief=tk.FLAT)
+            e.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            context_menu(e)
+            return e
+
+        def button(frame, text, cmd, fg=FG_ACCENT2):
+            b = tk.Button(frame, text=text, command=cmd, bg=BG_FIELD, fg=fg,
+                          font=FONT_LABEL, relief=tk.FLAT, padx=6, cursor="hand2")
+            b.pack(side=tk.LEFT, padx=(4, 0))
+            return b
+
+        # Url first: it drives the id / title / description suggestions.
+        self._url_var = tk.StringVar()
+        f = row("link_url")
+        self._url_entry = entry(f, self._url_var)
+        self._url_entry.bind("<FocusOut>", self._on_url_commit)
+        self._url_entry.bind("<Return>", self._on_url_commit)
+        self._btn_fetch = button(f, _("link_fetch"), lambda: self._fetch(force=True))
+        button(f, _("link_open"), self._open_url, fg=FG_LINK)
+
+        self._id_var = tk.StringVar()
+        self._id_entry = entry(row("link_id"), self._id_var)
+
+        self._title_var = tk.StringVar()
+        entry(row("link_title_field"), self._title_var)
+
+        df = tk.Frame(self, bg=bg)
+        df.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+        tk.Label(df, text=_("link_description"), bg=bg, fg=FG_LABEL,
+                 font=FONT_LABEL, anchor=tk.W).pack(anchor=tk.W)
+        self._desc_txt = tk.Text(df, height=5, wrap=tk.WORD, bg=BG_INPUT,
+                                 fg=FG_TEXT, insertbackground=FG_TEXT,
+                                 font=FONT_INPUT, relief=tk.FLAT, padx=6,
+                                 pady=4, undo=True)
+        self._desc_txt.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
+        context_menu(self._desc_txt)
+
+        self._date_var = tk.StringVar()
+        f = row("link_check_date")
+        entry(f, self._date_var)
+        button(f, _("link_today"),
+               lambda: self._date_var.set(date.today().isoformat()))
+
+    # ── State ─────────────────────────────────────────────────────────────────
+    def clear(self):
+        """Empty form, ready to create a new link."""
+        self.load(None)
+
+    def load(self, link: dict | None):
+        """Load *link* (existing, id locked) or None (new link)."""
+        self._token += 1  # ignore any fetch still running
+        self._is_new = link is None
+        link = link or {}
+        self._id_var.set(link.get("id") or "")
+        self._id_entry.config(state=tk.NORMAL if self._is_new else tk.DISABLED)
+        self._url_var.set(link.get("url") or "")
+        self._title_var.set(link.get("title") or "")
+        self._desc_txt.delete("1.0", tk.END)
+        self._desc_txt.insert("1.0", link.get("description") or "")
+        self._date_var.set(link.get("check_date") or "")
+        self._last_fetched_url = normalize_url(link.get("url"))
+        self._auto_id = self._auto_title = self._auto_desc = ""
+
+    def focus_first(self):
+        self._url_entry.focus_set()
+
+    def get_link(self) -> dict:
+        """Return the link as a dict; raise ValueError (translated
+        message) if the id or the url is missing."""
+        link_id = self._id_var.get().strip()
+        url = normalize_url(self._url_var.get())
+        if not link_id:
+            raise ValueError(_("link_id_required"))
+        if not url:
+            raise ValueError(_("link_url_required"))
+        return {
+            "id": link_id,
+            "url": url,
+            "title": self._title_var.get().strip() or None,
+            "description": self._desc_txt.get("1.0", tk.END).strip() or None,
+            "check_date": self._date_var.get().strip() or None,
+        }
+
+    # ── URL handling ──────────────────────────────────────────────────────────
+    def _known_ids(self) -> set[str]:
+        try:
+            return {l["id"] for l in self._model.list_links()}
+        except Exception:
+            return set()
+
+    def _on_url_commit(self, _event=None):
+        url = normalize_url(self._url_var.get())
+        if not url:
+            return
+        if url != self._url_var.get():
+            self._url_var.set(url)
+        # Propose an id (new link only; never overwrite one typed by hand).
+        if self._is_new and self._id_var.get().strip() in ("", self._auto_id):
+            suggestion = suggest_link_id(url, self._known_ids())
+            if suggestion:
+                self._id_var.set(suggestion)
+                self._auto_id = suggestion
+        if url != self._last_fetched_url:
+            self._fetch(force=False)
+
+    def _open_url(self):
+        url = normalize_url(self._url_var.get())
+        if url:
+            webbrowser.open(url)
+
+    def _fetch(self, force: bool):
+        url = normalize_url(self._url_var.get())
+        if not url:
+            return
+        self._token += 1
+        token = self._token
+        self._last_fetched_url = url
+        self._btn_fetch.config(state=tk.DISABLED)
+        self._on_status(_("link_fetching").format(url=url))
+
+        def worker():
+            try:
+                meta = fetch_link_metadata(url)
+            except Exception as e:  # network error, HTTP >= 400, bad url...
+                self._after_safe(lambda err=e: self._fetch_failed(token, err))
+                return
+            self._after_safe(lambda m=meta: self._fetch_done(token, m))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _after_safe(self, fn):
+        try:
+            self.after(0, fn)
+        except (tk.TclError, RuntimeError):
+            pass  # window closed meanwhile
+
+    def _fetch_failed(self, token: int, err: Exception):
+        if token != self._token or not self.winfo_exists():
+            return
+        self._btn_fetch.config(state=tk.NORMAL)
+        self._on_status(_("link_fetch_error").format(err=err))
+
+    def _fetch_done(self, token: int, meta: dict):
+        if token != self._token or not self.winfo_exists():
+            return
+        self._btn_fetch.config(state=tk.NORMAL)
+
+        filled = []
+        title = meta.get("title") or ""
+        if title and self._title_var.get().strip() in ("", self._auto_title):
+            self._title_var.set(title)
+            self._auto_title = title
+            filled.append(_("link_title_field"))
+        desc = meta.get("description") or ""
+        current_desc = self._desc_txt.get("1.0", tk.END).strip()
+        if desc and current_desc in ("", self._auto_desc):
+            self._desc_txt.delete("1.0", tk.END)
+            self._desc_txt.insert("1.0", desc)
+            self._auto_desc = desc
+            filled.append(_("link_description"))
+
+        # The link answered: it was just checked.
+        self._date_var.set(date.today().isoformat())
+
+        if filled:
+            self._on_status(_("link_fetch_ok").format(fields=", ".join(filled)))
+        else:
+            self._on_status(_("link_fetch_nometa"))
+
+
+class LinkEditDialog(tk.Toplevel):
+    """Modal dialog to create (link=None) or edit one link, from a card."""
+
+    def __init__(self, parent, model: Model, link: dict | None, on_saved, t):
+        super().__init__(parent)
+        self._model = model
+        self._on_saved = on_saved
+        self._t = t
+        self.title(_("link_edit_title") if link else _("link_new_title"))
+        self.configure(bg=BG_MAIN)
+
+        self._status = tk.StringVar(value="")
+        self._form = LinkForm(self, model, on_status=self._status.set, bg=BG_CARD)
+        self._form.pack(fill=tk.BOTH, expand=True, padx=10, pady=(10, 0))
+        self._form.load(link)
+
+        tk.Label(self, textvariable=self._status, bg=BG_MAIN, fg=FG_LABEL,
+                 font=FONT_SMALL, anchor=tk.W, wraplength=480,
+                 justify=tk.LEFT).pack(fill=tk.X, padx=12, pady=(4, 0))
+
+        btns = tk.Frame(self, bg=BG_MAIN)
+        btns.pack(pady=10)
+        tk.Button(btns, text=_("btn_save_close"), command=self._save,
+                  bg=FG_ACCENT, fg="#fff", font=FONT_LABEL, relief=tk.FLAT,
+                  padx=10, cursor="hand2").pack(side=tk.LEFT, padx=5)
+        tk.Button(btns, text=_("btn_cancel"), command=self.destroy,
+                  bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL, relief=tk.FLAT,
+                  padx=10, cursor="hand2").pack(side=tk.LEFT, padx=5)
+
+        self.bind("<Escape>", lambda _e: self.destroy())
+        self.geometry("520x400")
+        self.minsize(460, 360)
+        self.transient(parent)
+        self.grab_set()
+        self._form.focus_first()
+
+    def _save(self):
+        try:
+            link = self._form.get_link()
+            self._model.write_link(link)
+        except ValueError as e:
+            messagebox.showwarning(_("info_title"), str(e), parent=self)
+            return
+        except Exception as e:
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            return
+        self.destroy()
+        self._on_saved(link)
+
+
+class LinkManagerView(tk.Toplevel):
+    """Manage the links stored in the database (and links.json).
+
+    Left: list of all links (id + title). Right: LinkForm with
+    New / Save / Rename / Delete actions, backed by Model.list_links() /
+    write_link() / rename_link() / delete_link().
+    """
+
+    def __init__(self, parent: "App", t):
+        super().__init__(parent)
+        self._app = parent
+        self._t   = t
+        self.title(_("link_title"))
+        self.configure(bg=BG_MAIN)
+        self.geometry("960x560")
+        self.minsize(760, 440)
+        self.resizable(True, True)
+
+        self._links: list[dict] = []
+        self._visible_links: list[dict] = []
+        self._selected_id: str | None = None
+
+        self._build_ui()
+        self._reload()
+        self._new()
+
+    # ── Construction ─────────────────────────────────────────────────────────
+    def _build_ui(self):
+        body = tk.Frame(self, bg=BG_MAIN)
+        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        left = tk.Frame(body, bg=BG_CARD)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
+
+        tk.Label(left, text=_("link_list_label"), bg=BG_CARD, fg=FG_ACCENT,
+                 font=FONT_TITLE).pack(anchor=tk.W, padx=8, pady=(8, 4))
+
+        filt_frm = tk.Frame(left, bg=BG_CARD)
+        filt_frm.pack(fill=tk.X, padx=8, pady=(0, 6))
+        self._filter_var = tk.StringVar()
+        self._filter_entry = tk.Entry(
+            filt_frm, textvariable=self._filter_var,
+            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+            font=FONT_INPUT, relief=tk.FLAT)
+        self._filter_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=2)
+        self._filter_entry.insert(0, _("link_filter_placeholder"))
+        self._filter_entry.config(fg=FG_LABEL)
+        self._filter_entry.bind("<FocusIn>", self._filter_focus_in)
+        self._filter_entry.bind("<FocusOut>", self._filter_focus_out)
+        self._filter_entry.bind("<KeyRelease>", self._apply_filter)
+        context_menu(self._filter_entry)
+        tk.Button(filt_frm, text="✕", command=self._clear_filter,
+                  bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=6, cursor="hand2").pack(
+            side=tk.LEFT, padx=(4, 0))
+
+        lb_frm = tk.Frame(left, bg=BG_CARD)
+        lb_frm.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
+        vsb = ttk.Scrollbar(lb_frm, orient=tk.VERTICAL)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self._lb = tk.Listbox(lb_frm, bg=BG_INPUT, fg=FG_TEXT,
+                              selectbackground=FG_ACCENT, font=FONT_INPUT,
+                              relief=tk.FLAT, activestyle="none",
+                              yscrollcommand=vsb.set)
+        self._lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        vsb.config(command=self._lb.yview)
+        self._lb.bind("<<ListboxSelect>>", self._on_select)
+
+        tk.Button(left, text=_("link_new"), command=self._new,
+                  bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=8, cursor="hand2").pack(
+            fill=tk.X, padx=8, pady=(0, 8))
+
+        right = tk.Frame(body, bg=BG_CARD, width=470)
+        right.pack(side=tk.LEFT, fill=tk.BOTH)
+        right.pack_propagate(False)
+
+        tk.Label(right, text=_("link_detail_label"), bg=BG_CARD, fg=FG_ACCENT,
+                 font=FONT_TITLE).pack(anchor=tk.W, padx=10, pady=(10, 6))
+
+        actions = tk.Frame(right, bg=BG_CARD)
+        actions.pack(fill=tk.X, padx=10, pady=10, side=tk.BOTTOM)
+
+        self._status = tk.StringVar(value="")
+        self._form = LinkForm(right, self._app.model,
+                              on_status=self._status.set, bg=BG_CARD)
+        self._form.pack(fill=tk.BOTH, expand=True)
+
+        tk.Button(actions, text=_("btn_save_close"), command=self._save,
+                  bg=FG_ACCENT, fg="#fff", font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10, cursor="hand2").pack(
+            side=tk.LEFT, padx=(0, 6))
+        self._btn_rename = tk.Button(
+            actions, text=_("link_rename"), command=self._rename,
+            bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
+            relief=tk.FLAT, padx=10, cursor="hand2", state=tk.DISABLED)
+        self._btn_rename.pack(side=tk.LEFT, padx=(0, 6))
+        tk.Button(actions, text=_("link_delete"), command=self._delete,
+                  bg="#5a1a1a", fg=FG_TEXT, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10, cursor="hand2").pack(side=tk.LEFT)
+
+        tk.Label(self, textvariable=self._status, bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_SMALL, anchor=tk.W, padx=8).pack(fill=tk.X)
+
+    # ── Data ──────────────────────────────────────────────────────────────────
+    def _reload(self):
+        try:
+            self._links = self._app.model.list_links()
+        except Exception as e:
+            self._status.set(str(e))
+            self._links = []
+        self._apply_filter()
+
+    def _current_filter_text(self) -> str:
+        if self._filter_var.get() == _("link_filter_placeholder"):
+            return ""
+        return self._filter_var.get().strip()
+
+    def _apply_filter(self, _event=None):
+        query = _fold(self._current_filter_text())
+        if query:
+            self._visible_links = [
+                l for l in self._links
+                if query in _fold(l["id"]) or query in _fold(l.get("title"))
+                or query in _fold(l.get("description")) or query in _fold(l.get("url"))
+            ]
+        else:
+            self._visible_links = list(self._links)
+
+        self._lb.delete(0, tk.END)
+        for link in self._visible_links:
+            title = (link.get("title") or "").strip()
+            self._lb.insert(
+                tk.END, link["id"] if not title else f"{link['id']}  —  {title[:40]}")
+
+        if query:
+            self._status.set(_("link_count_filtered").format(
+                n=len(self._visible_links), total=len(self._links)))
+        else:
+            self._status.set(_("link_count").format(n=len(self._links)))
+
+        if self._selected_id:
+            self._select_in_list(self._selected_id)
+
+    def _filter_focus_in(self, _event=None):
+        if self._filter_var.get() == _("link_filter_placeholder"):
+            self._filter_entry.delete(0, tk.END)
+            self._filter_entry.config(fg=FG_TEXT)
+
+    def _filter_focus_out(self, _event=None):
+        if not self._filter_var.get().strip():
+            self._filter_entry.insert(0, _("link_filter_placeholder"))
+            self._filter_entry.config(fg=FG_LABEL)
+
+    def _clear_filter(self):
+        self._filter_entry.delete(0, tk.END)
+        self._filter_entry.config(fg=FG_TEXT)
+        self._apply_filter()
+        self._filter_entry.focus_set()
+
+    def _on_select(self, _event=None):
+        sel = self._lb.curselection()
+        if not sel:
+            return
+        link = self._visible_links[sel[0]]
+        self._selected_id = link["id"]
+        self._form.load(link)
+        self._btn_rename.config(state=tk.NORMAL)
+
+    def _new(self):
+        self._selected_id = None
+        self._lb.selection_clear(0, tk.END)
+        self._form.clear()
+        self._form.focus_first()
+        self._btn_rename.config(state=tk.DISABLED)
+
+    # ── Save / Delete / Rename ────────────────────────────────────────────────
+    def _save(self):
+        try:
+            link = self._form.get_link()
+            self._app.model.write_link(link)
+        except ValueError as e:
+            messagebox.showwarning(_("info_title"), str(e), parent=self)
+            return
+        except Exception as e:
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            return
+
+        self._selected_id = link["id"]
+        saved = self._app.model.get_link(link["id"])
+        self._reload()
+        self._select_in_list(link["id"])
+        if saved:
+            self._form.load(saved)
+        self._btn_rename.config(state=tk.NORMAL)
+        self._status.set(_("link_saved").format(id=link["id"]))
+
+    def _delete(self):
+        if not self._selected_id:
+            return
+        if not messagebox.askyesno(
+                _("info_title"),
+                _("link_delete_confirm").format(id=self._selected_id),
+                parent=self):
+            return
+        try:
+            n = self._app.model.delete_link(self._selected_id)
+        except Exception as e:
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            return
+        deleted = self._selected_id
+        self._new()
+        self._reload()
+        self._status.set(_("link_deleted").format(id=deleted, n=n))
+
+    def _rename(self):
+        if not self._selected_id:
+            return
+        old_id = self._selected_id
+
+        def on_confirm(new_id: str):
+            if new_id == old_id:
+                return
+            try:
+                n = self._app.model.rename_link(old_id, new_id)
+            except ValueError as e:
+                messagebox.showerror(_("error_title"), str(e), parent=self)
+                return
+            self._selected_id = new_id
+            self._reload()
+            self._select_in_list(new_id)
+            link = self._app.model.get_link(new_id)
+            if link:
+                self._form.load(link)
+            self._status.set(_("link_renamed").format(old=old_id, new=new_id, n=n))
+
+        RenamePoiDialog(self, old_id, on_confirm, self._t,
+                        title_key="link_rename_title",
+                        hint_key="link_rename_hint",
+                        required_key="link_id_required")
+
+    def _select_in_list(self, link_id: str):
+        for i, link in enumerate(self._visible_links):
+            if link["id"] == link_id:
+                self._lb.selection_clear(0, tk.END)
+                self._lb.selection_set(i)
+                self._lb.see(i)
+                return
+
+
+class LinkListEditor(tk.Toplevel):
+    """Editor for a postcard's list of link ids (field ``links``).
+
+    A card can carry several links. Links are picked from those already
+    in the database (read-only combobox); new ones are created with the
+    "New link" button (LinkEditDialog, which proposes an id and reads
+    the page's OpenGraph title/description from the URL).
+    """
+
+    def __init__(self, parent, field_label: str, lines: list[str],
+                 on_save, model: Model, t):
+        super().__init__(parent)
+        self.title(f"{_('list_editor_title')} — {field_label}")
+        self.configure(bg=BG_MAIN)
+        self._on_save = on_save
+        self._model = model
+        self._t = t
+        self.resizable(True, True)
+
+        self._known: dict[str, dict] = {}
+        self._reload_known()
+
+        tk.Label(self, text=f"{field_label}  —  {_('list_editor_hint')}",
+                 bg=BG_MAIN, fg=FG_ACCENT, font=FONT_TITLE).pack(padx=12, pady=(12, 4))
+
+        self._lb = tk.Listbox(self, bg=BG_INPUT, fg=FG_TEXT,
+                              selectbackground=FG_ACCENT, font=FONT_INPUT,
+                              width=56, height=10, relief=tk.FLAT,
+                              activestyle="none")
+        self._lb.pack(padx=12, pady=4, fill=tk.BOTH, expand=True)
+        for line in lines:
+            self._lb.insert(tk.END, line)
+        self._lb.bind("<<ListboxSelect>>", self._on_sel)
+
+        self._info = tk.StringVar(value="")
+        tk.Label(self, textvariable=self._info, bg=BG_MAIN, fg=FG_LINK,
+                 font=FONT_SMALL, anchor=tk.W, wraplength=480,
+                 justify=tk.LEFT).pack(fill=tk.X, padx=12)
+
+        row = tk.Frame(self, bg=BG_MAIN)
+        row.pack(fill=tk.X, padx=12, pady=4)
+        self._evar = tk.StringVar()
+        self._combo = ttk.Combobox(row, textvariable=self._evar,
+                                   values=sorted(self._known), width=34,
+                                   font=FONT_INPUT, state="readonly")
+        self._combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
+        self._combo.bind("<Return>", lambda _e: self._add())
+        for txt, cmd in [(_("btn_add"), self._add),
+                         (_("link_new_btn"), self._create),
+                         (_("btn_edit"), self._edit)]:
+            tk.Button(row, text=txt, command=cmd, bg=BG_FIELD, fg=FG_TEXT,
+                      font=FONT_LABEL, relief=tk.FLAT, padx=6,
+                      cursor="hand2").pack(side=tk.LEFT, padx=2)
+
+        tk.Label(self, text=_("link_editor_hint"), bg=BG_MAIN, fg=FG_LABEL,
+                 font=FONT_SMALL).pack(padx=12, anchor=tk.W)
+
+        ctrl = tk.Frame(self, bg=BG_MAIN)
+        ctrl.pack(fill=tk.X, padx=12, pady=4)
+        for txt, cmd, bg in [(_("btn_move_up"),   self._up,   BG_FIELD),
+                             (_("btn_move_down"), self._down, BG_FIELD),
+                             (_("btn_delete"),    self._del,  "#5a1a1a")]:
+            tk.Button(ctrl, text=txt, command=cmd, bg=bg, fg=FG_TEXT,
+                      font=FONT_LABEL, relief=tk.FLAT, padx=6).pack(side=tk.LEFT, padx=2)
+
+        bot = tk.Frame(self, bg=BG_MAIN)
+        bot.pack(fill=tk.X, padx=12, pady=(4, 12))
+        tk.Button(bot, text=_("btn_save_close"), command=self._save,
+                  bg=FG_ACCENT, fg="#fff", font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10).pack(side=tk.RIGHT, padx=4)
+        tk.Button(bot, text=_("btn_cancel"), command=self.destroy,
+                  bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10).pack(side=tk.RIGHT, padx=4)
+
+        self.update_idletasks()
+        self.minsize(self.winfo_reqwidth(), self.winfo_reqheight())
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+    def _reload_known(self):
+        try:
+            self._known = {l["id"]: l for l in self._model.list_links()}
+        except Exception:
+            self._known = {}
+
+    def _refresh_combo(self):
+        self._combo.config(values=sorted(self._known))
+
+    def _ids(self) -> list[str]:
+        return list(self._lb.get(0, tk.END))
+
+    def _on_sel(self, _event=None):
+        s = self._lb.curselection()
+        if not s:
+            self._info.set("")
+            return
+        link = self._known.get(self._lb.get(s[0]))
+        if link:
+            self._info.set(f"{link.get('title') or ''}  <{link['url']}>".strip())
+        else:
+            self._info.set(_("link_unknown"))
+
+    def _append(self, link_id: str):
+        if link_id and link_id not in self._ids():
+            self._lb.insert(tk.END, link_id)
+
+    # ── Actions ───────────────────────────────────────────────────────────────
+    def _add(self):
+        self._append(self._evar.get().strip())
+        self._evar.set("")
+
+    def _create(self):
+        def on_saved(link: dict):
+            self._reload_known()
+            self._refresh_combo()
+            self._append(link["id"])
+        LinkEditDialog(self, self._model, None, on_saved, self._t)
+
+    def _edit(self):
+        s = self._lb.curselection()
+        link_id = self._lb.get(s[0]) if s else self._evar.get().strip()
+        link = self._known.get(link_id)
+        if not link:
+            return
+
+        def on_saved(_link: dict):
+            self._reload_known()
+            self._refresh_combo()
+            self._on_sel()
+        LinkEditDialog(self, self._model, link, on_saved, self._t)
+
+    def _del(self):
+        s = self._lb.curselection()
+        if s:
+            self._lb.delete(s[0])
+            self._info.set("")
+
+    def _up(self):
+        s = self._lb.curselection()
+        if not s or s[0] == 0:
+            return
+        i = s[0]
+        v = self._lb.get(i)
+        self._lb.delete(i)
+        self._lb.insert(i - 1, v)
+        self._lb.selection_set(i - 1)
+
+    def _down(self):
+        s = self._lb.curselection()
+        if not s or s[0] == self._lb.size() - 1:
+            return
+        i = s[0]
+        v = self._lb.get(i)
+        self._lb.delete(i)
+        self._lb.insert(i + 1, v)
+        self._lb.selection_set(i + 1)
+
+    def _save(self):
+        self._on_save(self._ids())
+        self.destroy()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

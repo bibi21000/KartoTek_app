@@ -12,7 +12,8 @@
     {% if travels %}
     <div class="travel-list">
         {% for travel in travels %}
-        <a class="travel-card" href="{{ url_for('travel.detail', travel_id=travel.id) }}">
+        {# id d'ancre : /travel/#<id> pointe directement ce parcours #}
+        <a class="travel-card" id="{{ travel.id }}" href="{{ url_for('travel.detail', travel_id=travel.id) }}">
             {% if travel.cards %}
             <div class="travel-card-thumb">
                 <img src="{{ url_for('home.images', filename='size_div10/' + (travel.cards[0].id | string) + '_R.png') }}"

@@ -26,6 +26,12 @@
                 >
             </div>
 
+            {# La recherche n'est plus lancée automatiquement : Entrée ou ce
+               bouton la valide (voir gallery-filters.js). #}
+            <div class="filter-field">
+                <button type="submit" class="filter-submit">{{ _("Rechercher") }}</button>
+            </div>
+
             {% if collections %}
             <div class="filter-field">
                 <label for="collection-select" class="sr-only">{{ _("Collection") }}</label>

@@ -13,3 +13,13 @@ class SecretRead(BaseModel):
 
 class WriteAck(BaseModel):
     version: int
+
+
+class MeRead(BaseModel):
+    name: str
+    level: str | None = None
+    description: str | None = None
+    capabilities: list[str] = Field(default_factory=list)
+    expires_at: str | None = None
+    site: str | None = None
+    usage: dict = Field(default_factory=dict)

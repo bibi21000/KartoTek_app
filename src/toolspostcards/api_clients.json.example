@@ -1,9 +1,19 @@
 {
-  "REMPLACER_PAR_LE_SHA256_DE_LA_CLE": {
-    "name": "service-facturation",
-    "scopes": ["read:secrets"]
+  "REMPLACER_PAR_LE_SHA256_DE_LA_CLE_1": {
+    "name": "client-guest",
+    "level": "guest"
   },
-  "REMPLACER_PAR_UN_AUTRE_SHA256": {
+  "REMPLACER_PAR_LE_SHA256_DE_LA_CLE_2": {
+    "name": "client-premium",
+    "level": "premium",
+    "expires_at": "2027-01-31"
+  },
+  "REMPLACER_PAR_LE_SHA256_DE_LA_CLE_3": {
+    "name": "client-gold-suspendu",
+    "level": "gold",
+    "disabled": true
+  },
+  "REMPLACER_PAR_LE_SHA256_DE_LA_CLE_4": {
     "name": "admin-cli",
     "scopes": ["read:secrets", "write:secrets"]
   }

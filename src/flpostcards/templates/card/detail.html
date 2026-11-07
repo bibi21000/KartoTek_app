@@ -180,6 +180,24 @@
         {% endfor %}
     </div>
     {% endif %}
+
+    {% if card_links %}
+    {# Liens de la carte et de ses POIs, sans distinction (voir
+       Model.resolve_card_links). #}
+    <div class="card-links-section">
+        <h2 class="card-links-title">{{ _("Liens") }}</h2>
+        <ul class="card-links">
+            {% for link in card_links %}
+            <li>
+                <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer">{{ link.title or link.url }}</a>
+                {% if link.description %}
+                <span class="card-link-description">{{ link.description }}</span>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 

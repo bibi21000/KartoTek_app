@@ -284,7 +284,8 @@ def verification_file(filename: str):
 def sitemap():
     """
     Sitemap XML listant les pages principales, toutes les fiches cartes
-    (avec lastmod basé sur mdate) et les parcours.
+    (avec lastmod basé sur mdate, y compris celui de leurs liens et POIs,
+    voir Model.effective_mdates) et les parcours.
 
     Les pages de "listing" (accueil, diaporama, galerie, index des
     parcours, carte) n'ont pas de date de mise à jour qui leur est
@@ -307,7 +308,14 @@ def sitemap():
 
     all_cards = model.list_unique_cards(exclude_status="exchanged")
 
-    card_mdates = [c.get("mdate") for c in all_cards if c.get("mdate")]
+    # Date de modification "visible" de chaque carte : le plus récent de
+    # son mdate et de celui de ses liens, de ses POIs et des liens de ces
+    # POIs (voir Model.effective_mdates). Ajouter/modifier un lien ou un
+    # POI change la fiche des cartes qui le référencent sans toucher à
+    # leur JSON : sans cela, <lastmod> resterait inchangé.
+    effective_mdates = model.effective_mdates(all_cards)
+
+    card_mdates = [m for m in effective_mdates.values() if m]
     last_card_update = max(card_mdates) if card_mdates else None
 
     add(url_for("home.index", _external=True), lastmod=last_card_update, changefreq="daily")
@@ -329,7 +337,7 @@ def sitemap():
         image_caption = build_recto_alt(card).replace("\n", " - ")
         add(
             url_for("home.card_detail", card_id=card["id"], _external=True),
-            lastmod=card.get("mdate"),
+            lastmod=effective_mdates.get(str(card["id"])) or card.get("mdate"),
             changefreq="monthly",
             image_loc=image_loc,
             image_caption=image_caption,
@@ -511,9 +519,19 @@ def card_detail(card_id: str):
 
         points_of_interest.append({"id": poi["id"], "name": poi_name, "cards": related})
 
+    # Liens du bas de fiche : ceux de la carte et ceux de ses POIs, à plat,
+    # sans distinction d'origine ni doublon (voir Model.resolve_card_links).
+    # Un POI compte même s'il n'a aucune autre carte (donc absent de la
+    # section "Points d'intérêt" ci-dessus).
+    card_links = [
+        l for l in model.resolve_card_links(card)
+        if l["url"].lower().startswith(("http://", "https://"))
+    ]
+
     return render_template(
         "card/detail.html",
         card=card,
+        card_links=card_links,
         images=images,
         images_small=images_small,
         back_url=back_url,

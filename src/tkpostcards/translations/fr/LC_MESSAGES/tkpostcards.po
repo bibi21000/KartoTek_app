@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tkpostcards 2.0.0\n"
 "Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
-"POT-Creation-Date: 2026-10-30 20:00+0100\n"
+"POT-Creation-Date: 2026-11-06 15:11+0100\n"
 "PO-Revision-Date: 2026-07-24 22:03+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -45,6 +45,10 @@ msgid ""
 "Defaults to the [DEFAULT] torch_device setting in the configuration file,"
 " or torch's own default (cuda if available, else cpu) if unset."
 msgstr ""
+"Périphérique torch à utiliser pour la recherche de similarité (voir "
+"\"tktools devices\"). Par défaut, le réglage torch_device de [DEFAULT] "
+"dans le fichier de configuration, ou le défaut de torch (cuda si "
+"disponible, sinon cpu) s'il n'est pas défini."
 
 #: src/tkpostcards/__init__.py:183
 msgid ""
@@ -57,6 +61,15 @@ msgid ""
 "external_helper setting in the configuration file, or unset (local "
 "computation, those libs required) if neither is given."
 msgstr ""
+"URI d'un serveur simpostcards distant (ex. http://simpostcards:8004) "
+"auquel déléguer, au lieu d'un calcul local, tout ce que simpostcards peut"
+" faire à la place de cette machine : recherche de similarité/doublons et "
+"construction de l'index (torch/open-clip-torch/imagehash inutiles ici), "
+"optimisation des parcours (ortools inutile ici) et extraction de texte "
+"par OCR (pytesseract/tesseract-ocr inutiles ici). Par défaut, le réglage "
+"external_helper de [DEFAULT] dans le fichier de configuration, ou non "
+"défini (calcul local, ces bibliothèques sont alors requises) si aucun "
+"n'est donné."
 
 #: src/tkpostcards/__init__.py:193
 msgid ""
@@ -67,6 +80,12 @@ msgid ""
 "fall back to cpu for a computation normally done on GPU, which can easily"
 " take longer than the default."
 msgstr ""
+"Délai d'attente, en secondes, d'une requête vers --external-helper avant "
+"abandon côté client. Par défaut, le réglage external_helper_timeout de "
+"[DEFAULT] dans le fichier de configuration, ou la valeur par défaut "
+"propre à chaque commande (30-60 s) si aucun n'est donné. À augmenter si "
+"le serveur distant doit se rabattre sur le cpu pour un calcul normalement"
+" fait sur GPU, ce qui peut facilement dépasser le délai par défaut."
 
 #: src/tkpostcards/tkimport.py:264
 msgid "Fit to window"
@@ -145,7 +164,6 @@ msgid "Profile settings"
 msgstr "Réglages du profil"
 
 #: src/tkpostcards/tkimport.py:659
-#, fuzzy
 msgid "Description"
 msgstr "Description"
 
@@ -154,12 +172,18 @@ msgid ""
 "No processing at all\n"
 "(copy the raw file as-is: no crop, no rotation, no transparency)"
 msgstr ""
+"Aucun traitement\n"
+"(copie du fichier brut tel quel : ni rognage, ni rotation, ni "
+"transparence)"
 
 #: src/tkpostcards/tkimport.py:712
 msgid ""
 "Skip background transparency\n"
 "(keep the background opaque; crop/deskew still apply)"
 msgstr ""
+"Ignorer la transparence du fond\n"
+"(le fond reste opaque ; le rognage et le redressement s'appliquent "
+"toujours)"
 
 #: src/tkpostcards/tkimport.py:736
 msgid ""
@@ -373,11 +397,11 @@ msgstr "Info"
 
 #: src/tkpostcards/tkimport.py:1288
 msgid "Aucun scan à traiter"
-msgstr ""
+msgstr "Aucun scan à traiter"
 
 #: src/tkpostcards/tkimport.py:1293
 msgid "Nombre de scan(s) à traiter incohérent"
-msgstr ""
+msgstr "Nombre de scan(s) à traiter incohérent"
 
 #: src/tkpostcards/tkimport.py:1321 src/tkpostcards/tkimport.py:1721
 msgid "Warning"
@@ -385,11 +409,11 @@ msgstr "Lot en cours d'exécution"
 
 #: src/tkpostcards/tkimport.py:1322
 msgid "Incohérence entre importdir et la base de données"
-msgstr ""
+msgstr "Incohérence entre importdir et la base de données"
 
 #: src/tkpostcards/tkimport.py:1328
 msgid "Rien à faire ... je quitte"
-msgstr ""
+msgstr "Rien à faire ... je quitte"
 
 #: src/tkpostcards/tkimport.py:1360 src/tkpostcards/tkimport.py:1417
 msgid "(system default)"
@@ -493,1020 +517,1229 @@ msgstr ""
 msgid "Import folder emptied"
 msgstr "Le dossier d'import a été vidé"
 
-#: src/tkpostcards/tkmanager.py:138
+#: src/tkpostcards/tkmanager.py:139
 msgid "field_title"
 msgstr "Titre"
 
-#: src/tkpostcards/tkmanager.py:139
+#: src/tkpostcards/tkmanager.py:140
 msgid "field_title2"
 msgstr "Titre Sup."
 
-#: src/tkpostcards/tkmanager.py:140
+#: src/tkpostcards/tkmanager.py:141
 msgid "field_description"
 msgstr "Description"
 
-#: src/tkpostcards/tkmanager.py:141
+#: src/tkpostcards/tkmanager.py:142
 msgid "field_recto_ocr"
 msgstr "OCR recto"
 
-#: src/tkpostcards/tkmanager.py:142
+#: src/tkpostcards/tkmanager.py:143
 msgid "field_verso_ocr"
 msgstr "OCR verso"
 
-#: src/tkpostcards/tkmanager.py:143
+#: src/tkpostcards/tkmanager.py:144
 msgid "field_recto_text"
 msgstr "Texte recto"
 
-#: src/tkpostcards/tkmanager.py:144
+#: src/tkpostcards/tkmanager.py:145
 msgid "field_verso_text"
 msgstr "Texte verso"
 
-#: src/tkpostcards/tkmanager.py:145
+#: src/tkpostcards/tkmanager.py:146
 msgid "field_detected_content"
 msgstr "Contenu détecté"
 
-#: src/tkpostcards/tkmanager.py:146
+#: src/tkpostcards/tkmanager.py:147
 msgid "field_detected_objects"
 msgstr "Objets détectés"
 
-#: src/tkpostcards/tkmanager.py:148
+#: src/tkpostcards/tkmanager.py:149
 msgid "field_address"
 msgstr "Adresse"
 
-#: src/tkpostcards/tkmanager.py:149
+#: src/tkpostcards/tkmanager.py:150
 msgid "field_poi"
 msgstr "POI"
 
-#: src/tkpostcards/tkmanager.py:151 src/tkpostcards/tkmanager.py:2722
-msgid "field_status"
-msgstr "Statut"
-
-#: src/tkpostcards/tkmanager.py:152
-msgid "status_active"
-msgstr "Active"
+#: src/tkpostcards/tkmanager.py:151 src/tkpostcards/tkmanager.py:4692
+#: src/tkpostcards/tkmanager.py:4848
+msgid "field_links"
+msgstr "Liens"
 
 #: src/tkpostcards/tkmanager.py:153
-msgid "status_exchanged"
-msgstr "Échangée"
+msgid "link_id"
+msgstr "Identifiant"
 
 #: src/tkpostcards/tkmanager.py:154
-msgid "status_trade"
-msgstr "À échanger"
+msgid "link_url"
+msgstr "URL"
 
-#: src/tkpostcards/tkmanager.py:156 src/tkpostcards/tkmanager.py:2736
-msgid "field_storage"
-msgstr "Stockage"
+#: src/tkpostcards/tkmanager.py:155
+msgid "link_check_date"
+msgstr "Vérifié le"
 
-#: src/tkpostcards/tkmanager.py:158
-msgid "coord_lat"
-msgstr "Lat."
-
-#: src/tkpostcards/tkmanager.py:159
-msgid "coord_lon"
-msgstr "Long."
-
-#: src/tkpostcards/tkmanager.py:161 src/tkpostcards/tkmanager.py:1282
-msgid "side_recto"
-msgstr "Recto"
-
-#: src/tkpostcards/tkmanager.py:162 src/tkpostcards/tkmanager.py:1282
-msgid "side_verso"
-msgstr "Verso"
-
-#: src/tkpostcards/tkmanager.py:164 src/tkpostcards/tkmanager.py:1756
-#: src/tkpostcards/tkmanager.py:3213
-msgid "publish_confirm_title"
-msgstr "Publier"
-
-#: src/tkpostcards/tkmanager.py:165 src/tkpostcards/tkmanager.py:1765
-#: src/tkpostcards/tkmanager.py:3213
-msgid "publish_confirm_msg"
-msgstr "Voulez-vous publier les modifications"
-
-#: src/tkpostcards/tkmanager.py:166 src/tkpostcards/tkmanager.py:1769
-msgid "publish_full_checkbox"
-msgstr "Mettre à jours les parcours, ..."
-
-#: src/tkpostcards/tkmanager.py:167 src/tkpostcards/tkmanager.py:1779
-msgid "btn_publish"
-msgstr "Publier"
-
-#: src/tkpostcards/tkmanager.py:168 src/tkpostcards/tkmanager.py:1782
-msgid "btn_skip_publish"
-msgstr "Quitter sans publier"
-
-#: src/tkpostcards/tkmanager.py:169 src/tkpostcards/tkmanager.py:1897
-msgid "publish_progress_title"
-msgstr "Publication"
-
-#: src/tkpostcards/tkmanager.py:170 src/tkpostcards/tkmanager.py:1902
-msgid "publish_progress_msg"
-msgstr "Publication en cours..."
-
-#: src/tkpostcards/tkmanager.py:171 src/tkpostcards/tkmanager.py:1953
-msgid "publish_details_show"
-msgstr "Afficher les détails"
-
-#: src/tkpostcards/tkmanager.py:172 src/tkpostcards/tkmanager.py:1910
-#: src/tkpostcards/tkmanager.py:1949
-msgid "publish_details_hide"
-msgstr "Recherche de doublons"
-
-#: src/tkpostcards/tkmanager.py:173 src/tkpostcards/tkmanager.py:3236
-msgid "publish_success_title"
-msgstr "Publication terminée."
-
-#: src/tkpostcards/tkmanager.py:174 src/tkpostcards/tkmanager.py:3237
-msgid "publish_success_msg"
-msgstr "La publication s'est terminée avec succès."
-
-#: src/tkpostcards/tkmanager.py:175 src/tkpostcards/tkmanager.py:3231
-msgid "publish_error_title"
-msgstr "Erreur de publication"
-
-#: src/tkpostcards/tkmanager.py:176 src/tkpostcards/tkmanager.py:3232
-msgid "publish_error_msg"
-msgstr "Une erreur est survenue lors de la publication : {error}"
-
-#: src/tkpostcards/tkmanager.py:252
-msgid "ctx_cut"
-msgstr "Couper"
-
-#: src/tkpostcards/tkmanager.py:253
-msgid "ctx_copy"
-msgstr "Copier"
-
-#: src/tkpostcards/tkmanager.py:254
-msgid "ctx_paste"
-msgstr "Coller"
-
-#: src/tkpostcards/tkmanager.py:256
-msgid "ctx_select_all"
-msgstr "Sélectionner tout"
-
-#: src/tkpostcards/tkmanager.py:290
-msgid "zoom_fit"
-msgstr "Ajuster"
-
-#: src/tkpostcards/tkmanager.py:369
-msgid "date_dialog_title"
-msgstr "Date"
-
-#: src/tkpostcards/tkmanager.py:401 src/tkpostcards/tkmanager.py:569
-#: src/tkpostcards/tkmanager.py:704 src/tkpostcards/tkmanager.py:844
-#: src/tkpostcards/tkmanager.py:1586 src/tkpostcards/tkmanager.py:1665
-#: src/tkpostcards/tkmanager.py:4665 src/tkpostcards/tkmanager.py:4883
-#: src/tkpostcards/tkmanager.py:5063 src/tkpostcards/tkmanager.py:5758
-#: src/tkpostcards/tkmanager.py:5959
-msgid "btn_save_close"
-msgstr "Sauvegarder"
-
-#: src/tkpostcards/tkmanager.py:404 src/tkpostcards/tkmanager.py:572
-#: src/tkpostcards/tkmanager.py:707 src/tkpostcards/tkmanager.py:845
-#: src/tkpostcards/tkmanager.py:1589 src/tkpostcards/tkmanager.py:1668
-#: src/tkpostcards/tkmanager.py:4886 src/tkpostcards/tkmanager.py:5963
-msgid "btn_cancel"
-msgstr "Annuler"
-
-#: src/tkpostcards/tkmanager.py:414
-msgid "day_mon"
-msgstr "Lundi"
-
-#: src/tkpostcards/tkmanager.py:414
-msgid "day_tue"
-msgstr "Mardi"
-
-#: src/tkpostcards/tkmanager.py:414
-msgid "day_wed"
-msgstr "Mercredi"
-
-#: src/tkpostcards/tkmanager.py:415
-msgid "day_thu"
-msgstr "Jeudi"
-
-#: src/tkpostcards/tkmanager.py:415
-msgid "day_fri"
-msgstr "Vendredi"
-
-#: src/tkpostcards/tkmanager.py:415
-msgid "day_sat"
-msgstr "Samedi"
-
-#: src/tkpostcards/tkmanager.py:415
-msgid "day_sun"
-msgstr "Dimanche"
-
-#: src/tkpostcards/tkmanager.py:471
-msgid "date_pick"
-msgstr "Choisir"
-
-#: src/tkpostcards/tkmanager.py:474
-msgid "date_clear"
-msgstr "Effacer"
-
-#: src/tkpostcards/tkmanager.py:477
-msgid "date_format_hint"
-msgstr "AAAA-MM-JJ"
-
-#: src/tkpostcards/tkmanager.py:526 src/tkpostcards/tkmanager.py:652
-msgid "list_editor_title"
-msgstr "Éditer"
-
-#: src/tkpostcards/tkmanager.py:532 src/tkpostcards/tkmanager.py:664
-msgid "list_editor_hint"
-msgstr "Une entrée par ligne"
-
-#: src/tkpostcards/tkmanager.py:552 src/tkpostcards/tkmanager.py:684
-#: src/tkpostcards/tkmanager.py:1644
-msgid "btn_add"
-msgstr "Ajouter"
-
-#: src/tkpostcards/tkmanager.py:552 src/tkpostcards/tkmanager.py:684
-#: src/tkpostcards/tkmanager.py:1647
-msgid "btn_update"
-msgstr "Mettre à jour"
-
-#: src/tkpostcards/tkmanager.py:559 src/tkpostcards/tkmanager.py:694
-#: src/tkpostcards/tkmanager.py:1654
-msgid "btn_move_up"
-msgstr "Monter"
-
-#: src/tkpostcards/tkmanager.py:560 src/tkpostcards/tkmanager.py:695
-#: src/tkpostcards/tkmanager.py:1655
-msgid "btn_move_down"
-msgstr "Descendre"
-
-#: src/tkpostcards/tkmanager.py:561 src/tkpostcards/tkmanager.py:696
-#: src/tkpostcards/tkmanager.py:1656
-msgid "btn_delete"
-msgstr "Supprimer"
-
-#: src/tkpostcards/tkmanager.py:688
-msgid "poi_editor_hint"
-msgstr "Sélectionner un POI existant ou saisir un nouvel identifiant"
-
-#: src/tkpostcards/tkmanager.py:794
-msgid "coord_title"
-msgstr "GPS"
-
-#: src/tkpostcards/tkmanager.py:804
-msgid "coord_header"
-msgstr "Coordonnées GPS"
-
-#: src/tkpostcards/tkmanager.py:822
-msgid "coord_paste_label"
-msgstr "Coller"
-
-#: src/tkpostcards/tkmanager.py:835
-msgid "coord_paste_hint"
-msgstr "Format : lat/lon, lat,lon, lat;lon ou lat lon"
-
-#: src/tkpostcards/tkmanager.py:841 src/tkpostcards/tkmanager.py:3010
-msgid "btn_open_osm"
-msgstr "Ouvrir OSM ↗"
-
-#: src/tkpostcards/tkmanager.py:842
-msgid "btn_copy_osm"
-msgstr "Copier lien OSM"
-
-#: src/tkpostcards/tkmanager.py:843
-msgid "btn_reset"
-msgstr "Réinitialiser"
-
-#: src/tkpostcards/tkmanager.py:858 src/tkpostcards/tkmanager.py:886
-#: src/tkpostcards/tkmanager.py:1683 src/tkpostcards/tkmanager.py:2798
-#: src/tkpostcards/tkmanager.py:3028 src/tkpostcards/tkmanager.py:3044
-#: src/tkpostcards/tkmanager.py:3556 src/tkpostcards/tkmanager.py:3776
-#: src/tkpostcards/tkmanager.py:3793 src/tkpostcards/tkmanager.py:3825
-#: src/tkpostcards/tkmanager.py:4260 src/tkpostcards/tkmanager.py:4268
-#: src/tkpostcards/tkmanager.py:4293 src/tkpostcards/tkmanager.py:4797
-#: src/tkpostcards/tkmanager.py:4817 src/tkpostcards/tkmanager.py:4833
-#: src/tkpostcards/tkmanager.py:5094 src/tkpostcards/tkmanager.py:5095
-#: src/tkpostcards/tkmanager.py:5136 src/tkpostcards/tkmanager.py:5204
-#: src/tkpostcards/tkmanager.py:5234 src/tkpostcards/tkmanager.py:5254
-#: src/tkpostcards/tkmanager.py:5390 src/tkpostcards/tkmanager.py:5826
-#: src/tkpostcards/tkmanager.py:5832 src/tkpostcards/tkmanager.py:5853
-#: src/tkpostcards/tkmanager.py:6013
-msgid "error_title"
-msgstr "Erreur"
-
-#: src/tkpostcards/tkmanager.py:858
-msgid "coord_error"
-msgstr "Latitude ou longitude invalide"
-
-#: src/tkpostcards/tkmanager.py:872
-msgid "osm_copied_title"
-msgstr "Lien copié"
-
-#: src/tkpostcards/tkmanager.py:872
-msgid "osm_copied"
-msgstr "Le lien OSM a été copié dans le presse-papiers"
-
-#: src/tkpostcards/tkmanager.py:886
-msgid "coord_parse_error"
-msgstr "Impossible de lire les coordonnées"
-
-#: src/tkpostcards/tkmanager.py:929
-msgid "gallery_title"
-msgstr "Galerie"
-
-#: src/tkpostcards/tkmanager.py:953 src/tkpostcards/tkmanager.py:1031
-#: src/tkpostcards/tkmanager.py:1428 src/tkpostcards/tkmanager.py:1442
-#: src/tkpostcards/tkmanager.py:1466 src/tkpostcards/tkmanager.py:2187
-#: src/tkpostcards/tkmanager.py:2188 src/tkpostcards/tkmanager.py:2549
-#: src/tkpostcards/tkmanager.py:2550 src/tkpostcards/tkmanager.py:2562
-#: src/tkpostcards/tkmanager.py:2564 src/tkpostcards/tkmanager.py:2581
-#: src/tkpostcards/tkmanager.py:2584 src/tkpostcards/tkmanager.py:3066
-#: src/tkpostcards/tkmanager.py:3075 src/tkpostcards/tkmanager.py:3083
-#: src/tkpostcards/tkmanager.py:3382 src/tkpostcards/tkmanager.py:6119
-#: src/tkpostcards/tkmanager.py:6120 src/tkpostcards/tkmanager.py:6190
-#: src/tkpostcards/tkmanager.py:6294
-msgid "tsearch_all"
-msgstr "Tous"
-
-#: src/tkpostcards/tkmanager.py:1002
-msgid "gallery_mode"
-msgstr "Mode"
-
-#: src/tkpostcards/tkmanager.py:1004
-msgid "gall_recto"
-msgstr "Recto"
-
-#: src/tkpostcards/tkmanager.py:1005
-msgid "gall_verso"
-msgstr "Verso"
-
-#: src/tkpostcards/tkmanager.py:1006
-msgid "gall_both"
-msgstr "Recto/Verso"
-
-#: src/tkpostcards/tkmanager.py:1015
-msgid "gallery_cols"
-msgstr "Colonnes"
-
-#: src/tkpostcards/tkmanager.py:1026 src/tkpostcards/tkmanager.py:2547
-msgid "nav_filter_label"
-msgstr "Collection"
-
-#: src/tkpostcards/tkmanager.py:1037
-msgid "gallery_refresh"
-msgstr "Actualiser"
-
-#: src/tkpostcards/tkmanager.py:1087 src/tkpostcards/tkmanager.py:1131
-msgid "gallery_ready"
-msgstr "{total} cartes"
-
-#: src/tkpostcards/tkmanager.py:1091 src/tkpostcards/tkmanager.py:1145
-msgid "gallery_loading"
-msgstr "Chargement {done}/{total}…"
-
-#: src/tkpostcards/tkmanager.py:1218
-msgid "gall_empty"
-msgstr "Aucune carte ne correspond à ce filtre."
-
-#: src/tkpostcards/tkmanager.py:1434
-msgid "gall_no_collection"
-msgstr "Sans collection"
-
-#: src/tkpostcards/tkmanager.py:1520
-msgid "coll_editor_title"
-msgstr "Collections"
-
-#: src/tkpostcards/tkmanager.py:1527
-msgid "coll_editor_hint"
-msgstr "Collections"
-
-#: src/tkpostcards/tkmanager.py:1561
-msgid "coll_select_all"
-msgstr "Toutes"
-
-#: src/tkpostcards/tkmanager.py:1565
-msgid "coll_select_none"
-msgstr "Aucune"
-
-#: src/tkpostcards/tkmanager.py:1572
-msgid "coll_no_conf"
-msgstr "Aucune collection configurée. Saisir une liste séparée par des virgules."
-
-#: src/tkpostcards/tkmanager.py:1616
-msgid "dbl_editor_title"
-msgstr "Doublons"
-
-#: src/tkpostcards/tkmanager.py:1622
-msgid "dbl_editor_hint"
-msgstr "Doublons"
-
-#: src/tkpostcards/tkmanager.py:1684
-msgid "dbl_not_integer"
-msgstr "L'identifiant doit être un entier"
-
-#: src/tkpostcards/tkmanager.py:2118
-msgid "app_title"
-msgstr "Postcards Manager"
-
-#: src/tkpostcards/tkmanager.py:2198
-msgid "no_cards_title"
-msgstr "Aucune carte"
-
-#: src/tkpostcards/tkmanager.py:2199 src/tkpostcards/tkmanager.py:2202
-msgid "no_cards_msg"
-msgstr "Aucune carte trouvée dans {dir}"
-
-#: src/tkpostcards/tkmanager.py:2473
-msgid "unsaved_title"
-msgstr "Modifications non enregistrées"
-
-#: src/tkpostcards/tkmanager.py:2474
-msgid "unsaved_msg"
-msgstr "La carte #{id} a des modifications non sauvegardées. Enregistrer ?"
-
-#: src/tkpostcards/tkmanager.py:2509
-msgid "goto_label"
-msgstr "Aller à"
-
-#: src/tkpostcards/tkmanager.py:2518
-msgid "goto_btn"
-msgstr "Aller"
-
-#: src/tkpostcards/tkmanager.py:2523
-msgid "nav_save"
-msgstr "Sauvegarder"
-
-#: src/tkpostcards/tkmanager.py:2560
-msgid "nav_missing_filter_label"
-msgstr "Données"
-
-#: src/tkpostcards/tkmanager.py:2564 src/tkpostcards/tkmanager.py:3090
-#: src/tkpostcards/tkmanager.py:3123
-msgid "nav_no_gps"
-msgstr "Sans GPS"
-
-#: src/tkpostcards/tkmanager.py:2564 src/tkpostcards/tkmanager.py:3092
-#: src/tkpostcards/tkmanager.py:3112 src/tkpostcards/tkmanager.py:3124
-msgid "nav_no_poi"
-msgstr "Sans POI"
-
-#: src/tkpostcards/tkmanager.py:2564 src/tkpostcards/tkmanager.py:3094
-#: src/tkpostcards/tkmanager.py:3125
-msgid "nav_with_updates"
-msgstr "Mises à jour"
-
-#: src/tkpostcards/tkmanager.py:2565 src/tkpostcards/tkmanager.py:3096
-#: src/tkpostcards/tkmanager.py:3126
-msgid "nav_missing_doubles"
-msgstr "Doublons"
-
-#: src/tkpostcards/tkmanager.py:2565 src/tkpostcards/tkmanager.py:3098
-#: src/tkpostcards/tkmanager.py:3127
-msgid "nav_status_trade"
-msgstr "À échanger"
-
-#: src/tkpostcards/tkmanager.py:2565 src/tkpostcards/tkmanager.py:3100
-#: src/tkpostcards/tkmanager.py:3129
-msgid "nav_status_exchanged"
-msgstr "Échangées"
-
-#: src/tkpostcards/tkmanager.py:2579
-msgid "nav_poi_filter_label"
-msgstr "POI"
-
-#: src/tkpostcards/tkmanager.py:2591
-msgid "nav_more"
-msgstr "Plus"
-
-#: src/tkpostcards/tkmanager.py:2635
-msgid "click_to_enlarge"
-msgstr "Cliquer pour agrandir"
-
-#: src/tkpostcards/tkmanager.py:2681
-msgid "field_date"
-msgstr "Date"
-
-#: src/tkpostcards/tkmanager.py:2698 src/tkpostcards/tkmanager.py:2714
-#: src/tkpostcards/tkmanager.py:2757 src/tkpostcards/tkmanager.py:2774
-#: src/tkpostcards/tkmanager.py:4658 src/tkpostcards/tkmanager.py:5056
-msgid "btn_edit"
-msgstr "Éditer"
-
-#: src/tkpostcards/tkmanager.py:2708
-msgid "field_collections"
-msgstr "Collections"
-
-#: src/tkpostcards/tkmanager.py:2751
-msgid "field_doubles"
-msgstr "Doublons"
-
-#: src/tkpostcards/tkmanager.py:2765 src/tkpostcards/tkmanager.py:4651
-msgid "field_gps"
-msgstr "GPS"
-
-#: src/tkpostcards/tkmanager.py:2770
-msgid "btn_osm"
-msgstr "OSM ↗"
-
-#: src/tkpostcards/tkmanager.py:2783
-msgid "field_updates"
-msgstr "Mises à jour"
-
-#: src/tkpostcards/tkmanager.py:2799
-msgid "error_read"
-msgstr "Erreur lors de la lecture de {path} : {err}"
-
-#: src/tkpostcards/tkmanager.py:2884
-msgid "image_unavailable"
-msgstr "Image {side} indisponible"
-
-#: src/tkpostcards/tkmanager.py:2904 src/tkpostcards/tkmanager.py:2925
-msgid "side_mask"
-msgstr "Masque"
-
-#: src/tkpostcards/tkmanager.py:2906
-#, fuzzy
-msgid "mask_src_"
-msgstr "aucun"
-
-#: src/tkpostcards/tkmanager.py:2971
-msgid "updates_none"
-msgstr "Aucune mise à jour"
-
-#: src/tkpostcards/tkmanager.py:2996
-msgid "coord_none"
-msgstr "—"
-
-#: src/tkpostcards/tkmanager.py:3005
-msgid "btn_apply_gps"
-msgstr "Appliquer GPS"
-
-#: src/tkpostcards/tkmanager.py:3017
-msgid "btn_delete_update"
-msgstr "Supprimer"
-
-#: src/tkpostcards/tkmanager.py:3037 src/tkpostcards/tkmanager.py:3136
-#: src/tkpostcards/tkmanager.py:3180 src/tkpostcards/tkmanager.py:3184
-#: src/tkpostcards/tkmanager.py:3449 src/tkpostcards/tkmanager.py:4054
-#: src/tkpostcards/tkmanager.py:4491 src/tkpostcards/tkmanager.py:4785
-#: src/tkpostcards/tkmanager.py:4810 src/tkpostcards/tkmanager.py:4899
-#: src/tkpostcards/tkmanager.py:5218 src/tkpostcards/tkmanager.py:5247
-#: src/tkpostcards/tkmanager.py:5613 src/tkpostcards/tkmanager.py:5634
-#: src/tkpostcards/tkmanager.py:5816 src/tkpostcards/tkmanager.py:5823
-#: src/tkpostcards/tkmanager.py:5846 src/tkpostcards/tkmanager.py:5990
-#: src/tkpostcards/tkmanager.py:5996 src/tkpostcards/tkmanager.py:6508
-msgid "info_title"
-msgstr "Information"
-
-#: src/tkpostcards/tkmanager.py:3038
-msgid "update_delete_confirm"
-msgstr "Supprimer la mise à jour de {email} ?"
-
-#: src/tkpostcards/tkmanager.py:3137
-msgid "nav_filter_empty"
-msgstr "Filtre vide"
-
-#: src/tkpostcards/tkmanager.py:3181 src/tkpostcards/tkmanager.py:3185
-#: src/tkpostcards/tkmanager.py:4055 src/tkpostcards/tkmanager.py:4492
-#: src/tkpostcards/tkmanager.py:5614 src/tkpostcards/tkmanager.py:6509
-msgid "goto_not_found"
-msgstr "Carte #{id} introuvable"
-
-#: src/tkpostcards/tkmanager.py:3250
-msgid "nav_textsearch"
-msgstr "Recherche"
-
-#: src/tkpostcards/tkmanager.py:3251
-msgid "nav_similar"
-msgstr "Similaires"
-
-#: src/tkpostcards/tkmanager.py:3253
-msgid "nav_doubles"
-msgstr "Doublons"
-
-#: src/tkpostcards/tkmanager.py:3255
-msgid "nav_pois"
-msgstr "POIs"
-
-#: src/tkpostcards/tkmanager.py:3256
-msgid "nav_auths"
-msgstr "Accès"
-
-#: src/tkpostcards/tkmanager.py:3257
-msgid "nav_travels"
-msgstr "Parcours"
-
-#: src/tkpostcards/tkmanager.py:3259
-msgid "nav_gallery"
-msgstr "Galerie"
-
-# --- masks (COLMAP) ---
-#: src/tkpostcards/tkmanager.py:3260
-msgid "nav_masks"
-msgstr "Masques (COLMAP)"
-
-#: src/tkpostcards/tkmanager.py:3262
-msgid "nav_settings"
-msgstr "Paramètres"
-
-#: src/tkpostcards/tkmanager.py:3450
-msgid "image_not_found"
-msgstr "Image {id}_{side}non trouvée"
-
-#: src/tkpostcards/tkmanager.py:3553
-msgid "nav_saved"
-msgstr "Enregistré ✓"
-
-#: src/tkpostcards/tkmanager.py:3557
-msgid "error_save"
-msgstr "Erreur lors de la sauvegarde de {path} : {err}"
-
-#: src/tkpostcards/tkmanager.py:3606 src/tkpostcards/tkmanager.py:3738
-msgid "search_title"
-msgstr "Recherche de similaires"
-
-#: src/tkpostcards/tkmanager.py:3623 src/tkpostcards/tkmanager.py:3794
-#: src/tkpostcards/tkmanager.py:4180 src/tkpostcards/tkmanager.py:4269
-msgid "search_unavailable"
-msgstr "Recherche indisponible"
-
-#: src/tkpostcards/tkmanager.py:3627 src/tkpostcards/tkmanager.py:4183
-msgid "search_index_loading"
-msgstr "Chargement de l'index"
-
-#: src/tkpostcards/tkmanager.py:3639 src/tkpostcards/tkmanager.py:4194
-msgid "search_index_ready"
-msgstr "Index chargé"
-
-#: src/tkpostcards/tkmanager.py:3646 src/tkpostcards/tkmanager.py:4200
-msgid "search_index_error"
-msgstr "Erreur d'index"
-
-#: src/tkpostcards/tkmanager.py:3656
-msgid "search_url_label"
-msgstr "URL de l'image"
-
-#: src/tkpostcards/tkmanager.py:3670
-msgid "search_threshold_label"
-msgstr "Seuil"
-
-#: src/tkpostcards/tkmanager.py:3679
-msgid "search_maxresults_label"
-msgstr "Max résultats"
-
-#: src/tkpostcards/tkmanager.py:3688 src/tkpostcards/tkmanager.py:3839
-msgid "search_btn"
-msgstr "Depuis l'URL"
-
-#: src/tkpostcards/tkmanager.py:3699 src/tkpostcards/tkmanager.py:3840
-msgid "search_btn_clipboard"
-msgstr "Depuis le presse-papiers"
-
-#: src/tkpostcards/tkmanager.py:3705 src/tkpostcards/tkmanager.py:4227
-#: src/tkpostcards/tkmanager.py:6138
-msgid "search_clear"
-msgstr "Effacer"
-
-#: src/tkpostcards/tkmanager.py:3739
-msgid "search_no_url"
-msgstr "Veuillez saisir une URL"
-
-#: src/tkpostcards/tkmanager.py:3777 src/tkpostcards/tkmanager.py:4261
-msgid "search_param_error"
-msgstr "Seuil ou max résultats invalide"
-
-#: src/tkpostcards/tkmanager.py:3795 src/tkpostcards/tkmanager.py:4270
-msgid "search_index_not_ready"
-msgstr "Index non encore chargé"
-
-#: src/tkpostcards/tkmanager.py:3803 src/tkpostcards/tkmanager.py:3807
-#: src/tkpostcards/tkmanager.py:4273 src/tkpostcards/tkmanager.py:4274
-msgid "search_running"
-msgstr "Recherche en cours"
-
-#: src/tkpostcards/tkmanager.py:3814 src/tkpostcards/tkmanager.py:4281
-msgid "search_running_progress"
-msgstr "Recherche en cours"
-
-#: src/tkpostcards/tkmanager.py:3838
-msgid "search_done"
-msgstr "{n} résultat(s)"
-
-#: src/tkpostcards/tkmanager.py:3891 src/tkpostcards/tkmanager.py:4348
-#: src/tkpostcards/tkmanager.py:6332
-msgid "search_empty"
-msgstr "Recherche vide"
-
-#: src/tkpostcards/tkmanager.py:4164
-msgid "doubles_title"
-msgstr "Recherche de doublons"
-
-#: src/tkpostcards/tkmanager.py:4211
-msgid "doubles_threshold_label"
-msgstr "Seuil"
-
-#: src/tkpostcards/tkmanager.py:4221 src/tkpostcards/tkmanager.py:4307
-msgid "doubles_run"
-msgstr "Chercher"
-
-#: src/tkpostcards/tkmanager.py:4306
-msgid "doubles_done"
-msgstr "Recherche terminée"
-
-#: src/tkpostcards/tkmanager.py:4430
-msgid "doubles_edit"
-msgstr "Editer"
-
-#: src/tkpostcards/tkmanager.py:4552
-msgid "poi_title"
-msgstr "Points d'intérêt"
-
-#: src/tkpostcards/tkmanager.py:4576
-msgid "poi_list_label"
-msgstr "Points d'intérêt"
-
-#: src/tkpostcards/tkmanager.py:4588 src/tkpostcards/tkmanager.py:4693
-#: src/tkpostcards/tkmanager.py:4723 src/tkpostcards/tkmanager.py:4729
-msgid "poi_filter_placeholder"
-msgstr "Filtrer (id ou description)…"
-
-#: src/tkpostcards/tkmanager.py:4611
-msgid "poi_new"
-msgstr "Nouveau"
-
-#: src/tkpostcards/tkmanager.py:4621
-msgid "poi_detail_label"
-msgstr "Détail"
-
-#: src/tkpostcards/tkmanager.py:4627
-msgid "poi_id"
-msgstr "Id"
-
-#: src/tkpostcards/tkmanager.py:4639
-msgid "poi_description"
-msgstr "Description"
-
-#: src/tkpostcards/tkmanager.py:4670
-msgid "poi_rename"
-msgstr "Renommer"
-
-#: src/tkpostcards/tkmanager.py:4674
-msgid "poi_delete"
-msgstr "Supprimer"
-
-#: src/tkpostcards/tkmanager.py:4715
-msgid "poi_count_filtered"
-msgstr "{n} / {total} points d'intérêt"
-
-#: src/tkpostcards/tkmanager.py:4717
-msgid "poi_count"
-msgstr "{n} points d'intérêt"
-
-#: src/tkpostcards/tkmanager.py:4785 src/tkpostcards/tkmanager.py:4899
-msgid "poi_id_required"
-msgstr "Id requis"
-
-#: src/tkpostcards/tkmanager.py:4805
-msgid "poi_saved"
-msgstr "POI {id} enregistré"
-
-#: src/tkpostcards/tkmanager.py:4811
-msgid "poi_delete_confirm"
-msgstr "Confirmez la suppression de {id}"
-
-#: src/tkpostcards/tkmanager.py:4841
-msgid "poi_renamed"
-msgstr "POI {old} renommé en {new} ({n} carte(s) mise(s) à jour)"
-
-#: src/tkpostcards/tkmanager.py:4859
+#: src/tkpostcards/tkmanager.py:157
 msgid "poi_rename_title"
 msgstr "Renommer le POI"
 
-#: src/tkpostcards/tkmanager.py:4866
+#: src/tkpostcards/tkmanager.py:158
 msgid "poi_rename_hint"
 msgstr ""
 "Nouvel identifiant pour « {id} ».\n"
 "Les cartes postales qui référencent ce POI seront mises à jour."
 
-#: src/tkpostcards/tkmanager.py:4921
+#: src/tkpostcards/tkmanager.py:159 src/tkpostcards/tkmanager.py:4855
+msgid "poi_id_required"
+msgstr "Id requis"
+
+#: src/tkpostcards/tkmanager.py:160
+msgid "link_rename_title"
+msgstr "Renommer le lien"
+
+#: src/tkpostcards/tkmanager.py:161
+msgid "link_rename_hint"
+msgstr ""
+"Nouvel identifiant pour le lien « {id} » (les cartes qui l'utilisent "
+"seront mises à jour) :"
+
+#: src/tkpostcards/tkmanager.py:162 src/tkpostcards/tkmanager.py:5089
+msgid "link_id_required"
+msgstr "L'identifiant du lien est obligatoire."
+
+#: src/tkpostcards/tkmanager.py:164
+msgid "travel_title_field"
+msgstr "Titre"
+
+#: src/tkpostcards/tkmanager.py:165
+msgid "map_legend_postcard"
+msgstr "Carte postale"
+
+#: src/tkpostcards/tkmanager.py:166
+msgid "map_legend_poi"
+msgstr "Point d'intérêt"
+
+#: src/tkpostcards/tkmanager.py:168
+msgid "mask_tool_brush_off"
+msgstr "Pinceau : ignorer"
+
+#: src/tkpostcards/tkmanager.py:169
+msgid "mask_tool_brush_on"
+msgstr "Pinceau : garder"
+
+#: src/tkpostcards/tkmanager.py:170
+msgid "mask_tool_rect_off"
+msgstr "Rectangle : ignorer"
+
+#: src/tkpostcards/tkmanager.py:171
+msgid "mask_tool_rect_on"
+msgstr "Rectangle : garder"
+
+#: src/tkpostcards/tkmanager.py:172
+msgid "mask_src_none"
+msgstr "aucun"
+
+#: src/tkpostcards/tkmanager.py:173
+msgid "mask_src_auto"
+msgstr "auto"
+
+#: src/tkpostcards/tkmanager.py:174
+msgid "mask_src_manual"
+msgstr "manuel"
+
+#: src/tkpostcards/tkmanager.py:175
+msgid "mask_need_libs"
+msgstr "La génération automatique nécessite : pip install pypostcards[masks]"
+
+#: src/tkpostcards/tkmanager.py:176
+msgid "mask_need_libs_remote"
+msgstr ""
+"La génération automatique via external_helper nécessite : pip install "
+"requests numpy opencv-python-headless"
+
+#: src/tkpostcards/tkmanager.py:178 src/tkpostcards/tkmanager.py:2751
+msgid "field_status"
+msgstr "Statut"
+
+#: src/tkpostcards/tkmanager.py:179
+msgid "status_active"
+msgstr "Active"
+
+#: src/tkpostcards/tkmanager.py:180
+msgid "status_exchanged"
+msgstr "Échangée"
+
+#: src/tkpostcards/tkmanager.py:181
+msgid "status_trade"
+msgstr "À échanger"
+
+#: src/tkpostcards/tkmanager.py:183 src/tkpostcards/tkmanager.py:2765
+msgid "field_storage"
+msgstr "Stockage"
+
+#: src/tkpostcards/tkmanager.py:185
+msgid "coord_lat"
+msgstr "Lat."
+
+#: src/tkpostcards/tkmanager.py:186
+msgid "coord_lon"
+msgstr "Long."
+
+#: src/tkpostcards/tkmanager.py:188 src/tkpostcards/tkmanager.py:1309
+msgid "side_recto"
+msgstr "Recto"
+
+#: src/tkpostcards/tkmanager.py:189 src/tkpostcards/tkmanager.py:1309
+msgid "side_verso"
+msgstr "Verso"
+
+#: src/tkpostcards/tkmanager.py:191 src/tkpostcards/tkmanager.py:1783
+#: src/tkpostcards/tkmanager.py:3242
+msgid "publish_confirm_title"
+msgstr "Publier"
+
+#: src/tkpostcards/tkmanager.py:192 src/tkpostcards/tkmanager.py:1792
+#: src/tkpostcards/tkmanager.py:3242
+msgid "publish_confirm_msg"
+msgstr "Voulez-vous publier les modifications"
+
+#: src/tkpostcards/tkmanager.py:193 src/tkpostcards/tkmanager.py:1796
+msgid "publish_full_checkbox"
+msgstr "Mettre à jours les parcours, ..."
+
+#: src/tkpostcards/tkmanager.py:194 src/tkpostcards/tkmanager.py:1806
+msgid "btn_publish"
+msgstr "Publier"
+
+#: src/tkpostcards/tkmanager.py:195 src/tkpostcards/tkmanager.py:1809
+msgid "btn_skip_publish"
+msgstr "Quitter sans publier"
+
+#: src/tkpostcards/tkmanager.py:196 src/tkpostcards/tkmanager.py:1924
+msgid "publish_progress_title"
+msgstr "Publication"
+
+#: src/tkpostcards/tkmanager.py:197 src/tkpostcards/tkmanager.py:1929
+msgid "publish_progress_msg"
+msgstr "Publication en cours..."
+
+#: src/tkpostcards/tkmanager.py:198 src/tkpostcards/tkmanager.py:1980
+msgid "publish_details_show"
+msgstr "Afficher les détails"
+
+#: src/tkpostcards/tkmanager.py:199 src/tkpostcards/tkmanager.py:1937
+#: src/tkpostcards/tkmanager.py:1976
+msgid "publish_details_hide"
+msgstr "Masquer les détails"
+
+#: src/tkpostcards/tkmanager.py:200 src/tkpostcards/tkmanager.py:3265
+msgid "publish_success_title"
+msgstr "Publication terminée."
+
+#: src/tkpostcards/tkmanager.py:201 src/tkpostcards/tkmanager.py:3266
+msgid "publish_success_msg"
+msgstr "La publication s'est terminée avec succès."
+
+#: src/tkpostcards/tkmanager.py:202 src/tkpostcards/tkmanager.py:3260
+msgid "publish_error_title"
+msgstr "Erreur de publication"
+
+#: src/tkpostcards/tkmanager.py:203 src/tkpostcards/tkmanager.py:3261
+msgid "publish_error_msg"
+msgstr "Une erreur est survenue lors de la publication : {error}"
+
+#: src/tkpostcards/tkmanager.py:279
+msgid "ctx_cut"
+msgstr "Couper"
+
+#: src/tkpostcards/tkmanager.py:280
+msgid "ctx_copy"
+msgstr "Copier"
+
+#: src/tkpostcards/tkmanager.py:281
+msgid "ctx_paste"
+msgstr "Coller"
+
+#: src/tkpostcards/tkmanager.py:283
+msgid "ctx_select_all"
+msgstr "Sélectionner tout"
+
+#: src/tkpostcards/tkmanager.py:317
+msgid "zoom_fit"
+msgstr "Ajuster"
+
+#: src/tkpostcards/tkmanager.py:396
+msgid "date_dialog_title"
+msgstr "Date"
+
+#: src/tkpostcards/tkmanager.py:428 src/tkpostcards/tkmanager.py:596
+#: src/tkpostcards/tkmanager.py:731 src/tkpostcards/tkmanager.py:871
+#: src/tkpostcards/tkmanager.py:1613 src/tkpostcards/tkmanager.py:1692
+#: src/tkpostcards/tkmanager.py:4721 src/tkpostcards/tkmanager.py:4958
+#: src/tkpostcards/tkmanager.py:5209 src/tkpostcards/tkmanager.py:5325
+#: src/tkpostcards/tkmanager.py:5554 src/tkpostcards/tkmanager.py:5805
+#: src/tkpostcards/tkmanager.py:6500 src/tkpostcards/tkmanager.py:6701
+msgid "btn_save_close"
+msgstr "Sauvegarder"
+
+#: src/tkpostcards/tkmanager.py:431 src/tkpostcards/tkmanager.py:599
+#: src/tkpostcards/tkmanager.py:734 src/tkpostcards/tkmanager.py:872
+#: src/tkpostcards/tkmanager.py:1616 src/tkpostcards/tkmanager.py:1695
+#: src/tkpostcards/tkmanager.py:4961 src/tkpostcards/tkmanager.py:5212
+#: src/tkpostcards/tkmanager.py:5557 src/tkpostcards/tkmanager.py:6705
+msgid "btn_cancel"
+msgstr "Annuler"
+
+#: src/tkpostcards/tkmanager.py:441
+msgid "day_mon"
+msgstr "Lundi"
+
+#: src/tkpostcards/tkmanager.py:441
+msgid "day_tue"
+msgstr "Mardi"
+
+#: src/tkpostcards/tkmanager.py:441
+msgid "day_wed"
+msgstr "Mercredi"
+
+#: src/tkpostcards/tkmanager.py:442
+msgid "day_thu"
+msgstr "Jeudi"
+
+#: src/tkpostcards/tkmanager.py:442
+msgid "day_fri"
+msgstr "Vendredi"
+
+#: src/tkpostcards/tkmanager.py:442
+msgid "day_sat"
+msgstr "Samedi"
+
+#: src/tkpostcards/tkmanager.py:442
+msgid "day_sun"
+msgstr "Dimanche"
+
+#: src/tkpostcards/tkmanager.py:498
+msgid "date_pick"
+msgstr "Choisir"
+
+#: src/tkpostcards/tkmanager.py:501
+msgid "date_clear"
+msgstr "Effacer"
+
+#: src/tkpostcards/tkmanager.py:504
+msgid "date_format_hint"
+msgstr "AAAA-MM-JJ"
+
+#: src/tkpostcards/tkmanager.py:553 src/tkpostcards/tkmanager.py:679
+#: src/tkpostcards/tkmanager.py:5499
+msgid "list_editor_title"
+msgstr "Éditer"
+
+#: src/tkpostcards/tkmanager.py:559 src/tkpostcards/tkmanager.py:691
+#: src/tkpostcards/tkmanager.py:5509
+msgid "list_editor_hint"
+msgstr "Une entrée par ligne"
+
+#: src/tkpostcards/tkmanager.py:579 src/tkpostcards/tkmanager.py:711
+#: src/tkpostcards/tkmanager.py:1671 src/tkpostcards/tkmanager.py:5534
+msgid "btn_add"
+msgstr "Ajouter"
+
+#: src/tkpostcards/tkmanager.py:579 src/tkpostcards/tkmanager.py:711
+#: src/tkpostcards/tkmanager.py:1674
+msgid "btn_update"
+msgstr "Mettre à jour"
+
+#: src/tkpostcards/tkmanager.py:586 src/tkpostcards/tkmanager.py:721
+#: src/tkpostcards/tkmanager.py:1681 src/tkpostcards/tkmanager.py:5546
+msgid "btn_move_up"
+msgstr "Monter"
+
+#: src/tkpostcards/tkmanager.py:587 src/tkpostcards/tkmanager.py:722
+#: src/tkpostcards/tkmanager.py:1682 src/tkpostcards/tkmanager.py:5547
+msgid "btn_move_down"
+msgstr "Descendre"
+
+#: src/tkpostcards/tkmanager.py:588 src/tkpostcards/tkmanager.py:723
+#: src/tkpostcards/tkmanager.py:1683 src/tkpostcards/tkmanager.py:5548
+msgid "btn_delete"
+msgstr "Supprimer"
+
+#: src/tkpostcards/tkmanager.py:715
+msgid "poi_editor_hint"
+msgstr "Sélectionner un POI existant ou saisir un nouvel identifiant"
+
+#: src/tkpostcards/tkmanager.py:821
+msgid "coord_title"
+msgstr "GPS"
+
+#: src/tkpostcards/tkmanager.py:831
+msgid "coord_header"
+msgstr "Coordonnées GPS"
+
+#: src/tkpostcards/tkmanager.py:849
+msgid "coord_paste_label"
+msgstr "Coller"
+
+#: src/tkpostcards/tkmanager.py:862
+msgid "coord_paste_hint"
+msgstr "Format : lat/lon, lat,lon, lat;lon ou lat lon"
+
+#: src/tkpostcards/tkmanager.py:868 src/tkpostcards/tkmanager.py:3039
+msgid "btn_open_osm"
+msgstr "Ouvrir OSM ↗"
+
+#: src/tkpostcards/tkmanager.py:869
+msgid "btn_copy_osm"
+msgstr "Copier lien OSM"
+
+#: src/tkpostcards/tkmanager.py:870
+msgid "btn_reset"
+msgstr "Réinitialiser"
+
+#: src/tkpostcards/tkmanager.py:885 src/tkpostcards/tkmanager.py:913
+#: src/tkpostcards/tkmanager.py:1710 src/tkpostcards/tkmanager.py:2827
+#: src/tkpostcards/tkmanager.py:3057 src/tkpostcards/tkmanager.py:3073
+#: src/tkpostcards/tkmanager.py:3596 src/tkpostcards/tkmanager.py:3816
+#: src/tkpostcards/tkmanager.py:3833 src/tkpostcards/tkmanager.py:3865
+#: src/tkpostcards/tkmanager.py:4300 src/tkpostcards/tkmanager.py:4308
+#: src/tkpostcards/tkmanager.py:4333 src/tkpostcards/tkmanager.py:4868
+#: src/tkpostcards/tkmanager.py:4888 src/tkpostcards/tkmanager.py:4904
+#: src/tkpostcards/tkmanager.py:5231 src/tkpostcards/tkmanager.py:5422
+#: src/tkpostcards/tkmanager.py:5445 src/tkpostcards/tkmanager.py:5463
+#: src/tkpostcards/tkmanager.py:5836 src/tkpostcards/tkmanager.py:5837
+#: src/tkpostcards/tkmanager.py:5878 src/tkpostcards/tkmanager.py:5946
+#: src/tkpostcards/tkmanager.py:5976 src/tkpostcards/tkmanager.py:5996
+#: src/tkpostcards/tkmanager.py:6132 src/tkpostcards/tkmanager.py:6568
+#: src/tkpostcards/tkmanager.py:6574 src/tkpostcards/tkmanager.py:6595
+#: src/tkpostcards/tkmanager.py:6755
+msgid "error_title"
+msgstr "Erreur"
+
+#: src/tkpostcards/tkmanager.py:885
+msgid "coord_error"
+msgstr "Latitude ou longitude invalide"
+
+#: src/tkpostcards/tkmanager.py:899
+msgid "osm_copied_title"
+msgstr "Lien copié"
+
+#: src/tkpostcards/tkmanager.py:899
+msgid "osm_copied"
+msgstr "Le lien OSM a été copié dans le presse-papiers"
+
+#: src/tkpostcards/tkmanager.py:913
+msgid "coord_parse_error"
+msgstr "Impossible de lire les coordonnées"
+
+#: src/tkpostcards/tkmanager.py:956
+msgid "gallery_title"
+msgstr "Galerie"
+
+#: src/tkpostcards/tkmanager.py:980 src/tkpostcards/tkmanager.py:1058
+#: src/tkpostcards/tkmanager.py:1455 src/tkpostcards/tkmanager.py:1469
+#: src/tkpostcards/tkmanager.py:1493 src/tkpostcards/tkmanager.py:2216
+#: src/tkpostcards/tkmanager.py:2217 src/tkpostcards/tkmanager.py:2578
+#: src/tkpostcards/tkmanager.py:2579 src/tkpostcards/tkmanager.py:2591
+#: src/tkpostcards/tkmanager.py:2593 src/tkpostcards/tkmanager.py:2610
+#: src/tkpostcards/tkmanager.py:2613 src/tkpostcards/tkmanager.py:3095
+#: src/tkpostcards/tkmanager.py:3104 src/tkpostcards/tkmanager.py:3112
+#: src/tkpostcards/tkmanager.py:3412 src/tkpostcards/tkmanager.py:6861
+#: src/tkpostcards/tkmanager.py:6862 src/tkpostcards/tkmanager.py:6932
+#: src/tkpostcards/tkmanager.py:7036
+msgid "tsearch_all"
+msgstr "Tous"
+
+#: src/tkpostcards/tkmanager.py:1029
+msgid "gallery_mode"
+msgstr "Mode"
+
+#: src/tkpostcards/tkmanager.py:1031
+msgid "gall_recto"
+msgstr "Recto"
+
+#: src/tkpostcards/tkmanager.py:1032
+msgid "gall_verso"
+msgstr "Verso"
+
+#: src/tkpostcards/tkmanager.py:1033
+msgid "gall_both"
+msgstr "Recto/Verso"
+
+#: src/tkpostcards/tkmanager.py:1042
+msgid "gallery_cols"
+msgstr "Colonnes"
+
+#: src/tkpostcards/tkmanager.py:1053 src/tkpostcards/tkmanager.py:2576
+msgid "nav_filter_label"
+msgstr "Collection"
+
+#: src/tkpostcards/tkmanager.py:1064
+msgid "gallery_refresh"
+msgstr "Actualiser"
+
+#: src/tkpostcards/tkmanager.py:1114 src/tkpostcards/tkmanager.py:1158
+msgid "gallery_ready"
+msgstr "{total} cartes"
+
+#: src/tkpostcards/tkmanager.py:1118 src/tkpostcards/tkmanager.py:1172
+msgid "gallery_loading"
+msgstr "Chargement {done}/{total}…"
+
+#: src/tkpostcards/tkmanager.py:1245
+msgid "gall_empty"
+msgstr "Aucune carte ne correspond à ce filtre."
+
+#: src/tkpostcards/tkmanager.py:1461
+msgid "gall_no_collection"
+msgstr "Sans collection"
+
+#: src/tkpostcards/tkmanager.py:1547
+msgid "coll_editor_title"
+msgstr "Collections"
+
+#: src/tkpostcards/tkmanager.py:1554
+msgid "coll_editor_hint"
+msgstr "Collections"
+
+#: src/tkpostcards/tkmanager.py:1588
+msgid "coll_select_all"
+msgstr "Toutes"
+
+#: src/tkpostcards/tkmanager.py:1592
+msgid "coll_select_none"
+msgstr "Aucune"
+
+#: src/tkpostcards/tkmanager.py:1599
+msgid "coll_no_conf"
+msgstr "Aucune collection configurée. Saisir une liste séparée par des virgules."
+
+#: src/tkpostcards/tkmanager.py:1643
+msgid "dbl_editor_title"
+msgstr "Doublons"
+
+#: src/tkpostcards/tkmanager.py:1649
+msgid "dbl_editor_hint"
+msgstr "Doublons"
+
+#: src/tkpostcards/tkmanager.py:1711
+msgid "dbl_not_integer"
+msgstr "L'identifiant doit être un entier"
+
+#: src/tkpostcards/tkmanager.py:2146
+msgid "app_title"
+msgstr "Postcards Manager"
+
+#: src/tkpostcards/tkmanager.py:2227
+msgid "no_cards_title"
+msgstr "Aucune carte"
+
+#: src/tkpostcards/tkmanager.py:2228 src/tkpostcards/tkmanager.py:2231
+msgid "no_cards_msg"
+msgstr "Aucune carte trouvée dans {dir}"
+
+#: src/tkpostcards/tkmanager.py:2502
+msgid "unsaved_title"
+msgstr "Modifications non enregistrées"
+
+#: src/tkpostcards/tkmanager.py:2503
+msgid "unsaved_msg"
+msgstr "La carte #{id} a des modifications non sauvegardées. Enregistrer ?"
+
+#: src/tkpostcards/tkmanager.py:2538
+msgid "goto_label"
+msgstr "Aller à"
+
+#: src/tkpostcards/tkmanager.py:2547
+msgid "goto_btn"
+msgstr "Aller"
+
+#: src/tkpostcards/tkmanager.py:2552
+msgid "nav_save"
+msgstr "Sauvegarder"
+
+#: src/tkpostcards/tkmanager.py:2589
+msgid "nav_missing_filter_label"
+msgstr "Données"
+
+#: src/tkpostcards/tkmanager.py:2593 src/tkpostcards/tkmanager.py:3119
+#: src/tkpostcards/tkmanager.py:3152
+msgid "nav_no_gps"
+msgstr "Sans GPS"
+
+#: src/tkpostcards/tkmanager.py:2593 src/tkpostcards/tkmanager.py:3121
+#: src/tkpostcards/tkmanager.py:3141 src/tkpostcards/tkmanager.py:3153
+msgid "nav_no_poi"
+msgstr "Sans POI"
+
+#: src/tkpostcards/tkmanager.py:2593 src/tkpostcards/tkmanager.py:3123
+#: src/tkpostcards/tkmanager.py:3154
+msgid "nav_with_updates"
+msgstr "Mises à jour"
+
+#: src/tkpostcards/tkmanager.py:2594 src/tkpostcards/tkmanager.py:3125
+#: src/tkpostcards/tkmanager.py:3155
+msgid "nav_missing_doubles"
+msgstr "Doublons"
+
+#: src/tkpostcards/tkmanager.py:2594 src/tkpostcards/tkmanager.py:3127
+#: src/tkpostcards/tkmanager.py:3156
+msgid "nav_status_trade"
+msgstr "À échanger"
+
+#: src/tkpostcards/tkmanager.py:2594 src/tkpostcards/tkmanager.py:3129
+#: src/tkpostcards/tkmanager.py:3158
+msgid "nav_status_exchanged"
+msgstr "Échangées"
+
+#: src/tkpostcards/tkmanager.py:2608
+msgid "nav_poi_filter_label"
+msgstr "POI"
+
+#: src/tkpostcards/tkmanager.py:2620
+msgid "nav_more"
+msgstr "Plus"
+
+#: src/tkpostcards/tkmanager.py:2664
+msgid "click_to_enlarge"
+msgstr "Cliquer pour agrandir"
+
+#: src/tkpostcards/tkmanager.py:2710
+msgid "field_date"
+msgstr "Date"
+
+#: src/tkpostcards/tkmanager.py:2727 src/tkpostcards/tkmanager.py:2743
+#: src/tkpostcards/tkmanager.py:2786 src/tkpostcards/tkmanager.py:2803
+#: src/tkpostcards/tkmanager.py:4700 src/tkpostcards/tkmanager.py:4714
+#: src/tkpostcards/tkmanager.py:5536 src/tkpostcards/tkmanager.py:5798
+msgid "btn_edit"
+msgstr "Éditer"
+
+#: src/tkpostcards/tkmanager.py:2737
+msgid "field_collections"
+msgstr "Collections"
+
+#: src/tkpostcards/tkmanager.py:2780
+msgid "field_doubles"
+msgstr "Doublons"
+
+#: src/tkpostcards/tkmanager.py:2794 src/tkpostcards/tkmanager.py:4707
+msgid "field_gps"
+msgstr "GPS"
+
+#: src/tkpostcards/tkmanager.py:2799
+msgid "btn_osm"
+msgstr "OSM ↗"
+
+#: src/tkpostcards/tkmanager.py:2812
+msgid "field_updates"
+msgstr "Mises à jour"
+
+#: src/tkpostcards/tkmanager.py:2828
+msgid "error_read"
+msgstr "Erreur lors de la lecture de {path} : {err}"
+
+#: src/tkpostcards/tkmanager.py:2913
+msgid "image_unavailable"
+msgstr "Image {side} indisponible"
+
+#: src/tkpostcards/tkmanager.py:2933 src/tkpostcards/tkmanager.py:2954
+msgid "side_mask"
+msgstr "Masque"
+
+#: src/tkpostcards/tkmanager.py:2935
+msgid "mask_src_"
+msgstr "aucun"
+
+#: src/tkpostcards/tkmanager.py:3000
+msgid "updates_none"
+msgstr "Aucune mise à jour"
+
+#: src/tkpostcards/tkmanager.py:3025
+msgid "coord_none"
+msgstr "—"
+
+#: src/tkpostcards/tkmanager.py:3034
+msgid "btn_apply_gps"
+msgstr "Appliquer GPS"
+
+#: src/tkpostcards/tkmanager.py:3046
+msgid "btn_delete_update"
+msgstr "Supprimer"
+
+#: src/tkpostcards/tkmanager.py:3066 src/tkpostcards/tkmanager.py:3165
+#: src/tkpostcards/tkmanager.py:3209 src/tkpostcards/tkmanager.py:3213
+#: src/tkpostcards/tkmanager.py:3487 src/tkpostcards/tkmanager.py:4094
+#: src/tkpostcards/tkmanager.py:4531 src/tkpostcards/tkmanager.py:4855
+#: src/tkpostcards/tkmanager.py:4881 src/tkpostcards/tkmanager.py:4974
+#: src/tkpostcards/tkmanager.py:5228 src/tkpostcards/tkmanager.py:5419
+#: src/tkpostcards/tkmanager.py:5438 src/tkpostcards/tkmanager.py:5960
+#: src/tkpostcards/tkmanager.py:5989 src/tkpostcards/tkmanager.py:6355
+#: src/tkpostcards/tkmanager.py:6376 src/tkpostcards/tkmanager.py:6558
+#: src/tkpostcards/tkmanager.py:6565 src/tkpostcards/tkmanager.py:6588
+#: src/tkpostcards/tkmanager.py:6732 src/tkpostcards/tkmanager.py:6738
+#: src/tkpostcards/tkmanager.py:7250
+msgid "info_title"
+msgstr "Information"
+
+#: src/tkpostcards/tkmanager.py:3067
+msgid "update_delete_confirm"
+msgstr "Supprimer la mise à jour de {email} ?"
+
+#: src/tkpostcards/tkmanager.py:3166
+msgid "nav_filter_empty"
+msgstr "Filtre vide"
+
+#: src/tkpostcards/tkmanager.py:3210 src/tkpostcards/tkmanager.py:3214
+#: src/tkpostcards/tkmanager.py:4095 src/tkpostcards/tkmanager.py:4532
+#: src/tkpostcards/tkmanager.py:6356 src/tkpostcards/tkmanager.py:7251
+msgid "goto_not_found"
+msgstr "Carte #{id} introuvable"
+
+#: src/tkpostcards/tkmanager.py:3279
+msgid "nav_textsearch"
+msgstr "Recherche"
+
+#: src/tkpostcards/tkmanager.py:3280
+msgid "nav_similar"
+msgstr "Similaires"
+
+#: src/tkpostcards/tkmanager.py:3282
+msgid "nav_doubles"
+msgstr "Doublons"
+
+#: src/tkpostcards/tkmanager.py:3284
+msgid "nav_pois"
+msgstr "POIs"
+
+#: src/tkpostcards/tkmanager.py:3285
+msgid "nav_links"
+msgstr "Liens"
+
+#: src/tkpostcards/tkmanager.py:3286
+msgid "nav_auths"
+msgstr "Accès"
+
+#: src/tkpostcards/tkmanager.py:3287
+msgid "nav_travels"
+msgstr "Parcours"
+
+#: src/tkpostcards/tkmanager.py:3289
+msgid "nav_gallery"
+msgstr "Galerie"
+
+# --- masks (COLMAP) ---
+#: src/tkpostcards/tkmanager.py:3290
+msgid "nav_masks"
+msgstr "Masques (COLMAP)"
+
+#: src/tkpostcards/tkmanager.py:3292
+msgid "nav_settings"
+msgstr "Paramètres"
+
+#: src/tkpostcards/tkmanager.py:3488
+msgid "image_not_found"
+msgstr "Image {id}_{side} non trouvée"
+
+#: src/tkpostcards/tkmanager.py:3593
+msgid "nav_saved"
+msgstr "Enregistré ✓"
+
+#: src/tkpostcards/tkmanager.py:3597
+msgid "error_save"
+msgstr "Erreur lors de la sauvegarde de {path} : {err}"
+
+#: src/tkpostcards/tkmanager.py:3646 src/tkpostcards/tkmanager.py:3778
+msgid "search_title"
+msgstr "Recherche de similaires"
+
+#: src/tkpostcards/tkmanager.py:3663 src/tkpostcards/tkmanager.py:3834
+#: src/tkpostcards/tkmanager.py:4220 src/tkpostcards/tkmanager.py:4309
+msgid "search_unavailable"
+msgstr "Recherche indisponible"
+
+#: src/tkpostcards/tkmanager.py:3667 src/tkpostcards/tkmanager.py:4223
+msgid "search_index_loading"
+msgstr "Chargement de l'index"
+
+#: src/tkpostcards/tkmanager.py:3679 src/tkpostcards/tkmanager.py:4234
+msgid "search_index_ready"
+msgstr "Index chargé"
+
+#: src/tkpostcards/tkmanager.py:3686 src/tkpostcards/tkmanager.py:4240
+msgid "search_index_error"
+msgstr "Erreur d'index"
+
+#: src/tkpostcards/tkmanager.py:3696
+msgid "search_url_label"
+msgstr "URL de l'image"
+
+#: src/tkpostcards/tkmanager.py:3710
+msgid "search_threshold_label"
+msgstr "Seuil"
+
+#: src/tkpostcards/tkmanager.py:3719
+msgid "search_maxresults_label"
+msgstr "Max résultats"
+
+#: src/tkpostcards/tkmanager.py:3728 src/tkpostcards/tkmanager.py:3879
+msgid "search_btn"
+msgstr "Depuis l'URL"
+
+#: src/tkpostcards/tkmanager.py:3739 src/tkpostcards/tkmanager.py:3880
+msgid "search_btn_clipboard"
+msgstr "Depuis le presse-papiers"
+
+#: src/tkpostcards/tkmanager.py:3745 src/tkpostcards/tkmanager.py:4267
+#: src/tkpostcards/tkmanager.py:6880
+msgid "search_clear"
+msgstr "Effacer"
+
+#: src/tkpostcards/tkmanager.py:3779
+msgid "search_no_url"
+msgstr "Veuillez saisir une URL"
+
+#: src/tkpostcards/tkmanager.py:3817 src/tkpostcards/tkmanager.py:4301
+msgid "search_param_error"
+msgstr "Seuil ou max résultats invalide"
+
+#: src/tkpostcards/tkmanager.py:3835 src/tkpostcards/tkmanager.py:4310
+msgid "search_index_not_ready"
+msgstr "Index non encore chargé"
+
+#: src/tkpostcards/tkmanager.py:3843 src/tkpostcards/tkmanager.py:3847
+#: src/tkpostcards/tkmanager.py:4313 src/tkpostcards/tkmanager.py:4314
+msgid "search_running"
+msgstr "Recherche en cours"
+
+#: src/tkpostcards/tkmanager.py:3854 src/tkpostcards/tkmanager.py:4321
+msgid "search_running_progress"
+msgstr "Recherche en cours"
+
+#: src/tkpostcards/tkmanager.py:3878
+msgid "search_done"
+msgstr "{n} résultat(s)"
+
+#: src/tkpostcards/tkmanager.py:3931 src/tkpostcards/tkmanager.py:4388
+#: src/tkpostcards/tkmanager.py:7074
+msgid "search_empty"
+msgstr "Recherche vide"
+
+#: src/tkpostcards/tkmanager.py:4204
+msgid "doubles_title"
+msgstr "Recherche de doublons"
+
+#: src/tkpostcards/tkmanager.py:4251
+msgid "doubles_threshold_label"
+msgstr "Seuil"
+
+#: src/tkpostcards/tkmanager.py:4261 src/tkpostcards/tkmanager.py:4347
+msgid "doubles_run"
+msgstr "Chercher"
+
+#: src/tkpostcards/tkmanager.py:4346
+msgid "doubles_done"
+msgstr "Recherche terminée"
+
+#: src/tkpostcards/tkmanager.py:4470
+msgid "doubles_edit"
+msgstr "Editer"
+
+#: src/tkpostcards/tkmanager.py:4592
+msgid "poi_title"
+msgstr "Points d'intérêt"
+
+#: src/tkpostcards/tkmanager.py:4617
+msgid "poi_list_label"
+msgstr "Points d'intérêt"
+
+#: src/tkpostcards/tkmanager.py:4629 src/tkpostcards/tkmanager.py:4749
+#: src/tkpostcards/tkmanager.py:4779 src/tkpostcards/tkmanager.py:4785
+msgid "poi_filter_placeholder"
+msgstr "Filtrer (id ou description)…"
+
+#: src/tkpostcards/tkmanager.py:4652
+msgid "poi_new"
+msgstr "Nouveau"
+
+#: src/tkpostcards/tkmanager.py:4662
+msgid "poi_detail_label"
+msgstr "Détail"
+
+#: src/tkpostcards/tkmanager.py:4668
+msgid "poi_id"
+msgstr "Id"
+
+#: src/tkpostcards/tkmanager.py:4680
+msgid "poi_description"
+msgstr "Description"
+
+#: src/tkpostcards/tkmanager.py:4726
+msgid "poi_rename"
+msgstr "Renommer"
+
+#: src/tkpostcards/tkmanager.py:4730
+msgid "poi_delete"
+msgstr "Supprimer"
+
+#: src/tkpostcards/tkmanager.py:4771
+msgid "poi_count_filtered"
+msgstr "{n} / {total} points d'intérêt"
+
+#: src/tkpostcards/tkmanager.py:4773
+msgid "poi_count"
+msgstr "{n} points d'intérêt"
+
+#: src/tkpostcards/tkmanager.py:4876
+msgid "poi_saved"
+msgstr "POI {id} enregistré"
+
+#: src/tkpostcards/tkmanager.py:4882
+msgid "poi_delete_confirm"
+msgstr "Confirmez la suppression de {id}"
+
+#: src/tkpostcards/tkmanager.py:4912
+msgid "poi_renamed"
+msgstr "POI {old} renommé en {new} ({n} carte(s) mise(s) à jour)"
+
+#: src/tkpostcards/tkmanager.py:5034
+msgid "link_fetch"
+msgstr "Vérifier"
+
+#: src/tkpostcards/tkmanager.py:5035
+msgid "link_open"
+msgstr "Ouvrir"
+
+#: src/tkpostcards/tkmanager.py:5045 src/tkpostcards/tkmanager.py:5176
+msgid "link_description"
+msgstr "Description"
+
+#: src/tkpostcards/tkmanager.py:5057
+msgid "link_today"
+msgstr "Aujourd'hui"
+
+#: src/tkpostcards/tkmanager.py:5091
+msgid "link_url_required"
+msgstr "L'URL du lien est obligatoire."
+
+#: src/tkpostcards/tkmanager.py:5135
+msgid "link_fetching"
+msgstr "Lecture de {url}…"
+
+#: src/tkpostcards/tkmanager.py:5157
+msgid "link_fetch_error"
+msgstr "Impossible de lire la page : {err}"
+
+#: src/tkpostcards/tkmanager.py:5169
+msgid "link_title_field"
+msgstr "Titre"
+
+#: src/tkpostcards/tkmanager.py:5182
+msgid "link_fetch_ok"
+msgstr "Page lue ; champs remplis : {fields}. Date de vérification mise à jour."
+
+#: src/tkpostcards/tkmanager.py:5184
+msgid "link_fetch_nometa"
+msgstr ""
+"Page lue, aucune information OpenGraph à reprendre. Date de vérification "
+"mise à jour."
+
+#: src/tkpostcards/tkmanager.py:5195
+msgid "link_edit_title"
+msgstr "Modifier le lien"
+
+#: src/tkpostcards/tkmanager.py:5195
+msgid "link_new_title"
+msgstr "Nouveau lien"
+
+#: src/tkpostcards/tkmanager.py:5249
+msgid "link_title"
+msgstr "Liens"
+
+#: src/tkpostcards/tkmanager.py:5271
+msgid "link_list_label"
+msgstr "Liens"
+
+#: src/tkpostcards/tkmanager.py:5282 src/tkpostcards/tkmanager.py:5351
+#: src/tkpostcards/tkmanager.py:5382 src/tkpostcards/tkmanager.py:5388
+msgid "link_filter_placeholder"
+msgstr "Filtrer (id, titre, url…)"
+
+#: src/tkpostcards/tkmanager.py:5305
+msgid "link_new"
+msgstr "Nouveau lien"
+
+#: src/tkpostcards/tkmanager.py:5314
+msgid "link_detail_label"
+msgstr "Détail du lien"
+
+#: src/tkpostcards/tkmanager.py:5330
+msgid "link_rename"
+msgstr "Renommer"
+
+#: src/tkpostcards/tkmanager.py:5334
+msgid "link_delete"
+msgstr "Supprimer"
+
+#: src/tkpostcards/tkmanager.py:5373
+msgid "link_count_filtered"
+msgstr "{n} / {total} lien(s)"
+
+#: src/tkpostcards/tkmanager.py:5376
+msgid "link_count"
+msgstr "{n} lien(s)"
+
+#: src/tkpostcards/tkmanager.py:5432
+msgid "link_saved"
+msgstr "Lien « {id} » enregistré"
+
+#: src/tkpostcards/tkmanager.py:5439
+msgid "link_delete_confirm"
+msgstr ""
+"Supprimer le lien « {id} » ?\n"
+"Il sera aussi retiré des cartes qui l'utilisent."
+
+#: src/tkpostcards/tkmanager.py:5450
+msgid "link_deleted"
+msgstr "Lien « {id} » supprimé ({n} carte(s) mise(s) à jour)"
+
+#: src/tkpostcards/tkmanager.py:5471
+msgid "link_renamed"
+msgstr "Lien « {old} » renommé en « {new} » ({n} carte(s) mise(s) à jour)"
+
+#: src/tkpostcards/tkmanager.py:5535
+msgid "link_new_btn"
+msgstr "Nouveau lien…"
+
+#: src/tkpostcards/tkmanager.py:5541
+msgid "link_editor_hint"
+msgstr "Choisir un lien existant ou en créer un nouveau"
+
+#: src/tkpostcards/tkmanager.py:5586
+msgid "link_unknown"
+msgstr "Lien inconnu de la base"
+
+#: src/tkpostcards/tkmanager.py:5663
 msgid "travel_title"
 msgstr "Parcours"
 
-#: src/tkpostcards/tkmanager.py:4944
+#: src/tkpostcards/tkmanager.py:5686
 msgid "travel_list_label"
 msgstr "Liste des parcours"
 
-#: src/tkpostcards/tkmanager.py:4977
+#: src/tkpostcards/tkmanager.py:5719
 msgid "travel_new"
 msgstr "Nouveau"
 
-#: src/tkpostcards/tkmanager.py:4987
+#: src/tkpostcards/tkmanager.py:5729
 msgid "travel_detail_label"
 msgstr "Libellé"
 
-#: src/tkpostcards/tkmanager.py:5004
+#: src/tkpostcards/tkmanager.py:5746
 msgid "travel_id"
 msgstr "Id"
 
-#: src/tkpostcards/tkmanager.py:5028
+#: src/tkpostcards/tkmanager.py:5770
 msgid "travel_title2_field"
 msgstr "Sous-titre"
 
-#: src/tkpostcards/tkmanager.py:5040
+#: src/tkpostcards/tkmanager.py:5782
 msgid "travel_collection"
 msgstr "Collections"
 
-#: src/tkpostcards/tkmanager.py:5051
+#: src/tkpostcards/tkmanager.py:5793
 msgid "travel_start"
 msgstr "Point de départ"
 
-#: src/tkpostcards/tkmanager.py:5066
+#: src/tkpostcards/tkmanager.py:5808
 msgid "travel_delete"
 msgstr "Supprimer"
 
-#: src/tkpostcards/tkmanager.py:5069
+#: src/tkpostcards/tkmanager.py:5811
 msgid "travel_map_btn"
 msgstr "Carte"
 
-#: src/tkpostcards/tkmanager.py:5103
+#: src/tkpostcards/tkmanager.py:5845
 msgid "travel_count"
 msgstr "{n} parcours"
 
-#: src/tkpostcards/tkmanager.py:5204
+#: src/tkpostcards/tkmanager.py:5946
 msgid "map_unavailable"
 msgstr "La carte interactive n'est pas disponible (Pillow manquant)."
 
-#: src/tkpostcards/tkmanager.py:5218
+#: src/tkpostcards/tkmanager.py:5960
 msgid "travel_id_required"
 msgstr "Id requis"
 
-#: src/tkpostcards/tkmanager.py:5242
+#: src/tkpostcards/tkmanager.py:5984
 msgid "travel_saved"
 msgstr "Enregistré ✓"
 
-#: src/tkpostcards/tkmanager.py:5248
+#: src/tkpostcards/tkmanager.py:5990
 msgid "travel_delete_confirm"
-msgstr "Supprimer le paarcours {id} ?"
+msgstr "Supprimer le parcours {id} ?"
 
-#: src/tkpostcards/tkmanager.py:5309 src/tkpostcards/tkmanager.py:5343
+#: src/tkpostcards/tkmanager.py:6051 src/tkpostcards/tkmanager.py:6085
 msgid "map_title"
 msgstr "Carte — {id} — {title}"
 
-#: src/tkpostcards/tkmanager.py:5318
+#: src/tkpostcards/tkmanager.py:6060
 msgid "map_provider_google"
 msgstr "Google Maps"
 
-#: src/tkpostcards/tkmanager.py:5321
+#: src/tkpostcards/tkmanager.py:6063
 msgid "map_provider_osm"
 msgstr "OpenStreetMap"
 
-#: src/tkpostcards/tkmanager.py:5356
+#: src/tkpostcards/tkmanager.py:6098
 msgid "map_fit"
 msgstr "Cadrer"
 
-#: src/tkpostcards/tkmanager.py:5359
+#: src/tkpostcards/tkmanager.py:6101
 msgid "map_refresh"
 msgstr "Actualiser"
 
-#: src/tkpostcards/tkmanager.py:5382
+#: src/tkpostcards/tkmanager.py:6124
 msgid "map_loading"
 msgstr "Chargement de la carte…"
 
-#: src/tkpostcards/tkmanager.py:5470
+#: src/tkpostcards/tkmanager.py:6212
 msgid "map_count"
 msgstr "{cards} carte(s) postale(s) — {pois} POI dans la zone"
 
-#: src/tkpostcards/tkmanager.py:5624
+#: src/tkpostcards/tkmanager.py:6366
 msgid "map_drag_updated"
 msgstr "Position GPS de la carte {id} mise à jour (à enregistrer)"
 
-#: src/tkpostcards/tkmanager.py:5635
+#: src/tkpostcards/tkmanager.py:6377
 msgid "map_copy_gps_confirm"
 msgstr "Copier la position ({point}) dans le presse-papier ?"
 
-#: src/tkpostcards/tkmanager.py:5639
+#: src/tkpostcards/tkmanager.py:6381
 msgid "map_gps_copied"
 msgstr "Position copiée dans le presse-papier"
 
-#: src/tkpostcards/tkmanager.py:5658
+#: src/tkpostcards/tkmanager.py:6400
 msgid "auth_title"
 msgstr "Gestion des accès"
 
-#: src/tkpostcards/tkmanager.py:5679
+#: src/tkpostcards/tkmanager.py:6421
 msgid "auth_list_label"
 msgstr "Utilisateurs"
 
-#: src/tkpostcards/tkmanager.py:5694
+#: src/tkpostcards/tkmanager.py:6436
 msgid "auth_new"
 msgstr "Nouveau"
 
-#: src/tkpostcards/tkmanager.py:5704
+#: src/tkpostcards/tkmanager.py:6446
 msgid "auth_detail_label"
 msgstr "Détail"
 
-#: src/tkpostcards/tkmanager.py:5710
+#: src/tkpostcards/tkmanager.py:6452
 msgid "auth_email"
 msgstr "Email"
 
-#: src/tkpostcards/tkmanager.py:5722
+#: src/tkpostcards/tkmanager.py:6464
 msgid "auth_password"
 msgstr "Mot de passe"
 
-#: src/tkpostcards/tkmanager.py:5734
+#: src/tkpostcards/tkmanager.py:6476
 msgid "auth_password_confirm"
 msgstr "Confirmation mot de passe"
 
-#: src/tkpostcards/tkmanager.py:5743
+#: src/tkpostcards/tkmanager.py:6485
 msgid "auth_password_hint"
 msgstr "Laissez vide pour conserver le mot de passe actuel"
 
-#: src/tkpostcards/tkmanager.py:5749
+#: src/tkpostcards/tkmanager.py:6491
 msgid "auth_show_password"
 msgstr "Afficher le mot de passe"
 
-#: src/tkpostcards/tkmanager.py:5762
+#: src/tkpostcards/tkmanager.py:6504
 msgid "auth_delete"
 msgstr "Supprimer"
 
-#: src/tkpostcards/tkmanager.py:5783
+#: src/tkpostcards/tkmanager.py:6525
 msgid "auth_count"
 msgstr "{n} auths"
 
-#: src/tkpostcards/tkmanager.py:5795
+#: src/tkpostcards/tkmanager.py:6537
 msgid "auth_selected"
 msgstr "Auth {email} sélectionnée"
 
-#: src/tkpostcards/tkmanager.py:5816
+#: src/tkpostcards/tkmanager.py:6558
 msgid "auth_email_required"
 msgstr "Email requis"
 
-#: src/tkpostcards/tkmanager.py:5823
+#: src/tkpostcards/tkmanager.py:6565
 msgid "auth_password_required"
 msgstr "Mot de passe requis"
 
-#: src/tkpostcards/tkmanager.py:5826
+#: src/tkpostcards/tkmanager.py:6568
 msgid "auth_password_mismatch"
 msgstr "Les mots de passe ne correspondent pas"
 
-#: src/tkpostcards/tkmanager.py:5841
+#: src/tkpostcards/tkmanager.py:6583
 msgid "auth_saved"
 msgstr "Auth {email} enregistrée"
 
-#: src/tkpostcards/tkmanager.py:5847
+#: src/tkpostcards/tkmanager.py:6589
 msgid "auth_delete_confirm"
 msgstr "Confirmez la suppression de {email}"
 
-#: src/tkpostcards/tkmanager.py:5899 src/tkpostcards/tkmanager.py:5918
+#: src/tkpostcards/tkmanager.py:6641 src/tkpostcards/tkmanager.py:6660
 msgid "settings_title"
 msgstr "Paramètres"
 
-#: src/tkpostcards/tkmanager.py:5941
+#: src/tkpostcards/tkmanager.py:6683
 msgid "settings_file_format"
 msgstr "Format images scannées"
 
-#: src/tkpostcards/tkmanager.py:5947
+#: src/tkpostcards/tkmanager.py:6689
 msgid "settings_file_format_help"
 msgstr "Extension des images stockées dans le répertoire des cartes (ex : tiff)."
 
-#: src/tkpostcards/tkmanager.py:5952
+#: src/tkpostcards/tkmanager.py:6694
 msgid "settings_restart_notice"
 msgstr ""
 "Le format des images et les collections de la carte ne seront pris en "
 "compte qu'au prochain lancement des autres outils (tkscan, tktools, site "
 "web)."
 
-#: src/tkpostcards/tkmanager.py:5991
+#: src/tkpostcards/tkmanager.py:6733
 msgid "settings_map_unknown"
 msgstr ""
 "Ces collections de la carte ne figurent pas dans la liste des collections"
 " : {names}"
 
-#: src/tkpostcards/tkmanager.py:5996
+#: src/tkpostcards/tkmanager.py:6738
 msgid "settings_format_required"
 msgstr "Le format des images scannées est obligatoire."
 
-#: src/tkpostcards/tkmanager.py:6022
+#: src/tkpostcards/tkmanager.py:6764
 msgid "settings_saved"
 msgstr "Paramètres enregistrés."
 
-#: src/tkpostcards/tkmanager.py:6050
+#: src/tkpostcards/tkmanager.py:6792
 msgid "tsearch_title"
 msgstr "Recherche textuelle"
 
-#: src/tkpostcards/tkmanager.py:6104
+#: src/tkpostcards/tkmanager.py:6846
 msgid "tsearch_label"
 msgstr "Texte"
 
-#: src/tkpostcards/tkmanager.py:6117
+#: src/tkpostcards/tkmanager.py:6859
 msgid "tsearch_coll_filter"
 msgstr "Collection"
 
-#: src/tkpostcards/tkmanager.py:6129
+#: src/tkpostcards/tkmanager.py:6871
 msgid "tsearch_with_doubles"
 msgstr "Inclure les doublons"
 
-#: src/tkpostcards/tkmanager.py:6205
-#, fuzzy
+#: src/tkpostcards/tkmanager.py:6947
 msgid "tsearch_type_more"
-msgstr "Recherche textuelle"
+msgstr "Saisissez au moins 3 caractères"
 
-#: src/tkpostcards/tkmanager.py:6284
+#: src/tkpostcards/tkmanager.py:7026
 msgid "tsearch_results"
 msgstr "{n} cartes trouvées"
 
@@ -1667,7 +1900,7 @@ msgid "Select destination folder"
 msgstr "Sélectionner le dossier de destination"
 
 #: src/tkpostcards/tkscan.py:1188
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Scanners found: {count}"
 msgstr "Scanners détectés : {count}"
 
@@ -1736,7 +1969,7 @@ msgstr "Finalisation de la numérisation avant fermeture..."
 #: src/tkpostcards/libs/delcampe.py:406
 #, python-brace-format
 msgid "Network error on {url}: {exc}"
-msgstr ""
+msgstr "Erreur réseau sur {url} : {exc}"
 
 #: src/tkpostcards/libs/delcampe.py:421
 #, python-brace-format
@@ -1745,54 +1978,55 @@ msgid ""
 " fresh cookie from your browser (and its User-Agent, see [delcampe] "
 "user_agent)."
 msgstr ""
+"HTTP {code} de Delcampe : session refusée ou protection anti-robot. "
+"Copiez un cookie récent depuis votre navigateur (et son User-Agent, voir "
+"[delcampe] user_agent)."
 
 #: src/tkpostcards/libs/delcampe.py:427
 msgid "Delcampe redirected to the login page: session expired."
-msgstr ""
+msgstr "Delcampe a redirigé vers la page de connexion : session expirée."
 
 #: src/tkpostcards/libs/delcampe.py:455
 msgid "Not logged in: the cookie is missing, wrong or expired."
-msgstr ""
+msgstr "Non connecté : le cookie est absent, incorrect ou expiré."
 
 #: src/tkpostcards/libs/delcampe.py:577
-#, fuzzy
 msgid "ended"
-msgstr "Ajoutée"
+msgstr "terminé"
 
 #: src/tkpostcards/libs/delcampe.py:595
 #, python-brace-format
 msgid "{n} watched item(s), {s} seller(s)"
-msgstr ""
+msgstr "{n} objet(s) suivi(s), {s} vendeur(s)"
 
 #: src/tkpostcards/libs/delcampe.py:602
 #, python-brace-format
 msgid "{n} item(s)"
-msgstr ""
+msgstr "{n} objet(s)"
 
 #: src/tkpostcards/libs/delcampe.py:608
 msgid "none listed"
-msgstr ""
+msgstr "aucun indiqué"
 
 #: src/tkpostcards/libs/delcampe.py:609
 msgid "Payment"
-msgstr ""
+msgstr "Paiement"
 
 #: src/tkpostcards/libs/delcampe.py:612
 msgid "bid"
-msgstr ""
+msgstr "ench."
 
 #: src/tkpostcards/libs/delcampe.py:612
 msgid "fixed"
-msgstr ""
+msgstr "fixe"
 
 #: src/tkpostcards/libs/delcampe.py:613
-#, fuzzy
 msgid "[LEADING]"
-msgstr "Chargement de la carte…"
+msgstr "[EN TÊTE]"
 
 #: src/tkpostcards/libs/delcampe.py:613
 msgid "[outbid?]"
-msgstr ""
+msgstr "[surenchéri ?]"
 
 #: src/tkpostcards/libs/mask_editor.py:110
 #: src/tkpostcards/libs/mask_editor.py:470
@@ -1980,6 +2214,8 @@ msgid ""
 "no processing at all: the raw file is copied as-is (no crop, no deskew, "
 "no transparency)"
 msgstr ""
+"aucun traitement : le fichier brut est copié tel quel (ni rognage, ni "
+"redressement, ni transparence)"
 
 #: src/tkpostcards/scripts/tktools.py:170
 msgid "Re-save every TIFF in datadir/cards using lossless deflate compression"
@@ -2127,20 +2363,20 @@ msgstr "Rechercher une carte postale similaire depuis le presse-papiers"
 
 #: src/tkpostcards/scripts/tktools.py:568
 msgid "List torch devices available for similarity search"
-msgstr ""
+msgstr "Lister les périphériques torch disponibles pour la recherche de similarité"
 
 #: src/tkpostcards/scripts/tktools.py:574
 msgid "torch is not installed"
-msgstr ""
+msgstr "torch n'est pas installé"
 
 #: src/tkpostcards/scripts/tktools.py:588
 #, python-brace-format
 msgid "Currently configured device: {device}"
-msgstr ""
+msgstr "Périphérique actuellement configuré : {device}"
 
 #: src/tkpostcards/scripts/tktools.py:590
 msgid "Currently configured device: (auto)"
-msgstr ""
+msgstr "Périphérique actuellement configuré : (auto)"
 
 #: src/tkpostcards/scripts/tktools.py:593
 msgid "Check for missing ids and replace cards wih last ones"
@@ -2235,9 +2471,8 @@ msgstr ""
 #: src/tkpostcards/scripts/tktools.py:815
 #: src/tkpostcards/scripts/tktools.py:1167
 #: src/tkpostcards/scripts/tktools.py:1252
-#, fuzzy
 msgid "Only the cards of this collection"
-msgstr "Ajouter les cartes validées à la collection"
+msgstr "Uniquement les cartes de cette collection"
 
 #: src/tkpostcards/scripts/tktools.py:817
 msgid ""
@@ -2304,9 +2539,8 @@ msgstr "Moteur de traduction sur le serveur : {engine}"
 
 #: src/tkpostcards/scripts/tktools.py:881
 #: src/tkpostcards/scripts/tktools.py:1192
-#, fuzzy
 msgid "No card selected"
-msgstr "Auth {email} sélectionnée"
+msgstr "Aucune carte sélectionnée"
 
 #: src/tkpostcards/scripts/tktools.py:884
 msgid "Translate"
@@ -2404,6 +2638,8 @@ msgid ""
 "Profile {name!r} does not apply background transparency "
 "(skip_processing/skip_transparency); pick another profile."
 msgstr ""
+"Le profil {name!r} n'applique pas la transparence du fond "
+"(skip_processing/skip_transparency) ; choisissez un autre profil."
 
 #: src/tkpostcards/scripts/tktools.py:1018
 msgid "Calculate travels and add them to database"
@@ -2431,7 +2667,7 @@ msgstr "Ne pas mettre à jour les fichiers"
 
 #: src/tkpostcards/scripts/tktools.py:1156
 msgid "Masks (stamps, borders) to feed pycolmap"
-msgstr ""
+msgstr "Masques (timbres, bordures) pour alimenter pycolmap"
 
 #: src/tkpostcards/scripts/tktools.py:1162
 msgid ""
@@ -2439,24 +2675,30 @@ msgid ""
 "background and the card border are masked too. Masks edited by hand in "
 "ktmanager are never overwritten unless --force-manual."
 msgstr ""
+"Générer les masques : SAM détecte les timbres au recto ; le fond "
+"transparent et le bord de la carte sont aussi masqués. Les masques "
+"modifiés à la main dans ktmanager ne sont jamais écrasés, sauf avec "
+"--force-manual."
 
 #: src/tkpostcards/scripts/tktools.py:1169
 msgid "R = recto (default), V = verso"
-msgstr ""
+msgstr "R = recto (par défaut), V = verso"
 
 #: src/tkpostcards/scripts/tktools.py:1171
 msgid "Regenerate existing automatic masks"
-msgstr ""
+msgstr "Régénérer les masques automatiques existants"
 
 #: src/tkpostcards/scripts/tktools.py:1173
 msgid "Also overwrite masks edited by hand"
-msgstr ""
+msgstr "Écraser aussi les masques modifiés à la main"
 
 #: src/tkpostcards/scripts/tktools.py:1175
 msgid ""
 "Skip stamp detection: only mask the transparent background and the border"
 " (fast, no torch needed)"
 msgstr ""
+"Ignorer la détection des timbres : ne masquer que le fond transparent et "
+"le bord (rapide, torch inutile)"
 
 #: src/tkpostcards/scripts/tktools.py:1178
 msgid ""
@@ -2464,81 +2706,85 @@ msgid ""
 "vit-base. Ignored with an external helper: the server's "
 "segment_model_name applies."
 msgstr ""
+"Modèle SAM de Hugging Face. Par défaut, sam_model de [masks], ou facebook"
+"/sam-vit-base. Ignoré avec un serveur externe : c'est le "
+"segment_model_name du serveur qui s'applique."
 
 #: src/tkpostcards/scripts/tktools.py:1182
 msgid ""
 "Run SAM here even if an external helper is configured ([DEFAULT] "
 "external_helper or --external-helper)"
 msgstr ""
+"Exécuter SAM ici même si un serveur externe est configuré ([DEFAULT] "
+"external_helper ou --external-helper)"
 
 #: src/tkpostcards/scripts/tktools.py:1198
 #, python-brace-format
 msgid "SAM computed by {helper}"
-msgstr ""
+msgstr "SAM calculé par {helper}"
 
 # --- masks (COLMAP) ---
 #: src/tkpostcards/scripts/tktools.py:1200
-#, fuzzy
 msgid "Masks"
-msgstr "Masques (COLMAP)"
+msgstr "Masques"
 
 #: src/tkpostcards/scripts/tktools.py:1206
 #, python-brace-format
 msgid "{n} stamp(s)"
-msgstr ""
+msgstr "{n} timbre(s)"
 
 #: src/tkpostcards/scripts/tktools.py:1223
 #, python-brace-format
 msgid ""
 "{done} generated, {skipped} skipped, {missing} without image, {error} "
 "failed"
-msgstr ""
+msgstr "{done} générés, {skipped} ignorés, {missing} sans image, {error} en échec"
 
 #: src/tkpostcards/scripts/tktools.py:1227
 msgid "How many cards have a mask"
-msgstr ""
+msgstr "Nombre de cartes ayant un masque"
 
 #: src/tkpostcards/scripts/tktools.py:1240
 #, python-brace-format
 msgid "{n} cards: {a} automatic, {m} manual, {x} without mask"
-msgstr ""
+msgstr "{n} cartes : {a} automatiques, {m} manuels, {x} sans masque"
 
 #: src/tkpostcards/scripts/tktools.py:1244
 msgid "Without mask: "
-msgstr ""
+msgstr "Sans masque : "
 
 #: src/tkpostcards/scripts/tktools.py:1248
 msgid ""
 "Write images/ and masks/ ready for pycolmap (mask_path = masks/, "
 "image_path = images/)"
 msgstr ""
+"Écrire images/ et masks/ prêts pour pycolmap (mask_path = masks/, "
+"image_path = images/)"
 
 #: src/tkpostcards/scripts/tktools.py:1256
 msgid "Output directory (images/ and masks/ are created in it)"
-msgstr ""
+msgstr "Répertoire de sortie (images/ et masks/ y sont créés)"
 
 #: src/tkpostcards/scripts/tktools.py:1258
 msgid "Longest side of the exported images, in pixels"
-msgstr ""
+msgstr "Plus grand côté des images exportées, en pixels"
 
 #: src/tkpostcards/scripts/tktools.py:1264
-#, fuzzy
 msgid "Export"
-msgstr "Exporter en PNG"
+msgstr "Exporter"
 
 #: src/tkpostcards/scripts/tktools.py:1272
 #, python-brace-format
 msgid "{n} cards exported to {d}"
-msgstr ""
+msgstr "{n} cartes exportées vers {d}"
 
 #: src/tkpostcards/scripts/tktools.py:1274
-#, fuzzy
 msgid "Image not found: "
-msgstr "Image {id}_{side}non trouvée"
+msgstr "Image introuvable : "
 
 #: src/tkpostcards/scripts/tktools.py:1277
 msgid "Delcampe tools (website, no paid API account needed)"
-msgstr ""
+msgstr "Outils Delcampe (site web, aucun compte API payant requis)"
 
 #: src/tkpostcards/scripts/tktools.py:1283
 msgid ""
@@ -2546,47 +2792,57 @@ msgid ""
 "methods. Uses the session cookie of your browser ([delcampe] cookie / "
 "cookie_file in postcards.conf, or $DELCAMPE_COOKIE)."
 msgstr ""
+"Objets suivis regroupés par vendeur, avec le temps restant et les moyens "
+"de paiement du vendeur. Utilise le cookie de session de votre navigateur "
+"([delcampe] cookie / cookie_file dans postcards.conf, ou "
+"$DELCAMPE_COOKIE)."
 
 #: src/tkpostcards/scripts/tktools.py:1288
 msgid "Which watched items to list"
-msgstr ""
+msgstr "Quels objets suivis lister"
 
 #: src/tkpostcards/scripts/tktools.py:1291
 msgid "Sellers order: soonest ending item, name, or number of items"
 msgstr ""
+"Ordre des vendeurs : objet se terminant le plus tôt, nom, ou nombre "
+"d'objets"
 
 #: src/tkpostcards/scripts/tktools.py:1293
 msgid "Output format"
-msgstr ""
+msgstr "Format de sortie"
 
 #: src/tkpostcards/scripts/tktools.py:1295
 msgid "Do not look up payment methods (a single request in total)"
-msgstr ""
+msgstr "Ne pas rechercher les moyens de paiement (une seule requête au total)"
 
 #: src/tkpostcards/scripts/tktools.py:1297
 msgid "Ignore the seller cache and look payment methods up again"
 msgstr ""
+"Ignorer le cache des vendeurs et rechercher à nouveau les moyens de "
+"paiement"
 
 #: src/tkpostcards/scripts/tktools.py:1299
 msgid "Stop after this many pages of the list"
-msgstr ""
+msgstr "S'arrêter après ce nombre de pages de la liste"
 
 #: src/tkpostcards/scripts/tktools.py:1301
 msgid "Seconds between two requests (default [delcampe] delay, 1.0)"
-msgstr ""
+msgstr "Secondes entre deux requêtes (par défaut [delcampe] delay, 1.0)"
 
 #: src/tkpostcards/scripts/tktools.py:1303
 msgid "Session cookie header copied from your browser"
-msgstr ""
+msgstr "En-tête Cookie de session copié depuis votre navigateur"
 
 #: src/tkpostcards/scripts/tktools.py:1305
 msgid "Write the result to this file instead of stdout"
-msgstr ""
+msgstr "Écrire le résultat dans ce fichier au lieu de la sortie standard"
 
 #: src/tkpostcards/scripts/tktools.py:1313
 #, python-brace-format
 msgid "Missing dependency ({e}). Install: pip install requests beautifulsoup4"
 msgstr ""
+"Dépendance manquante ({e}). Installation : pip install requests "
+"beautifulsoup4"
 
 #: src/tkpostcards/scripts/tktools.py:1323
 msgid ""
@@ -2596,29 +2852,35 @@ msgid ""
 "= ...), or export DELCAMPE_COOKIE, or pass --cookie. It works like a "
 "password: keep it private."
 msgstr ""
+"Aucun cookie de session. Dans votre navigateur connecté à Delcampe, "
+"ouvrez les outils de développement > Réseau, cliquez sur une requête "
+"delcampe.net et copiez son en-tête « Cookie », puis soit placez-le dans "
+"postcards.conf ([delcampe] cookie = ...), soit exportez DELCAMPE_COOKIE, "
+"soit passez --cookie. Il fonctionne comme un mot de passe : gardez-le "
+"privé."
 
 #: src/tkpostcards/scripts/tktools.py:1340
 #, python-brace-format
 msgid "Page {p}/{n}: {g} item(s) so far"
-msgstr ""
+msgstr "Page {p}/{n} : {g} objet(s) jusqu'ici"
 
 #: src/tkpostcards/scripts/tktools.py:1346
 msgid "No watched item."
-msgstr ""
+msgstr "Aucun objet suivi."
 
 #: src/tkpostcards/scripts/tktools.py:1348
 msgid "Sellers"
-msgstr ""
+msgstr "Vendeurs"
 
 #: src/tkpostcards/scripts/tktools.py:1372
 #, python-brace-format
 msgid "Written to {f}"
-msgstr ""
+msgstr "Écrit dans {f}"
 
 #: src/tkpostcards/scripts/tktools.py:1375
 #, python-brace-format
 msgid "{n} request(s) made to Delcampe"
-msgstr ""
+msgstr "{n} requête(s) envoyée(s) à Delcampe"
 
 #~ msgid "map_legend_postcard"
 #~ msgstr "Carte postale"

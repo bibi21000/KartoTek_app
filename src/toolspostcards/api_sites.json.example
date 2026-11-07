@@ -1,0 +1,11 @@
+{
+  "acme": {
+    "url": "http://fl-acme:5000",
+    "datadir": "/srv/sites/acme/datadir"
+  },
+  "autre-client": {
+    "url": "http://fl-autre:5000",
+    "sync_token": "jeton-de-synchronisation-de-ce-flpostcards",
+    "sync_prefix": "/api/v1/sync"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "guest": {
+    "rank": 10,
+    "description": "Publication web (cartes + thème)",
+    "capabilities": ["publish"]
+  },
+  "basic": {
+    "rank": 20,
+    "extends": "guest",
+    "description": "Guest + traitement des images",
+    "capabilities": ["image"]
+  },
+  "premium": {
+    "rank": 30,
+    "extends": "basic",
+    "description": "Basic + OCR et détection",
+    "capabilities": ["ocr", "detection", "translate"]
+  },
+  "gold": {
+    "rank": 40,
+    "extends": "premium",
+    "description": "Accès total : premium + parcours (travels) + sauvegarde",
+    "capabilities": ["travel", "backup", "publish:restart"]
+  }
+}

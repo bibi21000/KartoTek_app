@@ -41,7 +41,7 @@
 [DEFAULT]
 
 # Data directory: postcard images (size_div1/3/10/20 subfolders),
-# pois.json, collections.json, updates.json, travels.json,
+# pois.json, links.json, collections.json, updates.json, travels.json,
 # postcards.sqlite, postcards.pkl, verification/, ...
 datadir = datadir
 
@@ -886,11 +886,13 @@ max_workers = 5
 #   [sync_lan]       host = http://flpostcards:5000    (direct, no TLS)
 #                    allow_http = true
 #   [sync_internet]  host = https://tools.example.com  (nginx + gateway)
-#                    api_key = <key of the "hosting" level>
+#                    api_key = <key of level guest or above>
 # Plain http:// is refused unless allow_http = true: the token then travels
 # in clear, so only for a trusted local network, never over the Internet.
 ;allow_http = false
 # API key required by a gateway in front of flpostcards (toolspostcards).
+# Publishing needs the "publish" capability, granted from level "guest" up;
+# restart_remote = true also needs "publish:restart" (level "gold" by default).
 # Sent in api_key_header IN ADDITION to the token below, which flpostcards
 # always checks itself (the gateway must forward "Authorization" untouched).
 ;api_key = 

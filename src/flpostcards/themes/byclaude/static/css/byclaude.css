@@ -292,6 +292,23 @@ html.bc-desk, body.bc-desk {
 .gallery-filters .filter-field {
     gap: 0.15rem;
 }
+
+/* Bouton "Rechercher" : même gabarit que les champs, mais en cire */
+.gallery-filters .filter-submit {
+    background: var(--bc-wax) !important;
+    color: var(--bc-paper) !important;
+    border: 1px solid var(--bc-wax-dark) !important;
+    border-radius: 2px;
+    font-family: var(--bc-font-type);
+    font-size: 0.82rem;
+    padding: 0.3rem 0.8rem !important;
+    box-shadow: 1px 1px 0 rgba(59, 42, 26, 0.35);
+}
+
+.gallery-filters .filter-submit:hover,
+.gallery-filters .filter-submit:focus-visible {
+    background: var(--bc-wax-dark) !important;
+}
 .gallery-pagination .page-link {
     color: var(--bc-ink);
     background: var(--bc-paper);
@@ -616,4 +633,54 @@ html.bc-desk, body.bc-desk {
     width: 40px;
     height: 40px;
     filter: drop-shadow(0 3px 4px rgba(59, 42, 26, 0.35));
+}
+
+/* -----------------------------------------------------------------
+   Détail d'une carte — titres de section : liens (carte + POI) et
+   points d'intérêt (même style), en bas de fiche
+   style.css les colore en bleu clair sur fond sombre : illisible sur
+   le papier du thème. On les passe en "lignes dactylographiées" :
+   titre à l'encre de la poste, soulignement doré, description en
+   papier atténué, et un filet doré sous le titre de section.
+   ----------------------------------------------------------------- */
+.card-links-title,
+.poi-name {
+    font-family: var(--bc-font-title);
+    color: var(--bc-paper) !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--bc-gold);
+}
+
+.card-links li {
+    font-family: var(--bc-font-type);
+    padding: 0.5rem 0.8rem;
+    background: var(--bc-paper);
+    border: 1px solid var(--bc-paper-deep);
+    border-left: 3px solid var(--bc-wax);
+    border-radius: 2px;
+    box-shadow: 1px 2px 0 rgba(59, 42, 26, 0.3);
+}
+
+.card-links a {
+    color: var(--bc-postmark) !important;
+    text-decoration: underline;
+    text-decoration-color: var(--bc-gold);
+    text-underline-offset: 3px;
+}
+
+.card-links a:hover,
+.card-links a:focus-visible {
+    color: var(--bc-wax) !important;
+}
+
+.card-link-description {
+    color: var(--bc-ink-soft) !important;
+    font-family: var(--bc-font-body);
+}
+
+/* Parcours ciblé par un lien direct /travel/#<id> */
+.travel-card:target {
+    outline: 2px solid var(--bc-wax);
+    outline-offset: 3px;
 }

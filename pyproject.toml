@@ -20,7 +20,7 @@ maintainers = [
   {name = "bibi21000", email = "bibi21000@gmail.com"}
 ]
 description = "Scan, manage and publish your postcards collection"
-version = "4.2.2"
+version = "4.2.6"
 requires-python = ">=3.9"
 dependencies = [
     "pillow",
@@ -105,6 +105,7 @@ similar = [
 ]
 tools = [
     "fastapi",
+    "httpx",
     "uvicorn[standard]",
     "cryptography",
     "pydantic",
@@ -196,6 +197,14 @@ flpostcards = [
     "deprecations.json",
 ]
 libpostcards = [
+    "translations/**/*.po",
+    "translations/**/*.mo",
+]
+simpostcards = [
+    "translations/**/*.po",
+    "translations/**/*.mo",
+]
+toolspostcards = [
     "translations/**/*.po",
     "translations/**/*.mo",
 ]

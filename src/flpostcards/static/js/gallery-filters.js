@@ -1,17 +1,18 @@
 /**
- * Filtres dynamiques de la galerie :
+ * Filtres de la galerie :
  *  - les <select> soumettent le formulaire immédiatement au changement
  *    (géré directement en HTML via onchange="this.form.submit()")
- *  - le champ de recherche soumet automatiquement le formulaire, mais
- *    seulement après un délai de 2 secondes sans frappe ET au moins
- *    3 caractères saisis (ou un champ vidé, pour réinitialiser le
- *    filtre de recherche)
+ *  - la recherche n'est PAS lancée automatiquement pendant la saisie :
+ *    elle n'est validée que par le bouton "Rechercher" ou la touche
+ *    Entrée (comportement natif du formulaire)
+ *  - après l'affichage du résultat d'une recherche, le focus est remis
+ *    dans la zone de saisie (curseur en fin de texte) pour enchaîner
+ *    une nouvelle recherche
  */
 (function () {
     "use strict";
 
-    var MIN_CHARS = 3;
-    var DEBOUNCE_MS = 2000;
+    var FOCUS_FLAG = "gallery-search-refocus";
 
     var form = document.getElementById("gallery-filters-form");
     var searchInput = document.getElementById("search-input");
@@ -20,43 +21,26 @@
         return;
     }
 
-    var debounceTimer = null;
-    var lastSubmittedValue = searchInput.value;
+    // Une recherche vient d'être validée : on le mémorise pour la page
+    // suivante (le flag évite de voler le focus lors d'une simple
+    // navigation, ex. pagination, ou d'ouvrir le clavier sur mobile).
+    form.addEventListener("submit", function () {
+        try {
+            sessionStorage.setItem(FOCUS_FLAG, "1");
+        } catch (e) { /* stockage indisponible : pas de refocus */ }
+    });
 
-    function maybeSubmit() {
-        var value = searchInput.value.trim();
+    var refocus = false;
+    try {
+        refocus = sessionStorage.getItem(FOCUS_FLAG) === "1";
+        sessionStorage.removeItem(FOCUS_FLAG);
+    } catch (e) { /* ignoré */ }
 
-        // Pas de re-soumission si la valeur n'a pas changé depuis le
-        // dernier filtrage effectif (évite une boucle de rechargement)
-        if (value === lastSubmittedValue) {
-            return;
-        }
-
-        // On filtre soit à partir de 3 caractères, soit quand le champ
-        // est vidé (pour permettre de retirer le filtre de recherche)
-        if (value.length === 0 || value.length >= MIN_CHARS) {
-            lastSubmittedValue = value;
-            form.submit();
-        }
+    if (refocus) {
+        var end = searchInput.value.length;
+        searchInput.focus();
+        try {
+            searchInput.setSelectionRange(end, end);
+        } catch (e) { /* type=search : non supporté partout */ }
     }
-
-    searchInput.addEventListener("input", function () {
-        if (debounceTimer) {
-            clearTimeout(debounceTimer);
-        }
-        debounceTimer = setTimeout(maybeSubmit, DEBOUNCE_MS);
-    });
-
-    // Permet aussi de valider immédiatement avec Entrée, sans attendre
-    // le délai, si la saisie respecte déjà la longueur minimale
-    searchInput.addEventListener("keydown", function (event) {
-        if (event.key !== "Enter") {
-            return;
-        }
-        event.preventDefault();
-        if (debounceTimer) {
-            clearTimeout(debounceTimer);
-        }
-        maybeSubmit();
-    });
 })();

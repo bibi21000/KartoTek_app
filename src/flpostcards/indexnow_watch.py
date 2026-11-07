@@ -1,6 +1,7 @@
 """
 flpostcards/indexnow_watch.py - Job de surveillance : détecte les
-cartes et parcours nouveaux ou modifiés depuis le dernier passage, et
+cartes et parcours nouveaux ou modifiés (y compris par l'ajout/la
+modification d'un lien ou d'un POI affiché sur la carte) depuis le dernier passage, et
 soumet leurs URLs à l'API IndexNow (flpostcards.indexnow.submit_urls,
 voir https://www.bing.com/indexnow/getstarted) pour une réindexation
 plus rapide côté Bing/Yandex/Seznam.cz/Naver, sans attendre leur
@@ -100,9 +101,23 @@ def check_and_submit(app) -> int:
         last_mdate = int(state.get("last_mdate", 0))
 
         all_cards = app.model.list_unique_cards(exclude_status="exchanged")
+
+        # Date de modification visible de chaque carte : son mdate, ou
+        # celui d'un lien/POI qu'elle affiche (voir
+        # Model.effective_mdates) -- ajouter ou modifier un lien ou un POI
+        # change la fiche sans toucher au JSON de la carte, et doit donc
+        # aussi être soumis à IndexNow (comme <lastmod> dans le sitemap).
+        effective = app.model.effective_mdates(all_cards)
+
+        def card_mdate(c) -> int:
+            return max(
+                int(c.get("mdate") or c.get("cdate") or 0),
+                effective.get(str(c["id"]), 0),
+            )
+
         changed_cards = sorted(
-            (c for c in all_cards if int(c.get("mdate") or c.get("cdate") or 0) > last_mdate),
-            key=lambda c: c.get("mdate") or c.get("cdate") or 0,
+            (c for c in all_cards if card_mdate(c) > last_mdate),
+            key=card_mdate,
         )
 
         changed_travels = sorted(
@@ -119,7 +134,7 @@ def check_and_submit(app) -> int:
         max_mdate_seen = last_mdate
         urls = []
         for card in changed_cards:
-            max_mdate_seen = max(max_mdate_seen, int(card.get("mdate") or card.get("cdate") or 0))
+            max_mdate_seen = max(max_mdate_seen, card_mdate(card))
             urls.append(url_for("home.card_detail", card_id=card["id"], _external=True))
         for travel in changed_travels:
             max_mdate_seen = max(max_mdate_seen, int(travel.get("mdate") or travel.get("cdate") or 0))

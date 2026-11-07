@@ -1179,6 +1179,10 @@ def card_detail(card_id: str):
       poi           : liste des points d'intérêt liés, chacun résolu en
                        {"id", "description", "coord"} (voir model.get_poi)
                        plutôt que de simples identifiants bruts.
+      links         : liens de la carte puis de ses POIs, à plat et sans
+                       doublon (voir model.resolve_card_links), chacun
+                       {"id", "title", "description", "url"} — même liste
+                       que celle affichée en bas de la fiche web.
       doubles       : autres exemplaires connus de la même carte
                        (même photo/tirage scanné plusieurs fois), résolus
                        en résumé léger {"id", "title", "thumb_recto"} —
@@ -1251,6 +1255,15 @@ def card_detail(card_id: str):
         "recto": _sizes("recto"),
         "verso": _sizes("verso"),
         "poi": pois,
+        "links": [
+            {
+                "id": l["id"],
+                "title": l.get("title"),
+                "description": l.get("description"),
+                "url": l["url"],
+            }
+            for l in model.resolve_card_links(card)
+        ],
         "doubles": doubles,
         "web_url": url_for("home.card_detail", card_id=cid, _external=True),
     }

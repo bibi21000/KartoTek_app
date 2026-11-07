@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tkpostcards 3.4.2\n"
 "Report-Msgid-Bugs-To: bibi21000@gmail.com\n"
-"POT-Creation-Date: 2026-09-05 10:03+0000\n"
+"POT-Creation-Date: 2026-10-31 14:45+0000\n"
 "PO-Revision-Date: 2026-07-24 22:03+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: uk\n"
@@ -20,266 +20,348 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: tkpostcards/__init__.py:128
+#: src/tkpostcards/__init__.py:173
 msgid "Configuration file"
 msgstr "Файл конфігурації"
 
-#: tkpostcards/__init__.py:129
+#: src/tkpostcards/__init__.py:174
 msgid "Image and JSON storage directory"
 msgstr "Каталог зберігання зображень і JSON"
 
-#: tkpostcards/__init__.py:130
+#: src/tkpostcards/__init__.py:175
 msgid "Scanned image import directory"
 msgstr "Каталог імпорту сканованих зображень"
 
-#: tkpostcards/__init__.py:131
+#: src/tkpostcards/__init__.py:176
 msgid "Temporary directory"
 msgstr "Тимчасовий каталог"
 
-#: tkpostcards/__init__.py:132
+#: src/tkpostcards/__init__.py:177
 msgid "Enable/disable debug"
 msgstr "Увімкнути/вимкнути налагодження"
 
-#: tkpostcards/__init__.py:134
+#: src/tkpostcards/__init__.py:179
 msgid ""
 "Torch device to use for similarity search (see \"tktools devices\"). "
 "Defaults to the [DEFAULT] torch_device setting in the configuration file,"
 " or torch's own default (cuda if available, else cpu) if unset."
 msgstr ""
+"Пристрій torch для пошуку схожості (див. \"tktools devices\"). За "
+"замовчуванням — параметр torch_device у [DEFAULT] конфігураційного файлу,"
+" а якщо його не задано — типове значення torch (cuda, якщо доступний, "
+"інакше cpu)."
 
-#: tkpostcards/tkimport.py:252
+#: src/tkpostcards/__init__.py:183
+msgid ""
+"URI of a remote simpostcards server (e.g. http://simpostcards:8004) used "
+"to delegate, instead of a local computation, whatever simpostcards can do"
+" in place of this machine: similarity/doubles search and index building "
+"(no torch/open-clip-torch/imagehash needed here), travel route "
+"optimization (no ortools needed here), and OCR text extraction (no "
+"pytesseract/tesseract-ocr needed here). Defaults to the [DEFAULT] "
+"external_helper setting in the configuration file, or unset (local "
+"computation, those libs required) if neither is given."
+msgstr ""
+"URI віддаленого сервера simpostcards (напр. http://simpostcards:8004), "
+"якому делегується замість локального обчислення все, що simpostcards може"
+" виконати замість цього комп'ютера: пошук схожості/дублікатів і побудова "
+"індексу (torch/open-clip-torch/imagehash тут не потрібні), оптимізація "
+"маршрутів подорожей (ortools тут не потрібен) та розпізнавання тексту OCR"
+" (pytesseract/tesseract-ocr тут не потрібні). За замовчуванням — параметр"
+" external_helper у [DEFAULT] конфігураційного файлу, а якщо жодного не "
+"задано — не встановлено (локальні обчислення, ці бібліотеки обов'язкові)."
+
+#: src/tkpostcards/__init__.py:193
+msgid ""
+"Timeout, in seconds, for a single request to --external-helper, before "
+"giving up client-side. Defaults to the [DEFAULT] external_helper_timeout "
+"setting in the configuration file, or each command's own built-in default"
+" (30-60s) if neither is given. Raise this if the remote server has to "
+"fall back to cpu for a computation normally done on GPU, which can easily"
+" take longer than the default."
+msgstr ""
+"Тайм-аут (у секундах) одного запиту до --external-helper, після якого "
+"клієнт здається. За замовчуванням — параметр external_helper_timeout у "
+"[DEFAULT] конфігураційного файлу, а якщо жодного не задано — власне "
+"типове значення кожної команди (30–60 с). Збільште його, якщо віддалений "
+"сервер змушений переходити на cpu для обчислення, яке зазвичай "
+"виконується на GPU, — це легко може перевищити типовий тайм-аут."
+
+#: src/tkpostcards/tkimport.py:264
 msgid "Fit to window"
 msgstr "Підігнати до вікна"
 
-#: tkpostcards/tkimport.py:254
+#: src/tkpostcards/tkimport.py:266
 msgid "Actual size"
 msgstr "Реальний розмір"
 
-#: tkpostcards/tkimport.py:262 tkpostcards/tkimport.py:700
-#: tkpostcards/tkimport.py:1263 tkpostcards/tkscan.py:738
-#: tkpostcards/tkscan.py:1336
-msgid "Close"
-msgstr "Закрити"
-
-#: tkpostcards/tkimport.py:422
-msgid "Recto"
-msgstr "Лицьова сторона"
-
-#: tkpostcards/tkimport.py:422
-msgid "Verso"
-msgstr "Зворотна сторона"
-
-#: tkpostcards/tkimport.py:268 tkpostcards/tkimport.py:448
+#: src/tkpostcards/tkimport.py:275 src/tkpostcards/tkimport.py:475
 msgid "Edit…"
 msgstr "Редагувати…"
 
-#: tkpostcards/tkimport.py:441
+#: src/tkpostcards/tkimport.py:278 src/tkpostcards/tkimport.py:826
+#: src/tkpostcards/tkimport.py:1445 src/tkpostcards/tkscan.py:771
+#: src/tkpostcards/tkscan.py:1375
+msgid "Close"
+msgstr "Закрити"
+
+#: src/tkpostcards/tkimport.py:458
+msgid "Recto"
+msgstr "Лицьова сторона"
+
+#: src/tkpostcards/tkimport.py:458
+msgid "Verso"
+msgstr "Зворотна сторона"
+
+#: src/tkpostcards/tkimport.py:477
 msgid "Reload"
 msgstr "Перезавантажити"
 
-#: tkpostcards/tkimport.py:452
+#: src/tkpostcards/tkimport.py:479
+msgid "Cancel"
+msgstr "Скасувати"
+
+#: src/tkpostcards/tkimport.py:490
 msgid "missing"
 msgstr "відсутнє"
 
-#: tkpostcards/tkimport.py:468 tkpostcards/tkimport.py:481
-#: tkpostcards/tkimport.py:786 tkpostcards/tkimport.py:799
-#: tkpostcards/tkimport.py:812 tkpostcards/tkimport.py:862
-#: tkpostcards/tkimport.py:884 tkpostcards/tkimport.py:919
-#: tkpostcards/tkimport.py:1115 tkpostcards/tkimport.py:1120
-#: tkpostcards/tkimport.py:1321 tkpostcards/tkimport.py:1430
-#: tkpostcards/tkscan.py:700 tkpostcards/tkscan.py:722
+#: src/tkpostcards/tkimport.py:506 src/tkpostcards/tkimport.py:519
+#: src/tkpostcards/tkimport.py:545 src/tkpostcards/tkimport.py:938
+#: src/tkpostcards/tkimport.py:951 src/tkpostcards/tkimport.py:964
+#: src/tkpostcards/tkimport.py:1017 src/tkpostcards/tkimport.py:1039
+#: src/tkpostcards/tkimport.py:1074 src/tkpostcards/tkimport.py:1293
+#: src/tkpostcards/tkimport.py:1522 src/tkpostcards/tkimport.py:1716
+#: src/tkpostcards/tkscan.py:733 src/tkpostcards/tkscan.py:755
 msgid "Error"
 msgstr "Помилка"
 
-#: tkpostcards/tkimport.py:493 tkpostcards/tkimport.py:1407
+#: src/tkpostcards/tkimport.py:557 src/tkpostcards/tkimport.py:1691
 msgid "Added"
 msgstr "Додано"
 
-#: tkpostcards/tkimport.py:501
+#: src/tkpostcards/tkimport.py:565
 msgid "Already in collection"
 msgstr "Вже в колекції"
 
-#: tkpostcards/tkimport.py:544
+#: src/tkpostcards/tkimport.py:609
 msgid "Import profiles"
-msgstr ""
+msgstr "Профілі імпорту"
 
-#: tkpostcards/tkimport.py:574
+#: src/tkpostcards/tkimport.py:639
 msgid "New…"
-msgstr ""
+msgstr "Новий…"
 
-#: tkpostcards/tkimport.py:576
+#: src/tkpostcards/tkimport.py:641
 msgid "Duplicate…"
-msgstr ""
+msgstr "Дублювати…"
 
-#: tkpostcards/tkimport.py:579
+#: src/tkpostcards/tkimport.py:644
 msgid "Set as active"
-msgstr ""
+msgstr "Зробити активним"
 
-#: tkpostcards/tkimport.py:583
+#: src/tkpostcards/tkimport.py:648
 msgid "Profile settings"
-msgstr ""
+msgstr "Параметри профілю"
 
-#: tkpostcards/tkimport.py:622
+#: src/tkpostcards/tkimport.py:659
+msgid "Description"
+msgstr "Опис"
+
+#: src/tkpostcards/tkimport.py:683
+msgid ""
+"No processing at all\n"
+"(copy the raw file as-is: no crop, no rotation, no transparency)"
+msgstr ""
+"Без обробки\n"
+"(копіювання вихідного файлу як є: без обрізання, повороту та прозорості)"
+
+#: src/tkpostcards/tkimport.py:712
+msgid ""
+"Skip background transparency\n"
+"(keep the background opaque; crop/deskew still apply)"
+msgstr ""
+"Пропустити прозорість тла\n"
+"(тло залишається непрозорим; обрізання й вирівнювання все одно "
+"застосовуються)"
+
+#: src/tkpostcards/tkimport.py:736
 msgid ""
 "Transparency band (px)\n"
 "(blank = unrestricted)"
 msgstr ""
+"Смуга прозорості (пікс.)\n"
+"(порожньо = без обмежень)"
 
-#: tkpostcards/tkimport.py:636
+#: src/tkpostcards/tkimport.py:752
 msgid ""
 "Detect card outline by contour\n"
 "(slower; handles non-rectangular cards)"
 msgstr ""
+"Визначати межі листівки за контуром\n"
+"(повільніше; працює з непрямокутними листівками)"
 
-#: tkpostcards/tkimport.py:649
+#: src/tkpostcards/tkimport.py:767
 msgid "Denoise before detecting (helps faint/grainy edges)"
-msgstr ""
+msgstr "Зменшувати шум перед визначенням (допомагає зі слабкими/зернистими краями)"
 
-#: tkpostcards/tkimport.py:655
+#: src/tkpostcards/tkimport.py:775
 msgid "Boost local contrast before detecting (helps low-contrast edges)"
 msgstr ""
+"Посилювати локальний контраст перед визначенням (допомагає з "
+"малоконтрастними краями)"
 
-#: tkpostcards/tkimport.py:661
+#: src/tkpostcards/tkimport.py:783
 msgid "Auto-adjust edge sensitivity per scan"
-msgstr ""
+msgstr "Автоматично налаштовувати чутливість до країв для кожного скану"
 
-#: tkpostcards/tkimport.py:676
+#: src/tkpostcards/tkimport.py:800
 msgid ""
 "Crop to card envelope via downscaled color detection\n"
 "(experimental; more robust on faint jagged edges)"
 msgstr ""
+"Обрізати по обгортці листівки за допомогою кольорового визначення зі "
+"зменшенням\n"
+"(експериментально; надійніше на слабких зубчастих краях)"
 
-#: tkpostcards/tkimport.py:688
+#: src/tkpostcards/tkimport.py:814
 msgid "Save"
-msgstr ""
+msgstr "Зберегти"
 
-#: tkpostcards/tkimport.py:691
+#: src/tkpostcards/tkimport.py:817
 msgid "Rename…"
-msgstr ""
+msgstr "Перейменувати…"
 
-#: tkpostcards/tkimport.py:693
+#: src/tkpostcards/tkimport.py:819
 msgid "Reset to defaults"
-msgstr ""
+msgstr "Скинути до типових"
 
-#: tkpostcards/tkimport.py:696
+#: src/tkpostcards/tkimport.py:822
 msgid "Delete…"
-msgstr ""
+msgstr "Видалити…"
 
-#: tkpostcards/tkimport.py:735
+#: src/tkpostcards/tkimport.py:861
 msgid "(active)"
-msgstr ""
+msgstr "(активний)"
 
-#: tkpostcards/tkimport.py:752
+#: src/tkpostcards/tkimport.py:886
 msgid ""
 "Built-in profile: editing it saves an override; \"Reset to defaults\" "
 "removes that override."
 msgstr ""
+"Вбудований профіль: його редагування зберігає перевизначення; «Скинути до"
+" типових» вилучає це перевизначення."
 
-#: tkpostcards/tkimport.py:771
+#: src/tkpostcards/tkimport.py:923
 #, python-brace-format
 msgid ""
 "Transparency white threshold\n"
 "(blank = same as White threshold, currently {value})"
 msgstr ""
+"Поріг білого для прозорості\n"
+"(порожньо = як поріг білого, зараз {value})"
 
-#: tkpostcards/tkimport.py:787 tkpostcards/tkimport.py:800
-#: tkpostcards/tkimport.py:813
+#: src/tkpostcards/tkimport.py:939 src/tkpostcards/tkimport.py:952
+#: src/tkpostcards/tkimport.py:965
 #, python-brace-format
 msgid "Invalid value for {field}: {value!r}"
-msgstr ""
+msgstr "Недійсне значення для {field}: {value!r}"
 
-#: tkpostcards/tkimport.py:801
+#: src/tkpostcards/tkimport.py:953
 msgid "Transparency white threshold"
-msgstr ""
+msgstr "Поріг білого для прозорості"
 
-#: tkpostcards/tkimport.py:814
+#: src/tkpostcards/tkimport.py:966
 msgid "Transparency band (px)"
-msgstr ""
+msgstr "Смуга прозорості (пікс.)"
 
-#: tkpostcards/tkimport.py:856
+#: src/tkpostcards/tkimport.py:1011
 msgid "New profile"
-msgstr ""
+msgstr "Новий профіль"
 
-#: tkpostcards/tkimport.py:856
+#: src/tkpostcards/tkimport.py:1011
 msgid "Name of the new profile:"
-msgstr ""
+msgstr "Назва нового профілю:"
 
-#: tkpostcards/tkimport.py:862 tkpostcards/tkimport.py:884
+#: src/tkpostcards/tkimport.py:1017 src/tkpostcards/tkimport.py:1039
 msgid "Invalid or already used profile name."
-msgstr ""
+msgstr "Недійсна або вже використана назва профілю."
 
-#: tkpostcards/tkimport.py:877
+#: src/tkpostcards/tkimport.py:1032
 msgid "Rename profile"
-msgstr ""
+msgstr "Перейменувати профіль"
 
-#: tkpostcards/tkimport.py:877
+#: src/tkpostcards/tkimport.py:1032
 #, python-brace-format
 msgid "New name for {name!r}:"
-msgstr ""
+msgstr "Нова назва для {name!r}:"
 
-#: tkpostcards/tkimport.py:912
+#: src/tkpostcards/tkimport.py:1067
 msgid "Reset profile"
-msgstr ""
+msgstr "Скинути профіль"
 
-#: tkpostcards/tkimport.py:913
+#: src/tkpostcards/tkimport.py:1068
 #, python-brace-format
 msgid "Reset {name!r} to its default values?"
-msgstr ""
+msgstr "Скинути {name!r} до типових значень?"
 
-#: tkpostcards/tkimport.py:920
+#: src/tkpostcards/tkimport.py:1075
 msgid "Cannot delete the currently active profile: activate another one first."
-msgstr ""
+msgstr "Не можна видалити поточний активний профіль: спершу активуйте інший."
 
-#: tkpostcards/tkimport.py:925
+#: src/tkpostcards/tkimport.py:1080
 msgid "Delete profile"
-msgstr ""
+msgstr "Видалити профіль"
 
-#: tkpostcards/tkimport.py:926
+#: src/tkpostcards/tkimport.py:1081
 #, python-brace-format
 msgid "Delete profile {name!r}? This cannot be undone."
-msgstr ""
+msgstr "Видалити профіль {name!r}? Цю дію неможливо скасувати."
 
-#: tkpostcards/tkimport.py:964
+#: src/tkpostcards/tkimport.py:1119
 msgid "Postcard Import"
 msgstr "Імпорт листівок"
 
-#: tkpostcards/tkimport.py:1010
+#: src/tkpostcards/tkimport.py:1165
 msgid "1. Analyze and correct scans"
 msgstr "1. Аналіз і корекція сканів"
 
-#: tkpostcards/tkimport.py:1015
+#: src/tkpostcards/tkimport.py:1170
 msgid "Prefix:"
 msgstr "Префікс:"
 
-#: tkpostcards/tkimport.py:1020
+#: src/tkpostcards/tkimport.py:1175
 msgid "Import profile:"
-msgstr ""
+msgstr "Профіль імпорту:"
 
-#: tkpostcards/tkimport.py:1027
+#: src/tkpostcards/tkimport.py:1182
 msgid "Manage profiles…"
-msgstr ""
+msgstr "Керувати профілями…"
 
-#: tkpostcards/tkimport.py:1035
+#: src/tkpostcards/tkimport.py:1198
 msgid "Analyze and correct scans"
 msgstr "Аналізувати та виправити скани"
 
-#: tkpostcards/tkimport.py:1040
+#: src/tkpostcards/tkimport.py:1203
 msgid "2. Validate scans"
 msgstr "2. Перевірка сканів"
 
-#: tkpostcards/tkimport.py:1049
+#: src/tkpostcards/tkimport.py:1212
+msgid "Cancel all…"
+msgstr "Скасувати все…"
+
+#: src/tkpostcards/tkimport.py:1214
 msgid "Select all"
 msgstr "Вибрати все"
 
-#: tkpostcards/tkimport.py:1051
+#: src/tkpostcards/tkimport.py:1216
 msgid "Select none"
 msgstr "Скасувати вибір"
 
-#: tkpostcards/tkimport.py:1058
+#: src/tkpostcards/tkimport.py:1223
 msgid "3. Add to collection"
 msgstr "3. Додати до колекції"
 
-#: tkpostcards/tkimport.py:1063
+#: src/tkpostcards/tkimport.py:1228
 msgid ""
 "Empty the import folder once postcards are added (deletes every file in "
 "the folder)"
@@ -287,1424 +369,1896 @@ msgstr ""
 "Очистити папку імпорту після додавання листівок (видаляє всі файли в "
 "папці)"
 
-#: tkpostcards/tkimport.py:1067
+#: src/tkpostcards/tkimport.py:1232
 msgid "Add validated postcards to collection"
 msgstr "Додати перевірені листівки до колекції"
 
-#: tkpostcards/tkimport.py:1072 tkpostcards/tkimport.py:1451
-#: tkpostcards/tkscan.py:993 tkpostcards/tkscan.py:1426
+#: src/tkpostcards/tkimport.py:1237 src/tkpostcards/tkimport.py:1746
+#: src/tkpostcards/tkscan.py:1026 src/tkpostcards/tkscan.py:1465
 msgid "Status:"
 msgstr "Статус:"
 
-#: tkpostcards/tkimport.py:1072 tkpostcards/tkimport.py:1323
-#: tkpostcards/tkimport.py:1439 tkpostcards/tkscan.py:993
+#: src/tkpostcards/tkimport.py:1237 src/tkpostcards/tkimport.py:1524
+#: src/tkpostcards/tkimport.py:1565 src/tkpostcards/tkimport.py:1603
+#: src/tkpostcards/tkimport.py:1734 src/tkpostcards/tkscan.py:1026
 msgid "Ready"
 msgstr "Готово"
 
-#: tkpostcards/tkimport.py:1075 tkpostcards/tkscan.py:998
+#: src/tkpostcards/tkimport.py:1240 src/tkpostcards/tkscan.py:1031
 msgid "Log"
 msgstr "Журнал"
 
-#: tkpostcards/tkimport.py:1110 tkpostcards/tkimport.py:1152
-#: tkpostcards/tkimport.py:1357
+#: src/tkpostcards/tkimport.py:1288 src/tkpostcards/tkimport.py:1328
+#: src/tkpostcards/tkimport.py:1579 src/tkpostcards/tkimport.py:1614
 msgid "Info"
 msgstr "Інформація"
 
-#: tkpostcards/tkimport.py:1110
+#: src/tkpostcards/tkimport.py:1288
 msgid "Aucun scan à traiter"
 msgstr "Немає сканів для обробки"
 
-#: tkpostcards/tkimport.py:1115
+#: src/tkpostcards/tkimport.py:1293
 msgid "Nombre de scan(s) à traiter incohérent"
 msgstr "Невідповідна кількість сканів для обробки"
 
-#: tkpostcards/tkimport.py:1121
-msgid "La précédente analyse n'a pas été terminée ... je ne sais pas quoi faire"
-msgstr "Попередній аналіз не завершено... незрозуміло, що робити"
-
-#: tkpostcards/tkimport.py:1145
+#: src/tkpostcards/tkimport.py:1321 src/tkpostcards/tkimport.py:1721
 msgid "Warning"
 msgstr "Попередження"
 
-#: tkpostcards/tkimport.py:1146
+#: src/tkpostcards/tkimport.py:1322
 msgid "Incohérence entre importdir et la base de données"
 msgstr "Невідповідність між папкою імпорту та базою даних"
 
-#: tkpostcards/tkimport.py:1152
+#: src/tkpostcards/tkimport.py:1328
 msgid "Rien à faire ... je quitte"
 msgstr "Нічого робити... завершення роботи"
 
-#: tkpostcards/tkimport.py:1184 tkpostcards/tkimport.py:1235
+#: src/tkpostcards/tkimport.py:1360 src/tkpostcards/tkimport.py:1417
 msgid "(system default)"
 msgstr "(типово для системи)"
 
-#: tkpostcards/tkimport.py:1225
+#: src/tkpostcards/tkimport.py:1407
 msgid "Choose your preferred image editor"
 msgstr "Виберіть улюблений редактор зображень"
 
-#: tkpostcards/tkimport.py:1231
+#: src/tkpostcards/tkimport.py:1413
 #, python-brace-format
 msgid "Preferred image editor set to {app}"
 msgstr "Улюблений редактор зображень встановлено на {app}"
 
-#: tkpostcards/tkimport.py:1242
+#: src/tkpostcards/tkimport.py:1424
 msgid "Preferred image editor"
 msgstr "Улюблений редактор зображень"
 
-#: tkpostcards/tkimport.py:1249
+#: src/tkpostcards/tkimport.py:1431
 msgid "Preferred image editor:"
 msgstr "Улюблений редактор зображень:"
 
-#: tkpostcards/tkimport.py:1256
+#: src/tkpostcards/tkimport.py:1438
 msgid "Browse…"
 msgstr "Огляд…"
 
-#: tkpostcards/tkimport.py:1259
+#: src/tkpostcards/tkimport.py:1441
 msgid "Use system default"
 msgstr "Використовувати типовий системний"
 
-#: tkpostcards/tkimport.py:1279
+#: src/tkpostcards/tkimport.py:1477
 #, python-brace-format
 msgid "Raw scans waiting: {count}"
 msgstr "Необроблених сканів в очікуванні: {count}"
 
-#: tkpostcards/tkimport.py:1289
+#: src/tkpostcards/tkimport.py:1487
 msgid "Analyzing scans..."
 msgstr "Аналіз сканів..."
 
-#: tkpostcards/tkimport.py:1319
+#: src/tkpostcards/tkimport.py:1520
 msgid "Preparation failed"
 msgstr "Помилка підготовки"
 
-#: tkpostcards/tkimport.py:1324
+#: src/tkpostcards/tkimport.py:1525
 #, python-brace-format
 msgid "Prepared {count} postcard(s)"
 msgstr "Підготовлено {count} листівок(и)"
 
-#: tkpostcards/tkimport.py:1358
+#: src/tkpostcards/tkimport.py:1563
+#, python-brace-format
+msgid "Cancelled #{pcid} ({side}); pick a profile and analyze again to redo it."
+msgstr ""
+"Скасовано #{pcid} ({side}); виберіть профіль і повторіть аналіз, щоб "
+"переробити."
+
+#: src/tkpostcards/tkimport.py:1579
+msgid "Nothing to cancel."
+msgstr "Нічого скасовувати."
+
+#: src/tkpostcards/tkimport.py:1582
+msgid "Cancel all"
+msgstr "Скасувати все"
+
+#: src/tkpostcards/tkimport.py:1583
+msgid ""
+"Delete every analyzed (not yet added) recto/verso file so you can pick a "
+"different profile and analyze again? This cannot be undone."
+msgstr ""
+"Видалити всі проаналізовані (ще не додані) файли лицьової/зворотної "
+"сторони, щоб можна було вибрати інший профіль і повторити аналіз? Це "
+"неможливо скасувати."
+
+#: src/tkpostcards/tkimport.py:1601
+#, python-brace-format
+msgid "Cancelled {count} postcard(s); pick a profile and analyze again."
+msgstr "Скасовано {count} листівок(и); виберіть профіль і повторіть аналіз."
+
+#: src/tkpostcards/tkimport.py:1615
 msgid "No validated postcard to add."
 msgstr "Немає перевірених листівок для додавання."
 
-#: tkpostcards/tkimport.py:1362 tkpostcards/tkimport.py:1411
+#: src/tkpostcards/tkimport.py:1619 src/tkpostcards/tkimport.py:1695
 msgid "Adding postcards..."
 msgstr "Додавання листівок..."
 
-#: tkpostcards/tkimport.py:1428
+#: src/tkpostcards/tkimport.py:1714
 msgid "Add failed"
 msgstr "Помилка додавання"
 
-#: tkpostcards/tkimport.py:1434
+#: src/tkpostcards/tkimport.py:1723
+msgid ""
+"The detected texts stay in English. Once the language is available, "
+"translate them with: kttools detect-translate"
+msgstr ""
+"Виявлені тексти залишаються англійською. Коли мова стане доступною, "
+"перекладіть їх командою: kttools detect-translate"
+
+#: src/tkpostcards/tkimport.py:1729
 msgid "Import folder emptied"
 msgstr "Папку імпорту очищено"
 
-#: tkpostcards/tkmanager.py:135
+#: src/tkpostcards/tkmanager.py:139
 msgid "field_title"
 msgstr "Заголовок"
 
-#: tkpostcards/tkmanager.py:136
+#: src/tkpostcards/tkmanager.py:140
 msgid "field_title2"
 msgstr "Додатковий заголовок"
 
-#: tkpostcards/tkmanager.py:137
+#: src/tkpostcards/tkmanager.py:141
 msgid "field_description"
 msgstr "Опис"
 
-#: tkpostcards/tkmanager.py:138
+#: src/tkpostcards/tkmanager.py:142
 msgid "field_recto_ocr"
 msgstr "OCR лицьової сторони"
 
-#: tkpostcards/tkmanager.py:139
+#: src/tkpostcards/tkmanager.py:143
 msgid "field_verso_ocr"
 msgstr "OCR зворотної сторони"
 
-#: tkpostcards/tkmanager.py:140
+#: src/tkpostcards/tkmanager.py:144
 msgid "field_recto_text"
 msgstr "Текст лицьової сторони"
 
-#: tkpostcards/tkmanager.py:141
+#: src/tkpostcards/tkmanager.py:145
 msgid "field_verso_text"
 msgstr "Текст зворотної сторони"
 
-#: tkpostcards/tkmanager.py:142
+#: src/tkpostcards/tkmanager.py:146
 msgid "field_detected_content"
 msgstr "Виявлений вміст"
 
-#: tkpostcards/tkmanager.py:143
+#: src/tkpostcards/tkmanager.py:147
 msgid "field_detected_objects"
 msgstr "Виявлені об'єкти"
 
-#: tkpostcards/tkmanager.py:145
+#: src/tkpostcards/tkmanager.py:149
 msgid "field_address"
 msgstr "Адреса"
 
-#: tkpostcards/tkmanager.py:146
+#: src/tkpostcards/tkmanager.py:150
 msgid "field_poi"
 msgstr "POI"
 
-#: tkpostcards/tkmanager.py:148 tkpostcards/tkmanager.py:2507
-msgid "field_status"
-msgstr "Статус"
-
-#: tkpostcards/tkmanager.py:149
-msgid "status_active"
-msgstr "Активна"
-
-#: tkpostcards/tkmanager.py:150
-msgid "status_exchanged"
-msgstr "Обміняно"
-
-#: tkpostcards/tkmanager.py:151
-msgid "status_trade"
-msgstr "На обмін"
-
-#: tkpostcards/tkmanager.py:153
-msgid "coord_lat"
-msgstr "Шир."
-
-#: tkpostcards/tkmanager.py:154
-msgid "coord_lon"
-msgstr "Довг."
-
-#: tkpostcards/tkmanager.py:156 tkpostcards/tkmanager.py:1241
-msgid "side_recto"
-msgstr "Лицьова сторона"
-
-#: tkpostcards/tkmanager.py:157 tkpostcards/tkmanager.py:1241
-msgid "side_verso"
-msgstr "Зворотна сторона"
-
-#: tkpostcards/tkmanager.py:159 tkpostcards/tkmanager.py:1629
-#: tkpostcards/tkmanager.py:2877
-msgid "publish_confirm_title"
-msgstr "Публікація"
-
-#: tkpostcards/tkmanager.py:160 tkpostcards/tkmanager.py:1638
-#: tkpostcards/tkmanager.py:2877
-msgid "publish_confirm_msg"
-msgstr "Опублікувати зміни?"
-
-#: tkpostcards/tkmanager.py:161 tkpostcards/tkmanager.py:1642
-msgid "publish_full_checkbox"
-msgstr "Оновити подорожі та інше"
-
-#: tkpostcards/tkmanager.py:162 tkpostcards/tkmanager.py:1652
-msgid "btn_publish"
-msgstr "Опублікувати"
-
-#: tkpostcards/tkmanager.py:163 tkpostcards/tkmanager.py:1655
-msgid "btn_skip_publish"
-msgstr "Вийти без публікації"
-
-#: tkpostcards/tkmanager.py:164 tkpostcards/tkmanager.py:1769
-msgid "publish_progress_title"
-msgstr "Публікація"
-
-#: tkpostcards/tkmanager.py:165 tkpostcards/tkmanager.py:1774
-msgid "publish_progress_msg"
-msgstr "Публікація..."
-
-#: tkpostcards/tkmanager.py:166 tkpostcards/tkmanager.py:1823
-msgid "publish_details_show"
-msgstr "Показати деталі"
-
-#: tkpostcards/tkmanager.py:167 tkpostcards/tkmanager.py:1782
-#: tkpostcards/tkmanager.py:1819
-msgid "publish_details_hide"
-msgstr "Приховати деталі"
-
-#: tkpostcards/tkmanager.py:168 tkpostcards/tkmanager.py:2900
-msgid "publish_success_title"
-msgstr "Публікацію завершено."
-
-#: tkpostcards/tkmanager.py:169 tkpostcards/tkmanager.py:2901
-msgid "publish_success_msg"
-msgstr "Публікація успішно завершена."
-
-#: tkpostcards/tkmanager.py:170 tkpostcards/tkmanager.py:2895
-msgid "publish_error_title"
-msgstr "Помилка публікації"
-
-#: tkpostcards/tkmanager.py:171 tkpostcards/tkmanager.py:2896
-msgid "publish_error_msg"
-msgstr "Під час публікації сталася помилка: {error}"
-
-#: tkpostcards/tkmanager.py:247
-msgid "ctx_cut"
-msgstr "Вирізати"
-
-#: tkpostcards/tkmanager.py:248
-msgid "ctx_copy"
-msgstr "Копіювати"
-
-#: tkpostcards/tkmanager.py:249
-msgid "ctx_paste"
-msgstr "Вставити"
-
-#: tkpostcards/tkmanager.py:251
-msgid "ctx_select_all"
-msgstr "Вибрати все"
-
-#: tkpostcards/tkmanager.py:285
-msgid "zoom_fit"
-msgstr "Підігнати"
-
-#: tkpostcards/tkmanager.py:364
-msgid "date_dialog_title"
-msgstr "Дата"
-
-#: tkpostcards/tkmanager.py:396 tkpostcards/tkmanager.py:564
-#: tkpostcards/tkmanager.py:699 tkpostcards/tkmanager.py:839
-#: tkpostcards/tkmanager.py:1459 tkpostcards/tkmanager.py:1538
-#: tkpostcards/tkmanager.py:4270 tkpostcards/tkmanager.py:4488
-#: tkpostcards/tkmanager.py:4668 tkpostcards/tkmanager.py:5363
-#: tkpostcards/tkmanager.py:5564
-msgid "btn_save_close"
-msgstr "Зберегти"
-
-#: tkpostcards/tkmanager.py:399 tkpostcards/tkmanager.py:567
-#: tkpostcards/tkmanager.py:702 tkpostcards/tkmanager.py:840
-#: tkpostcards/tkmanager.py:1462 tkpostcards/tkmanager.py:1541
-#: tkpostcards/tkmanager.py:4491 tkpostcards/tkmanager.py:5568
-msgid "btn_cancel"
-msgstr "Скасувати"
-
-#: tkpostcards/tkmanager.py:409
-msgid "day_mon"
-msgstr "Понеділок"
-
-#: tkpostcards/tkmanager.py:409
-msgid "day_tue"
-msgstr "Вівторок"
-
-#: tkpostcards/tkmanager.py:409
-msgid "day_wed"
-msgstr "Середа"
-
-#: tkpostcards/tkmanager.py:410
-msgid "day_thu"
-msgstr "Четвер"
-
-#: tkpostcards/tkmanager.py:410
-msgid "day_fri"
-msgstr "П'ятниця"
-
-#: tkpostcards/tkmanager.py:410
-msgid "day_sat"
-msgstr "Субота"
-
-#: tkpostcards/tkmanager.py:410
-msgid "day_sun"
-msgstr "Неділя"
-
-#: tkpostcards/tkmanager.py:466
-msgid "date_pick"
-msgstr "Вибрати"
-
-#: tkpostcards/tkmanager.py:469
-msgid "date_clear"
-msgstr "Очистити"
-
-#: tkpostcards/tkmanager.py:472
-msgid "date_format_hint"
-msgstr "РРРР-ММ-ДД"
-
-#: tkpostcards/tkmanager.py:521 tkpostcards/tkmanager.py:647
-msgid "list_editor_title"
-msgstr "Редагувати"
-
-#: tkpostcards/tkmanager.py:527 tkpostcards/tkmanager.py:659
-msgid "list_editor_hint"
-msgstr "По одному запису на рядок"
-
-#: tkpostcards/tkmanager.py:547 tkpostcards/tkmanager.py:679
-#: tkpostcards/tkmanager.py:1517
-msgid "btn_add"
-msgstr "Додати"
-
-#: tkpostcards/tkmanager.py:547 tkpostcards/tkmanager.py:679
-#: tkpostcards/tkmanager.py:1520
-msgid "btn_update"
-msgstr "Оновити"
-
-#: tkpostcards/tkmanager.py:554 tkpostcards/tkmanager.py:689
-#: tkpostcards/tkmanager.py:1527
-msgid "btn_move_up"
-msgstr "Перемістити вгору"
-
-#: tkpostcards/tkmanager.py:555 tkpostcards/tkmanager.py:690
-#: tkpostcards/tkmanager.py:1528
-msgid "btn_move_down"
-msgstr "Перемістити вниз"
-
-#: tkpostcards/tkmanager.py:556 tkpostcards/tkmanager.py:691
-#: tkpostcards/tkmanager.py:1529
-msgid "btn_delete"
-msgstr "Видалити"
-
-#: tkpostcards/tkmanager.py:683
-msgid "poi_editor_hint"
-msgstr "Виберіть наявний POI або введіть новий ідентифікатор"
-
-#: tkpostcards/tkmanager.py:789
-msgid "coord_title"
-msgstr "GPS"
-
-#: tkpostcards/tkmanager.py:799
-msgid "coord_header"
-msgstr "GPS-координати"
-
-#: tkpostcards/tkmanager.py:817
-msgid "coord_paste_label"
-msgstr "Вставити"
-
-#: tkpostcards/tkmanager.py:830
-msgid "coord_paste_hint"
-msgstr "Формат: шир./довг., шир.,довг., шир.;довг. або шир. довг."
-
-#: tkpostcards/tkmanager.py:836 tkpostcards/tkmanager.py:2726
-msgid "btn_open_osm"
-msgstr "Відкрити OSM ↗"
-
-#: tkpostcards/tkmanager.py:837
-msgid "btn_copy_osm"
-msgstr "Копіювати посилання OSM"
-
-#: tkpostcards/tkmanager.py:838
-msgid "btn_reset"
-msgstr "Скинути"
-
-#: tkpostcards/tkmanager.py:853 tkpostcards/tkmanager.py:881
-#: tkpostcards/tkmanager.py:1556 tkpostcards/tkmanager.py:2567
-#: tkpostcards/tkmanager.py:2744 tkpostcards/tkmanager.py:2760
-#: tkpostcards/tkmanager.py:3161 tkpostcards/tkmanager.py:3381
-#: tkpostcards/tkmanager.py:3398 tkpostcards/tkmanager.py:3430
-#: tkpostcards/tkmanager.py:3865 tkpostcards/tkmanager.py:3873
-#: tkpostcards/tkmanager.py:3898 tkpostcards/tkmanager.py:4402
-#: tkpostcards/tkmanager.py:4422 tkpostcards/tkmanager.py:4438
-#: tkpostcards/tkmanager.py:4699 tkpostcards/tkmanager.py:4700
-#: tkpostcards/tkmanager.py:4741 tkpostcards/tkmanager.py:4809
-#: tkpostcards/tkmanager.py:4839 tkpostcards/tkmanager.py:4859
-#: tkpostcards/tkmanager.py:4995 tkpostcards/tkmanager.py:5431
-#: tkpostcards/tkmanager.py:5437 tkpostcards/tkmanager.py:5458
-#: tkpostcards/tkmanager.py:5618
-msgid "error_title"
-msgstr "Помилка"
-
-#: tkpostcards/tkmanager.py:853
-msgid "coord_error"
-msgstr "Невірна широта або довгота"
-
-#: tkpostcards/tkmanager.py:867
-msgid "osm_copied_title"
-msgstr "Посилання скопійовано"
-
-#: tkpostcards/tkmanager.py:867
-msgid "osm_copied"
-msgstr "Посилання OSM скопійовано в буфер обміну"
-
-#: tkpostcards/tkmanager.py:881
-msgid "coord_parse_error"
-msgstr "Не вдалося зчитати координати"
-
-#: tkpostcards/tkmanager.py:923
-msgid "gallery_title"
-msgstr "Галерея"
-
-#: tkpostcards/tkmanager.py:985
-msgid "gallery_mode"
-msgstr "Режим"
-
-#: tkpostcards/tkmanager.py:987
-msgid "gall_recto"
-msgstr "Лицьова сторона"
-
-#: tkpostcards/tkmanager.py:988
-msgid "gall_verso"
-msgstr "Зворотна сторона"
-
-#: tkpostcards/tkmanager.py:989
-msgid "gall_both"
-msgstr "Лицьова/зворотна"
-
-#: tkpostcards/tkmanager.py:998
-msgid "gallery_cols"
-msgstr "Стовпці"
-
-#: tkpostcards/tkmanager.py:1009
-msgid "gallery_refresh"
-msgstr "Оновити"
-
-#: tkpostcards/tkmanager.py:1057 tkpostcards/tkmanager.py:1108
-msgid "gallery_loading"
-msgstr "Завантаження {done}/{total}…"
-
-#: tkpostcards/tkmanager.py:1097
-msgid "gallery_ready"
-msgstr "{total} листівок"
-
-#: tkpostcards/tkmanager.py:1393
-msgid "coll_editor_title"
-msgstr "Колекції"
-
-#: tkpostcards/tkmanager.py:1400
-msgid "coll_editor_hint"
-msgstr "Колекції"
-
-#: tkpostcards/tkmanager.py:1434
-msgid "coll_select_all"
-msgstr "Усі"
-
-#: tkpostcards/tkmanager.py:1438
-msgid "coll_select_none"
-msgstr "Жодної"
-
-#: tkpostcards/tkmanager.py:1445
-msgid "coll_no_conf"
-msgstr "Жодної колекції не налаштовано. Введіть список через кому."
-
-#: tkpostcards/tkmanager.py:1489
-msgid "dbl_editor_title"
-msgstr "Дублікати"
-
-#: tkpostcards/tkmanager.py:1495
-msgid "dbl_editor_hint"
-msgstr "Дублікати"
-
-#: tkpostcards/tkmanager.py:1557
-msgid "dbl_not_integer"
-msgstr "Ідентифікатор має бути цілим числом"
-
-#: tkpostcards/tkmanager.py:1955
-msgid "app_title"
-msgstr "Postcards Manager"
-
-#: tkpostcards/tkmanager.py:2017 tkpostcards/tkmanager.py:2018
-#: tkpostcards/tkmanager.py:2361 tkpostcards/tkmanager.py:2362
-#: tkpostcards/tkmanager.py:2374 tkpostcards/tkmanager.py:2376
-#: tkpostcards/tkmanager.py:2765 tkpostcards/tkmanager.py:5714
-#: tkpostcards/tkmanager.py:5715 tkpostcards/tkmanager.py:5764
-#: tkpostcards/tkmanager.py:5835
-msgid "tsearch_all"
-msgstr "Усі"
-
-#: tkpostcards/tkmanager.py:2028
-msgid "no_cards_title"
-msgstr "Немає листівок"
-
-#: tkpostcards/tkmanager.py:2029 tkpostcards/tkmanager.py:2032
-msgid "no_cards_msg"
-msgstr "Жодної листівки не знайдено в {dir}"
-
-#: tkpostcards/tkmanager.py:2285
-msgid "unsaved_title"
-msgstr "Незбережені зміни"
-
-#: tkpostcards/tkmanager.py:2286
-msgid "unsaved_msg"
-msgstr "Листівка №{id} має незбережені зміни. Зберегти?"
-
-#: tkpostcards/tkmanager.py:2321
-msgid "goto_label"
-msgstr "Перейти до"
-
-#: tkpostcards/tkmanager.py:2330
-msgid "goto_btn"
-msgstr "Перейти"
-
-#: tkpostcards/tkmanager.py:2335
-msgid "nav_save"
-msgstr "Зберегти"
-
-#: tkpostcards/tkmanager.py:2359
-msgid "nav_filter_label"
-msgstr "Колекція"
-
-#: tkpostcards/tkmanager.py:2372
-msgid "nav_missing_filter_label"
-msgstr "Дані"
-
-#: tkpostcards/tkmanager.py:2376 tkpostcards/tkmanager.py:2771
-#: tkpostcards/tkmanager.py:2790
-msgid "nav_no_gps"
-msgstr "Без GPS"
-
-#: tkpostcards/tkmanager.py:2376 tkpostcards/tkmanager.py:2773
-#: tkpostcards/tkmanager.py:2791
-msgid "nav_no_poi"
-msgstr "Без POI"
-
-#: tkpostcards/tkmanager.py:2376 tkpostcards/tkmanager.py:2775
-#: tkpostcards/tkmanager.py:2792
-msgid "nav_with_updates"
-msgstr "Оновлення"
-
-#: tkpostcards/tkmanager.py:2377 tkpostcards/tkmanager.py:2777
-#: tkpostcards/tkmanager.py:2793
-msgid "nav_missing_doubles"
-msgstr "Дублікати"
-
-#: tkpostcards/tkmanager.py:2377 tkpostcards/tkmanager.py:2779
-#: tkpostcards/tkmanager.py:2794
-msgid "nav_status_trade"
-msgstr "На обмін"
-
-#: tkpostcards/tkmanager.py:2377 tkpostcards/tkmanager.py:2781
-#: tkpostcards/tkmanager.py:2796
-msgid "nav_status_exchanged"
-msgstr "Обміняно"
-
-#: tkpostcards/tkmanager.py:2387
-msgid "nav_more"
-msgstr "Більше"
-
-#: tkpostcards/tkmanager.py:2431
-msgid "click_to_enlarge"
-msgstr "Натисніть, щоб збільшити"
-
-#: tkpostcards/tkmanager.py:2466
-msgid "field_date"
-msgstr "Дата"
-
-#: tkpostcards/tkmanager.py:2483 tkpostcards/tkmanager.py:2499
-#: tkpostcards/tkmanager.py:2526 tkpostcards/tkmanager.py:2543
-#: tkpostcards/tkmanager.py:4263 tkpostcards/tkmanager.py:4661
-msgid "btn_edit"
-msgstr "Редагувати"
-
-#: tkpostcards/tkmanager.py:2493
-msgid "field_collections"
-msgstr "Колекції"
-
-#: tkpostcards/tkmanager.py:2520
-msgid "field_doubles"
-msgstr "Дублікати"
-
-#: tkpostcards/tkmanager.py:2534 tkpostcards/tkmanager.py:4256
-msgid "field_gps"
-msgstr "GPS"
-
-#: tkpostcards/tkmanager.py:2539
-msgid "btn_osm"
-msgstr "OSM ↗"
-
-#: tkpostcards/tkmanager.py:2552
-msgid "field_updates"
-msgstr "Оновлення"
-
-#: tkpostcards/tkmanager.py:2568
-msgid "error_read"
-msgstr "Помилка читання {path}: {err}"
-
-#: tkpostcards/tkmanager.py:2649
-msgid "image_unavailable"
-msgstr "Зображення {side} недоступне"
-
-#: tkpostcards/tkmanager.py:2687
-msgid "updates_none"
-msgstr "Немає оновлень"
-
-#: tkpostcards/tkmanager.py:2712
-msgid "coord_none"
-msgstr "—"
-
-#: tkpostcards/tkmanager.py:2721
-msgid "btn_apply_gps"
-msgstr "Застосувати GPS"
-
-#: tkpostcards/tkmanager.py:2733
-msgid "btn_delete_update"
-msgstr "Видалити"
-
-#: tkpostcards/tkmanager.py:2753 tkpostcards/tkmanager.py:2803
-#: tkpostcards/tkmanager.py:2844 tkpostcards/tkmanager.py:2848
-#: tkpostcards/tkmanager.py:3065 tkpostcards/tkmanager.py:3659
-#: tkpostcards/tkmanager.py:4096 tkpostcards/tkmanager.py:4390
-#: tkpostcards/tkmanager.py:4415 tkpostcards/tkmanager.py:4504
-#: tkpostcards/tkmanager.py:4823 tkpostcards/tkmanager.py:4852
-#: tkpostcards/tkmanager.py:5218 tkpostcards/tkmanager.py:5239
-#: tkpostcards/tkmanager.py:5421 tkpostcards/tkmanager.py:5428
-#: tkpostcards/tkmanager.py:5451 tkpostcards/tkmanager.py:5595
-#: tkpostcards/tkmanager.py:5601 tkpostcards/tkmanager.py:6049
-msgid "info_title"
-msgstr "Інформація"
-
-#: tkpostcards/tkmanager.py:2754
-msgid "update_delete_confirm"
-msgstr "Видалити оновлення від {email}?"
-
-#: tkpostcards/tkmanager.py:2804
-msgid "nav_filter_empty"
-msgstr "Порожній фільтр"
-
-#: tkpostcards/tkmanager.py:2845 tkpostcards/tkmanager.py:2849
-#: tkpostcards/tkmanager.py:3660 tkpostcards/tkmanager.py:4097
-#: tkpostcards/tkmanager.py:5219 tkpostcards/tkmanager.py:6050
-msgid "goto_not_found"
-msgstr "Листівку №{id} не знайдено"
-
-#: tkpostcards/tkmanager.py:2913
-msgid "nav_textsearch"
-msgstr "Пошук"
-
-#: tkpostcards/tkmanager.py:2914
-msgid "nav_similar"
-msgstr "Схожі"
-
-#: tkpostcards/tkmanager.py:2916
-msgid "nav_doubles"
-msgstr "Дублікати"
-
-#: tkpostcards/tkmanager.py:2918
-msgid "nav_pois"
-msgstr "POI"
-
-#: tkpostcards/tkmanager.py:2919
-msgid "nav_auths"
-msgstr "Доступи"
-
-#: tkpostcards/tkmanager.py:2920
-msgid "nav_travels"
-msgstr "Подорожі"
-
-#: tkpostcards/tkmanager.py:2922
-msgid "nav_gallery"
-msgstr "Галерея"
-
-#: tkpostcards/tkmanager.py:2924
-msgid "nav_settings"
-msgstr "Налаштування"
-
-#: tkpostcards/tkmanager.py:3066
-msgid "image_not_found"
-msgstr "Зображення {id}_{side} не знайдено"
-
-#: tkpostcards/tkmanager.py:3158
-msgid "nav_saved"
-msgstr "Збережено ✓"
-
-#: tkpostcards/tkmanager.py:3162
-msgid "error_save"
-msgstr "Помилка збереження {path}: {err}"
-
-#: tkpostcards/tkmanager.py:3211 tkpostcards/tkmanager.py:3343
-msgid "search_title"
-msgstr "Пошук схожих листівок"
-
-#: tkpostcards/tkmanager.py:3228 tkpostcards/tkmanager.py:3399
-#: tkpostcards/tkmanager.py:3785 tkpostcards/tkmanager.py:3874
-msgid "search_unavailable"
-msgstr "Пошук недоступний"
-
-#: tkpostcards/tkmanager.py:3232 tkpostcards/tkmanager.py:3788
-msgid "search_index_loading"
-msgstr "Завантаження індексу"
-
-#: tkpostcards/tkmanager.py:3244 tkpostcards/tkmanager.py:3799
-msgid "search_index_ready"
-msgstr "Індекс завантажено"
-
-#: tkpostcards/tkmanager.py:3251 tkpostcards/tkmanager.py:3805
-msgid "search_index_error"
-msgstr "Помилка індексу"
-
-#: tkpostcards/tkmanager.py:3261
-msgid "search_url_label"
-msgstr "URL зображення"
-
-#: tkpostcards/tkmanager.py:3275
-msgid "search_threshold_label"
-msgstr "Поріг"
-
-#: tkpostcards/tkmanager.py:3284
-msgid "search_maxresults_label"
-msgstr "Макс. результатів"
-
-#: tkpostcards/tkmanager.py:3293 tkpostcards/tkmanager.py:3444
-msgid "search_btn"
-msgstr "За URL-адресою"
-
-#: tkpostcards/tkmanager.py:3304 tkpostcards/tkmanager.py:3445
-msgid "search_btn_clipboard"
-msgstr "З буфера обміну"
-
-#: tkpostcards/tkmanager.py:3310 tkpostcards/tkmanager.py:3832
-#: tkpostcards/tkmanager.py:5733
-msgid "search_clear"
-msgstr "Очистити"
-
-#: tkpostcards/tkmanager.py:3344
-msgid "search_no_url"
-msgstr "Введіть URL-адресу"
-
-#: tkpostcards/tkmanager.py:3382 tkpostcards/tkmanager.py:3866
-msgid "search_param_error"
-msgstr "Невірний поріг або максимальна кількість результатів"
-
-#: tkpostcards/tkmanager.py:3400 tkpostcards/tkmanager.py:3875
-msgid "search_index_not_ready"
-msgstr "Індекс ще не завантажено"
-
-#: tkpostcards/tkmanager.py:3408 tkpostcards/tkmanager.py:3412
-#: tkpostcards/tkmanager.py:3878 tkpostcards/tkmanager.py:3879
-msgid "search_running"
-msgstr "Пошук триває"
-
-#: tkpostcards/tkmanager.py:3419 tkpostcards/tkmanager.py:3886
-msgid "search_running_progress"
-msgstr "Пошук триває"
-
-#: tkpostcards/tkmanager.py:3443
-msgid "search_done"
-msgstr "{n} результат(ів)"
-
-#: tkpostcards/tkmanager.py:3496 tkpostcards/tkmanager.py:3953
-#: tkpostcards/tkmanager.py:5873
-msgid "search_empty"
-msgstr "Порожній пошук"
-
-#: tkpostcards/tkmanager.py:3769
-msgid "doubles_title"
-msgstr "Пошук дублікатів"
-
-#: tkpostcards/tkmanager.py:3816
-msgid "doubles_threshold_label"
-msgstr "Поріг"
-
-#: tkpostcards/tkmanager.py:3826 tkpostcards/tkmanager.py:3912
-msgid "doubles_run"
-msgstr "Шукати"
-
-#: tkpostcards/tkmanager.py:3911
-msgid "doubles_done"
-msgstr "Пошук завершено"
-
-#: tkpostcards/tkmanager.py:4035
-msgid "doubles_edit"
-msgstr "Редагувати"
-
-#: tkpostcards/tkmanager.py:4157
-msgid "poi_title"
-msgstr "Цікаві місця"
-
-#: tkpostcards/tkmanager.py:4181
-msgid "poi_list_label"
-msgstr "Цікаві місця"
-
-#: tkpostcards/tkmanager.py:4193 tkpostcards/tkmanager.py:4298
-#: tkpostcards/tkmanager.py:4328 tkpostcards/tkmanager.py:4334
-msgid "poi_filter_placeholder"
-msgstr "Фільтр (id або опис)…"
-
-#: tkpostcards/tkmanager.py:4216
-msgid "poi_new"
-msgstr "Новий"
-
-#: tkpostcards/tkmanager.py:4226
-msgid "poi_detail_label"
-msgstr "Деталі"
-
-#: tkpostcards/tkmanager.py:4232
-msgid "poi_id"
-msgstr "Id"
-
-#: tkpostcards/tkmanager.py:4244
-msgid "poi_description"
-msgstr "Опис"
-
-#: tkpostcards/tkmanager.py:4275
-msgid "poi_rename"
-msgstr "Перейменувати"
-
-#: tkpostcards/tkmanager.py:4279
-msgid "poi_delete"
-msgstr "Видалити"
-
-#: tkpostcards/tkmanager.py:4320
-msgid "poi_count_filtered"
-msgstr "{n} / {total} точок інтересу"
-
-#: tkpostcards/tkmanager.py:4322
-msgid "poi_count"
-msgstr "{n} цікавих місць"
-
-#: tkpostcards/tkmanager.py:4390 tkpostcards/tkmanager.py:4504
-msgid "poi_id_required"
-msgstr "Id обов'язковий"
-
-#: tkpostcards/tkmanager.py:4410
-msgid "poi_saved"
-msgstr "POI {id} збережено"
-
-#: tkpostcards/tkmanager.py:4416
-msgid "poi_delete_confirm"
-msgstr "Підтвердіть видалення {id}"
-
-#: tkpostcards/tkmanager.py:4446
-msgid "poi_renamed"
-msgstr "POI {old} перейменовано на {new} ({n} листівок(и) оновлено)"
-
-#: tkpostcards/tkmanager.py:4464
+#: src/tkpostcards/tkmanager.py:151
+msgid "field_links"
+msgstr "Посилання"
+
+#: src/tkpostcards/tkmanager.py:153
+msgid "link_id"
+msgstr "Ідентифікатор"
+
+#: src/tkpostcards/tkmanager.py:154
+msgid "link_url"
+msgstr "URL"
+
+#: src/tkpostcards/tkmanager.py:155
+msgid "link_check_date"
+msgstr "Перевірено"
+
+#: src/tkpostcards/tkmanager.py:157
 msgid "poi_rename_title"
 msgstr "Перейменувати POI"
 
-#: tkpostcards/tkmanager.py:4471
+#: src/tkpostcards/tkmanager.py:158
 msgid "poi_rename_hint"
 msgstr ""
 "Новий ідентифікатор для «{id}».\n"
 "Листівки, що посилаються на цей POI, будуть оновлені."
 
-#: tkpostcards/tkmanager.py:4526
+#: src/tkpostcards/tkmanager.py:159 src/tkpostcards/tkmanager.py:4825
+msgid "poi_id_required"
+msgstr "Id обов'язковий"
+
+#: src/tkpostcards/tkmanager.py:160
+msgid "link_rename_title"
+msgstr "Перейменувати посилання"
+
+#: src/tkpostcards/tkmanager.py:161
+msgid "link_rename_hint"
+msgstr ""
+"Новий ідентифікатор для посилання «{id}» (картки, що його використовують,"
+" буде оновлено):"
+
+#: src/tkpostcards/tkmanager.py:162 src/tkpostcards/tkmanager.py:5058
+msgid "link_id_required"
+msgstr "Ідентифікатор посилання обов'язковий."
+
+#: src/tkpostcards/tkmanager.py:164
+msgid "travel_title_field"
+msgstr "Заголовок"
+
+#: src/tkpostcards/tkmanager.py:165
+msgid "map_legend_postcard"
+msgstr "Листівка"
+
+#: src/tkpostcards/tkmanager.py:166
+msgid "map_legend_poi"
+msgstr "Цікаве місце"
+
+#: src/tkpostcards/tkmanager.py:168
+msgid "mask_tool_brush_off"
+msgstr "Пензель: ігнорувати"
+
+#: src/tkpostcards/tkmanager.py:169
+msgid "mask_tool_brush_on"
+msgstr "Пензель: залишити"
+
+#: src/tkpostcards/tkmanager.py:170
+msgid "mask_tool_rect_off"
+msgstr "Прямокутник: ігнорувати"
+
+#: src/tkpostcards/tkmanager.py:171
+msgid "mask_tool_rect_on"
+msgstr "Прямокутник: залишити"
+
+#: src/tkpostcards/tkmanager.py:172
+msgid "mask_src_none"
+msgstr "немає"
+
+#: src/tkpostcards/tkmanager.py:173
+msgid "mask_src_auto"
+msgstr "авто"
+
+#: src/tkpostcards/tkmanager.py:174
+msgid "mask_src_manual"
+msgstr "вручну"
+
+#: src/tkpostcards/tkmanager.py:175
+msgid "mask_need_libs"
+msgstr "Автоматичне створення потребує: pip install pypostcards[masks]"
+
+#: src/tkpostcards/tkmanager.py:176
+msgid "mask_need_libs_remote"
+msgstr ""
+"Автоматичне створення через external_helper потребує: pip install "
+"requests numpy opencv-python-headless"
+
+#: src/tkpostcards/tkmanager.py:178 src/tkpostcards/tkmanager.py:2751
+msgid "field_status"
+msgstr "Статус"
+
+#: src/tkpostcards/tkmanager.py:179
+msgid "status_active"
+msgstr "Активна"
+
+#: src/tkpostcards/tkmanager.py:180
+msgid "status_exchanged"
+msgstr "Обміняно"
+
+#: src/tkpostcards/tkmanager.py:181
+msgid "status_trade"
+msgstr "На обмін"
+
+#: src/tkpostcards/tkmanager.py:183 src/tkpostcards/tkmanager.py:2765
+msgid "field_storage"
+msgstr "Зберігання"
+
+#: src/tkpostcards/tkmanager.py:185
+msgid "coord_lat"
+msgstr "Шир."
+
+#: src/tkpostcards/tkmanager.py:186
+msgid "coord_lon"
+msgstr "Довг."
+
+#: src/tkpostcards/tkmanager.py:188 src/tkpostcards/tkmanager.py:1309
+msgid "side_recto"
+msgstr "Лицьова сторона"
+
+#: src/tkpostcards/tkmanager.py:189 src/tkpostcards/tkmanager.py:1309
+msgid "side_verso"
+msgstr "Зворотна сторона"
+
+#: src/tkpostcards/tkmanager.py:191 src/tkpostcards/tkmanager.py:1783
+#: src/tkpostcards/tkmanager.py:3242
+msgid "publish_confirm_title"
+msgstr "Публікація"
+
+#: src/tkpostcards/tkmanager.py:192 src/tkpostcards/tkmanager.py:1792
+#: src/tkpostcards/tkmanager.py:3242
+msgid "publish_confirm_msg"
+msgstr "Опублікувати зміни?"
+
+#: src/tkpostcards/tkmanager.py:193 src/tkpostcards/tkmanager.py:1796
+msgid "publish_full_checkbox"
+msgstr "Оновити подорожі та інше"
+
+#: src/tkpostcards/tkmanager.py:194 src/tkpostcards/tkmanager.py:1806
+msgid "btn_publish"
+msgstr "Опублікувати"
+
+#: src/tkpostcards/tkmanager.py:195 src/tkpostcards/tkmanager.py:1809
+msgid "btn_skip_publish"
+msgstr "Вийти без публікації"
+
+#: src/tkpostcards/tkmanager.py:196 src/tkpostcards/tkmanager.py:1924
+msgid "publish_progress_title"
+msgstr "Публікація"
+
+#: src/tkpostcards/tkmanager.py:197 src/tkpostcards/tkmanager.py:1929
+msgid "publish_progress_msg"
+msgstr "Публікація..."
+
+#: src/tkpostcards/tkmanager.py:198 src/tkpostcards/tkmanager.py:1980
+msgid "publish_details_show"
+msgstr "Показати деталі"
+
+#: src/tkpostcards/tkmanager.py:199 src/tkpostcards/tkmanager.py:1937
+#: src/tkpostcards/tkmanager.py:1976
+msgid "publish_details_hide"
+msgstr "Приховати деталі"
+
+#: src/tkpostcards/tkmanager.py:200 src/tkpostcards/tkmanager.py:3265
+msgid "publish_success_title"
+msgstr "Публікацію завершено."
+
+#: src/tkpostcards/tkmanager.py:201 src/tkpostcards/tkmanager.py:3266
+msgid "publish_success_msg"
+msgstr "Публікація успішно завершена."
+
+#: src/tkpostcards/tkmanager.py:202 src/tkpostcards/tkmanager.py:3260
+msgid "publish_error_title"
+msgstr "Помилка публікації"
+
+#: src/tkpostcards/tkmanager.py:203 src/tkpostcards/tkmanager.py:3261
+msgid "publish_error_msg"
+msgstr "Під час публікації сталася помилка: {error}"
+
+#: src/tkpostcards/tkmanager.py:279
+msgid "ctx_cut"
+msgstr "Вирізати"
+
+#: src/tkpostcards/tkmanager.py:280
+msgid "ctx_copy"
+msgstr "Копіювати"
+
+#: src/tkpostcards/tkmanager.py:281
+msgid "ctx_paste"
+msgstr "Вставити"
+
+#: src/tkpostcards/tkmanager.py:283
+msgid "ctx_select_all"
+msgstr "Вибрати все"
+
+#: src/tkpostcards/tkmanager.py:317
+msgid "zoom_fit"
+msgstr "Підігнати"
+
+#: src/tkpostcards/tkmanager.py:396
+msgid "date_dialog_title"
+msgstr "Дата"
+
+#: src/tkpostcards/tkmanager.py:428 src/tkpostcards/tkmanager.py:596
+#: src/tkpostcards/tkmanager.py:731 src/tkpostcards/tkmanager.py:871
+#: src/tkpostcards/tkmanager.py:1613 src/tkpostcards/tkmanager.py:1692
+#: src/tkpostcards/tkmanager.py:4705 src/tkpostcards/tkmanager.py:4927
+#: src/tkpostcards/tkmanager.py:5178 src/tkpostcards/tkmanager.py:5294
+#: src/tkpostcards/tkmanager.py:5523 src/tkpostcards/tkmanager.py:5774
+#: src/tkpostcards/tkmanager.py:6469 src/tkpostcards/tkmanager.py:6670
+msgid "btn_save_close"
+msgstr "Зберегти"
+
+#: src/tkpostcards/tkmanager.py:431 src/tkpostcards/tkmanager.py:599
+#: src/tkpostcards/tkmanager.py:734 src/tkpostcards/tkmanager.py:872
+#: src/tkpostcards/tkmanager.py:1616 src/tkpostcards/tkmanager.py:1695
+#: src/tkpostcards/tkmanager.py:4930 src/tkpostcards/tkmanager.py:5181
+#: src/tkpostcards/tkmanager.py:5526 src/tkpostcards/tkmanager.py:6674
+msgid "btn_cancel"
+msgstr "Скасувати"
+
+#: src/tkpostcards/tkmanager.py:441
+msgid "day_mon"
+msgstr "Понеділок"
+
+#: src/tkpostcards/tkmanager.py:441
+msgid "day_tue"
+msgstr "Вівторок"
+
+#: src/tkpostcards/tkmanager.py:441
+msgid "day_wed"
+msgstr "Середа"
+
+#: src/tkpostcards/tkmanager.py:442
+msgid "day_thu"
+msgstr "Четвер"
+
+#: src/tkpostcards/tkmanager.py:442
+msgid "day_fri"
+msgstr "П'ятниця"
+
+#: src/tkpostcards/tkmanager.py:442
+msgid "day_sat"
+msgstr "Субота"
+
+#: src/tkpostcards/tkmanager.py:442
+msgid "day_sun"
+msgstr "Неділя"
+
+#: src/tkpostcards/tkmanager.py:498
+msgid "date_pick"
+msgstr "Вибрати"
+
+#: src/tkpostcards/tkmanager.py:501
+msgid "date_clear"
+msgstr "Очистити"
+
+#: src/tkpostcards/tkmanager.py:504
+msgid "date_format_hint"
+msgstr "РРРР-ММ-ДД"
+
+#: src/tkpostcards/tkmanager.py:553 src/tkpostcards/tkmanager.py:679
+#: src/tkpostcards/tkmanager.py:5468
+msgid "list_editor_title"
+msgstr "Редагувати"
+
+#: src/tkpostcards/tkmanager.py:559 src/tkpostcards/tkmanager.py:691
+#: src/tkpostcards/tkmanager.py:5478
+msgid "list_editor_hint"
+msgstr "По одному запису на рядок"
+
+#: src/tkpostcards/tkmanager.py:579 src/tkpostcards/tkmanager.py:711
+#: src/tkpostcards/tkmanager.py:1671 src/tkpostcards/tkmanager.py:5503
+msgid "btn_add"
+msgstr "Додати"
+
+#: src/tkpostcards/tkmanager.py:579 src/tkpostcards/tkmanager.py:711
+#: src/tkpostcards/tkmanager.py:1674
+msgid "btn_update"
+msgstr "Оновити"
+
+#: src/tkpostcards/tkmanager.py:586 src/tkpostcards/tkmanager.py:721
+#: src/tkpostcards/tkmanager.py:1681 src/tkpostcards/tkmanager.py:5515
+msgid "btn_move_up"
+msgstr "Перемістити вгору"
+
+#: src/tkpostcards/tkmanager.py:587 src/tkpostcards/tkmanager.py:722
+#: src/tkpostcards/tkmanager.py:1682 src/tkpostcards/tkmanager.py:5516
+msgid "btn_move_down"
+msgstr "Перемістити вниз"
+
+#: src/tkpostcards/tkmanager.py:588 src/tkpostcards/tkmanager.py:723
+#: src/tkpostcards/tkmanager.py:1683 src/tkpostcards/tkmanager.py:5517
+msgid "btn_delete"
+msgstr "Видалити"
+
+#: src/tkpostcards/tkmanager.py:715
+msgid "poi_editor_hint"
+msgstr "Виберіть наявний POI або введіть новий ідентифікатор"
+
+#: src/tkpostcards/tkmanager.py:821
+msgid "coord_title"
+msgstr "GPS"
+
+#: src/tkpostcards/tkmanager.py:831
+msgid "coord_header"
+msgstr "GPS-координати"
+
+#: src/tkpostcards/tkmanager.py:849
+msgid "coord_paste_label"
+msgstr "Вставити"
+
+#: src/tkpostcards/tkmanager.py:862
+msgid "coord_paste_hint"
+msgstr "Формат: шир./довг., шир.,довг., шир.;довг. або шир. довг."
+
+#: src/tkpostcards/tkmanager.py:868 src/tkpostcards/tkmanager.py:3039
+msgid "btn_open_osm"
+msgstr "Відкрити OSM ↗"
+
+#: src/tkpostcards/tkmanager.py:869
+msgid "btn_copy_osm"
+msgstr "Копіювати посилання OSM"
+
+#: src/tkpostcards/tkmanager.py:870
+msgid "btn_reset"
+msgstr "Скинути"
+
+#: src/tkpostcards/tkmanager.py:885 src/tkpostcards/tkmanager.py:913
+#: src/tkpostcards/tkmanager.py:1710 src/tkpostcards/tkmanager.py:2827
+#: src/tkpostcards/tkmanager.py:3057 src/tkpostcards/tkmanager.py:3073
+#: src/tkpostcards/tkmanager.py:3596 src/tkpostcards/tkmanager.py:3816
+#: src/tkpostcards/tkmanager.py:3833 src/tkpostcards/tkmanager.py:3865
+#: src/tkpostcards/tkmanager.py:4300 src/tkpostcards/tkmanager.py:4308
+#: src/tkpostcards/tkmanager.py:4333 src/tkpostcards/tkmanager.py:4837
+#: src/tkpostcards/tkmanager.py:4857 src/tkpostcards/tkmanager.py:4873
+#: src/tkpostcards/tkmanager.py:5200 src/tkpostcards/tkmanager.py:5391
+#: src/tkpostcards/tkmanager.py:5414 src/tkpostcards/tkmanager.py:5432
+#: src/tkpostcards/tkmanager.py:5805 src/tkpostcards/tkmanager.py:5806
+#: src/tkpostcards/tkmanager.py:5847 src/tkpostcards/tkmanager.py:5915
+#: src/tkpostcards/tkmanager.py:5945 src/tkpostcards/tkmanager.py:5965
+#: src/tkpostcards/tkmanager.py:6101 src/tkpostcards/tkmanager.py:6537
+#: src/tkpostcards/tkmanager.py:6543 src/tkpostcards/tkmanager.py:6564
+#: src/tkpostcards/tkmanager.py:6724
+msgid "error_title"
+msgstr "Помилка"
+
+#: src/tkpostcards/tkmanager.py:885
+msgid "coord_error"
+msgstr "Невірна широта або довгота"
+
+#: src/tkpostcards/tkmanager.py:899
+msgid "osm_copied_title"
+msgstr "Посилання скопійовано"
+
+#: src/tkpostcards/tkmanager.py:899
+msgid "osm_copied"
+msgstr "Посилання OSM скопійовано в буфер обміну"
+
+#: src/tkpostcards/tkmanager.py:913
+msgid "coord_parse_error"
+msgstr "Не вдалося зчитати координати"
+
+#: src/tkpostcards/tkmanager.py:956
+msgid "gallery_title"
+msgstr "Галерея"
+
+#: src/tkpostcards/tkmanager.py:980 src/tkpostcards/tkmanager.py:1058
+#: src/tkpostcards/tkmanager.py:1455 src/tkpostcards/tkmanager.py:1469
+#: src/tkpostcards/tkmanager.py:1493 src/tkpostcards/tkmanager.py:2216
+#: src/tkpostcards/tkmanager.py:2217 src/tkpostcards/tkmanager.py:2578
+#: src/tkpostcards/tkmanager.py:2579 src/tkpostcards/tkmanager.py:2591
+#: src/tkpostcards/tkmanager.py:2593 src/tkpostcards/tkmanager.py:2610
+#: src/tkpostcards/tkmanager.py:2613 src/tkpostcards/tkmanager.py:3095
+#: src/tkpostcards/tkmanager.py:3104 src/tkpostcards/tkmanager.py:3112
+#: src/tkpostcards/tkmanager.py:3412 src/tkpostcards/tkmanager.py:6830
+#: src/tkpostcards/tkmanager.py:6831 src/tkpostcards/tkmanager.py:6901
+#: src/tkpostcards/tkmanager.py:7005
+msgid "tsearch_all"
+msgstr "Усі"
+
+#: src/tkpostcards/tkmanager.py:1029
+msgid "gallery_mode"
+msgstr "Режим"
+
+#: src/tkpostcards/tkmanager.py:1031
+msgid "gall_recto"
+msgstr "Лицьова сторона"
+
+#: src/tkpostcards/tkmanager.py:1032
+msgid "gall_verso"
+msgstr "Зворотна сторона"
+
+#: src/tkpostcards/tkmanager.py:1033
+msgid "gall_both"
+msgstr "Лицьова/зворотна"
+
+#: src/tkpostcards/tkmanager.py:1042
+msgid "gallery_cols"
+msgstr "Стовпці"
+
+#: src/tkpostcards/tkmanager.py:1053 src/tkpostcards/tkmanager.py:2576
+msgid "nav_filter_label"
+msgstr "Колекція"
+
+#: src/tkpostcards/tkmanager.py:1064
+msgid "gallery_refresh"
+msgstr "Оновити"
+
+#: src/tkpostcards/tkmanager.py:1114 src/tkpostcards/tkmanager.py:1158
+msgid "gallery_ready"
+msgstr "{total} листівок"
+
+#: src/tkpostcards/tkmanager.py:1118 src/tkpostcards/tkmanager.py:1172
+msgid "gallery_loading"
+msgstr "Завантаження {done}/{total}…"
+
+#: src/tkpostcards/tkmanager.py:1245
+msgid "gall_empty"
+msgstr "No card matches this filter."
+
+#: src/tkpostcards/tkmanager.py:1461
+msgid "gall_no_collection"
+msgstr "No collection"
+
+#: src/tkpostcards/tkmanager.py:1547
+msgid "coll_editor_title"
+msgstr "Колекції"
+
+#: src/tkpostcards/tkmanager.py:1554
+msgid "coll_editor_hint"
+msgstr "Колекції"
+
+#: src/tkpostcards/tkmanager.py:1588
+msgid "coll_select_all"
+msgstr "Усі"
+
+#: src/tkpostcards/tkmanager.py:1592
+msgid "coll_select_none"
+msgstr "Жодної"
+
+#: src/tkpostcards/tkmanager.py:1599
+msgid "coll_no_conf"
+msgstr "Жодної колекції не налаштовано. Введіть список через кому."
+
+#: src/tkpostcards/tkmanager.py:1643
+msgid "dbl_editor_title"
+msgstr "Дублікати"
+
+#: src/tkpostcards/tkmanager.py:1649
+msgid "dbl_editor_hint"
+msgstr "Дублікати"
+
+#: src/tkpostcards/tkmanager.py:1711
+msgid "dbl_not_integer"
+msgstr "Ідентифікатор має бути цілим числом"
+
+#: src/tkpostcards/tkmanager.py:2146
+msgid "app_title"
+msgstr "Postcards Manager"
+
+#: src/tkpostcards/tkmanager.py:2227
+msgid "no_cards_title"
+msgstr "Немає листівок"
+
+#: src/tkpostcards/tkmanager.py:2228 src/tkpostcards/tkmanager.py:2231
+msgid "no_cards_msg"
+msgstr "Жодної листівки не знайдено в {dir}"
+
+#: src/tkpostcards/tkmanager.py:2502
+msgid "unsaved_title"
+msgstr "Незбережені зміни"
+
+#: src/tkpostcards/tkmanager.py:2503
+msgid "unsaved_msg"
+msgstr "Листівка №{id} має незбережені зміни. Зберегти?"
+
+#: src/tkpostcards/tkmanager.py:2538
+msgid "goto_label"
+msgstr "Перейти до"
+
+#: src/tkpostcards/tkmanager.py:2547
+msgid "goto_btn"
+msgstr "Перейти"
+
+#: src/tkpostcards/tkmanager.py:2552
+msgid "nav_save"
+msgstr "Зберегти"
+
+#: src/tkpostcards/tkmanager.py:2589
+msgid "nav_missing_filter_label"
+msgstr "Дані"
+
+#: src/tkpostcards/tkmanager.py:2593 src/tkpostcards/tkmanager.py:3119
+#: src/tkpostcards/tkmanager.py:3152
+msgid "nav_no_gps"
+msgstr "Без GPS"
+
+#: src/tkpostcards/tkmanager.py:2593 src/tkpostcards/tkmanager.py:3121
+#: src/tkpostcards/tkmanager.py:3141 src/tkpostcards/tkmanager.py:3153
+msgid "nav_no_poi"
+msgstr "Без POI"
+
+#: src/tkpostcards/tkmanager.py:2593 src/tkpostcards/tkmanager.py:3123
+#: src/tkpostcards/tkmanager.py:3154
+msgid "nav_with_updates"
+msgstr "Оновлення"
+
+#: src/tkpostcards/tkmanager.py:2594 src/tkpostcards/tkmanager.py:3125
+#: src/tkpostcards/tkmanager.py:3155
+msgid "nav_missing_doubles"
+msgstr "Дублікати"
+
+#: src/tkpostcards/tkmanager.py:2594 src/tkpostcards/tkmanager.py:3127
+#: src/tkpostcards/tkmanager.py:3156
+msgid "nav_status_trade"
+msgstr "На обмін"
+
+#: src/tkpostcards/tkmanager.py:2594 src/tkpostcards/tkmanager.py:3129
+#: src/tkpostcards/tkmanager.py:3158
+msgid "nav_status_exchanged"
+msgstr "Обміняно"
+
+#: src/tkpostcards/tkmanager.py:2608
+msgid "nav_poi_filter_label"
+msgstr "POI"
+
+#: src/tkpostcards/tkmanager.py:2620
+msgid "nav_more"
+msgstr "Більше"
+
+#: src/tkpostcards/tkmanager.py:2664
+msgid "click_to_enlarge"
+msgstr "Натисніть, щоб збільшити"
+
+#: src/tkpostcards/tkmanager.py:2710
+msgid "field_date"
+msgstr "Дата"
+
+#: src/tkpostcards/tkmanager.py:2727 src/tkpostcards/tkmanager.py:2743
+#: src/tkpostcards/tkmanager.py:2786 src/tkpostcards/tkmanager.py:2803
+#: src/tkpostcards/tkmanager.py:4698 src/tkpostcards/tkmanager.py:5505
+#: src/tkpostcards/tkmanager.py:5767
+msgid "btn_edit"
+msgstr "Редагувати"
+
+#: src/tkpostcards/tkmanager.py:2737
+msgid "field_collections"
+msgstr "Колекції"
+
+#: src/tkpostcards/tkmanager.py:2780
+msgid "field_doubles"
+msgstr "Дублікати"
+
+#: src/tkpostcards/tkmanager.py:2794 src/tkpostcards/tkmanager.py:4691
+msgid "field_gps"
+msgstr "GPS"
+
+#: src/tkpostcards/tkmanager.py:2799
+msgid "btn_osm"
+msgstr "OSM ↗"
+
+#: src/tkpostcards/tkmanager.py:2812
+msgid "field_updates"
+msgstr "Оновлення"
+
+#: src/tkpostcards/tkmanager.py:2828
+msgid "error_read"
+msgstr "Помилка читання {path}: {err}"
+
+#: src/tkpostcards/tkmanager.py:2913
+msgid "image_unavailable"
+msgstr "Зображення {side} недоступне"
+
+#: src/tkpostcards/tkmanager.py:2933 src/tkpostcards/tkmanager.py:2954
+msgid "side_mask"
+msgstr "Mask"
+
+#: src/tkpostcards/tkmanager.py:2935
+msgid "mask_src_"
+msgstr "немає"
+
+#: src/tkpostcards/tkmanager.py:3000
+msgid "updates_none"
+msgstr "Немає оновлень"
+
+#: src/tkpostcards/tkmanager.py:3025
+msgid "coord_none"
+msgstr "—"
+
+#: src/tkpostcards/tkmanager.py:3034
+msgid "btn_apply_gps"
+msgstr "Застосувати GPS"
+
+#: src/tkpostcards/tkmanager.py:3046
+msgid "btn_delete_update"
+msgstr "Видалити"
+
+#: src/tkpostcards/tkmanager.py:3066 src/tkpostcards/tkmanager.py:3165
+#: src/tkpostcards/tkmanager.py:3209 src/tkpostcards/tkmanager.py:3213
+#: src/tkpostcards/tkmanager.py:3487 src/tkpostcards/tkmanager.py:4094
+#: src/tkpostcards/tkmanager.py:4531 src/tkpostcards/tkmanager.py:4825
+#: src/tkpostcards/tkmanager.py:4850 src/tkpostcards/tkmanager.py:4943
+#: src/tkpostcards/tkmanager.py:5197 src/tkpostcards/tkmanager.py:5388
+#: src/tkpostcards/tkmanager.py:5407 src/tkpostcards/tkmanager.py:5929
+#: src/tkpostcards/tkmanager.py:5958 src/tkpostcards/tkmanager.py:6324
+#: src/tkpostcards/tkmanager.py:6345 src/tkpostcards/tkmanager.py:6527
+#: src/tkpostcards/tkmanager.py:6534 src/tkpostcards/tkmanager.py:6557
+#: src/tkpostcards/tkmanager.py:6701 src/tkpostcards/tkmanager.py:6707
+#: src/tkpostcards/tkmanager.py:7219
+msgid "info_title"
+msgstr "Інформація"
+
+#: src/tkpostcards/tkmanager.py:3067
+msgid "update_delete_confirm"
+msgstr "Видалити оновлення від {email}?"
+
+#: src/tkpostcards/tkmanager.py:3166
+msgid "nav_filter_empty"
+msgstr "Порожній фільтр"
+
+#: src/tkpostcards/tkmanager.py:3210 src/tkpostcards/tkmanager.py:3214
+#: src/tkpostcards/tkmanager.py:4095 src/tkpostcards/tkmanager.py:4532
+#: src/tkpostcards/tkmanager.py:6325 src/tkpostcards/tkmanager.py:7220
+msgid "goto_not_found"
+msgstr "Листівку №{id} не знайдено"
+
+#: src/tkpostcards/tkmanager.py:3279
+msgid "nav_textsearch"
+msgstr "Пошук"
+
+#: src/tkpostcards/tkmanager.py:3280
+msgid "nav_similar"
+msgstr "Схожі"
+
+#: src/tkpostcards/tkmanager.py:3282
+msgid "nav_doubles"
+msgstr "Дублікати"
+
+#: src/tkpostcards/tkmanager.py:3284
+msgid "nav_pois"
+msgstr "POI"
+
+#: src/tkpostcards/tkmanager.py:3285
+msgid "nav_links"
+msgstr "Посилання"
+
+#: src/tkpostcards/tkmanager.py:3286
+msgid "nav_auths"
+msgstr "Доступи"
+
+#: src/tkpostcards/tkmanager.py:3287
+msgid "nav_travels"
+msgstr "Подорожі"
+
+#: src/tkpostcards/tkmanager.py:3289
+msgid "nav_gallery"
+msgstr "Галерея"
+
+# --- masks (COLMAP) ---
+#: src/tkpostcards/tkmanager.py:3290
+msgid "nav_masks"
+msgstr "Masks (COLMAP)"
+
+#: src/tkpostcards/tkmanager.py:3292
+msgid "nav_settings"
+msgstr "Налаштування"
+
+#: src/tkpostcards/tkmanager.py:3488
+msgid "image_not_found"
+msgstr "Зображення {id}_{side} не знайдено"
+
+#: src/tkpostcards/tkmanager.py:3593
+msgid "nav_saved"
+msgstr "Збережено ✓"
+
+#: src/tkpostcards/tkmanager.py:3597
+msgid "error_save"
+msgstr "Помилка збереження {path}: {err}"
+
+#: src/tkpostcards/tkmanager.py:3646 src/tkpostcards/tkmanager.py:3778
+msgid "search_title"
+msgstr "Пошук схожих листівок"
+
+#: src/tkpostcards/tkmanager.py:3663 src/tkpostcards/tkmanager.py:3834
+#: src/tkpostcards/tkmanager.py:4220 src/tkpostcards/tkmanager.py:4309
+msgid "search_unavailable"
+msgstr "Пошук недоступний"
+
+#: src/tkpostcards/tkmanager.py:3667 src/tkpostcards/tkmanager.py:4223
+msgid "search_index_loading"
+msgstr "Завантаження індексу"
+
+#: src/tkpostcards/tkmanager.py:3679 src/tkpostcards/tkmanager.py:4234
+msgid "search_index_ready"
+msgstr "Індекс завантажено"
+
+#: src/tkpostcards/tkmanager.py:3686 src/tkpostcards/tkmanager.py:4240
+msgid "search_index_error"
+msgstr "Помилка індексу"
+
+#: src/tkpostcards/tkmanager.py:3696
+msgid "search_url_label"
+msgstr "URL зображення"
+
+#: src/tkpostcards/tkmanager.py:3710
+msgid "search_threshold_label"
+msgstr "Поріг"
+
+#: src/tkpostcards/tkmanager.py:3719
+msgid "search_maxresults_label"
+msgstr "Макс. результатів"
+
+#: src/tkpostcards/tkmanager.py:3728 src/tkpostcards/tkmanager.py:3879
+msgid "search_btn"
+msgstr "За URL-адресою"
+
+#: src/tkpostcards/tkmanager.py:3739 src/tkpostcards/tkmanager.py:3880
+msgid "search_btn_clipboard"
+msgstr "З буфера обміну"
+
+#: src/tkpostcards/tkmanager.py:3745 src/tkpostcards/tkmanager.py:4267
+#: src/tkpostcards/tkmanager.py:6849
+msgid "search_clear"
+msgstr "Очистити"
+
+#: src/tkpostcards/tkmanager.py:3779
+msgid "search_no_url"
+msgstr "Введіть URL-адресу"
+
+#: src/tkpostcards/tkmanager.py:3817 src/tkpostcards/tkmanager.py:4301
+msgid "search_param_error"
+msgstr "Невірний поріг або максимальна кількість результатів"
+
+#: src/tkpostcards/tkmanager.py:3835 src/tkpostcards/tkmanager.py:4310
+msgid "search_index_not_ready"
+msgstr "Індекс ще не завантажено"
+
+#: src/tkpostcards/tkmanager.py:3843 src/tkpostcards/tkmanager.py:3847
+#: src/tkpostcards/tkmanager.py:4313 src/tkpostcards/tkmanager.py:4314
+msgid "search_running"
+msgstr "Пошук триває"
+
+#: src/tkpostcards/tkmanager.py:3854 src/tkpostcards/tkmanager.py:4321
+msgid "search_running_progress"
+msgstr "Пошук триває"
+
+#: src/tkpostcards/tkmanager.py:3878
+msgid "search_done"
+msgstr "{n} результат(ів)"
+
+#: src/tkpostcards/tkmanager.py:3931 src/tkpostcards/tkmanager.py:4388
+#: src/tkpostcards/tkmanager.py:7043
+msgid "search_empty"
+msgstr "Порожній пошук"
+
+#: src/tkpostcards/tkmanager.py:4204
+msgid "doubles_title"
+msgstr "Пошук дублікатів"
+
+#: src/tkpostcards/tkmanager.py:4251
+msgid "doubles_threshold_label"
+msgstr "Поріг"
+
+#: src/tkpostcards/tkmanager.py:4261 src/tkpostcards/tkmanager.py:4347
+msgid "doubles_run"
+msgstr "Шукати"
+
+#: src/tkpostcards/tkmanager.py:4346
+msgid "doubles_done"
+msgstr "Пошук завершено"
+
+#: src/tkpostcards/tkmanager.py:4470
+msgid "doubles_edit"
+msgstr "Редагувати"
+
+#: src/tkpostcards/tkmanager.py:4592
+msgid "poi_title"
+msgstr "Цікаві місця"
+
+#: src/tkpostcards/tkmanager.py:4616
+msgid "poi_list_label"
+msgstr "Цікаві місця"
+
+#: src/tkpostcards/tkmanager.py:4628 src/tkpostcards/tkmanager.py:4733
+#: src/tkpostcards/tkmanager.py:4763 src/tkpostcards/tkmanager.py:4769
+msgid "poi_filter_placeholder"
+msgstr "Фільтр (id або опис)…"
+
+#: src/tkpostcards/tkmanager.py:4651
+msgid "poi_new"
+msgstr "Новий"
+
+#: src/tkpostcards/tkmanager.py:4661
+msgid "poi_detail_label"
+msgstr "Деталі"
+
+#: src/tkpostcards/tkmanager.py:4667
+msgid "poi_id"
+msgstr "Id"
+
+#: src/tkpostcards/tkmanager.py:4679
+msgid "poi_description"
+msgstr "Опис"
+
+#: src/tkpostcards/tkmanager.py:4710
+msgid "poi_rename"
+msgstr "Перейменувати"
+
+#: src/tkpostcards/tkmanager.py:4714
+msgid "poi_delete"
+msgstr "Видалити"
+
+#: src/tkpostcards/tkmanager.py:4755
+msgid "poi_count_filtered"
+msgstr "{n} / {total} точок інтересу"
+
+#: src/tkpostcards/tkmanager.py:4757
+msgid "poi_count"
+msgstr "{n} цікавих місць"
+
+#: src/tkpostcards/tkmanager.py:4845
+msgid "poi_saved"
+msgstr "POI {id} збережено"
+
+#: src/tkpostcards/tkmanager.py:4851
+msgid "poi_delete_confirm"
+msgstr "Підтвердіть видалення {id}"
+
+#: src/tkpostcards/tkmanager.py:4881
+msgid "poi_renamed"
+msgstr "POI {old} перейменовано на {new} ({n} листівок(и) оновлено)"
+
+#: src/tkpostcards/tkmanager.py:5003
+msgid "link_fetch"
+msgstr "Перевірити"
+
+#: src/tkpostcards/tkmanager.py:5004
+msgid "link_open"
+msgstr "Відкрити"
+
+#: src/tkpostcards/tkmanager.py:5014 src/tkpostcards/tkmanager.py:5145
+msgid "link_description"
+msgstr "Опис"
+
+#: src/tkpostcards/tkmanager.py:5026
+msgid "link_today"
+msgstr "Сьогодні"
+
+#: src/tkpostcards/tkmanager.py:5060
+msgid "link_url_required"
+msgstr "URL посилання обов'язковий."
+
+#: src/tkpostcards/tkmanager.py:5104
+msgid "link_fetching"
+msgstr "Читання {url}…"
+
+#: src/tkpostcards/tkmanager.py:5126
+msgid "link_fetch_error"
+msgstr "Не вдалося прочитати сторінку: {err}"
+
+#: src/tkpostcards/tkmanager.py:5138
+msgid "link_title_field"
+msgstr "Назва"
+
+#: src/tkpostcards/tkmanager.py:5151
+msgid "link_fetch_ok"
+msgstr "Сторінку прочитано; заповнено поля: {fields}. Дату перевірки оновлено."
+
+#: src/tkpostcards/tkmanager.py:5153
+msgid "link_fetch_nometa"
+msgstr "Сторінку прочитано, даних OpenGraph немає. Дату перевірки оновлено."
+
+#: src/tkpostcards/tkmanager.py:5164
+msgid "link_edit_title"
+msgstr "Редагувати посилання"
+
+#: src/tkpostcards/tkmanager.py:5164
+msgid "link_new_title"
+msgstr "Нове посилання"
+
+#: src/tkpostcards/tkmanager.py:5218
+msgid "link_title"
+msgstr "Посилання"
+
+#: src/tkpostcards/tkmanager.py:5240
+msgid "link_list_label"
+msgstr "Посилання"
+
+#: src/tkpostcards/tkmanager.py:5251 src/tkpostcards/tkmanager.py:5320
+#: src/tkpostcards/tkmanager.py:5351 src/tkpostcards/tkmanager.py:5357
+msgid "link_filter_placeholder"
+msgstr "Фільтр (id, назва, url…)"
+
+#: src/tkpostcards/tkmanager.py:5274
+msgid "link_new"
+msgstr "Нове посилання"
+
+#: src/tkpostcards/tkmanager.py:5283
+msgid "link_detail_label"
+msgstr "Деталі посилання"
+
+#: src/tkpostcards/tkmanager.py:5299
+msgid "link_rename"
+msgstr "Перейменувати"
+
+#: src/tkpostcards/tkmanager.py:5303
+msgid "link_delete"
+msgstr "Видалити"
+
+#: src/tkpostcards/tkmanager.py:5342
+msgid "link_count_filtered"
+msgstr "Посилань: {n} / {total}"
+
+#: src/tkpostcards/tkmanager.py:5345
+msgid "link_count"
+msgstr "Посилань: {n}"
+
+#: src/tkpostcards/tkmanager.py:5401
+msgid "link_saved"
+msgstr "Посилання «{id}» збережено"
+
+#: src/tkpostcards/tkmanager.py:5408
+msgid "link_delete_confirm"
+msgstr ""
+"Видалити посилання «{id}»?\n"
+"Його також буде вилучено з карток, які його використовують."
+
+#: src/tkpostcards/tkmanager.py:5419
+msgid "link_deleted"
+msgstr "Посилання «{id}» видалено (оновлено карток: {n})"
+
+#: src/tkpostcards/tkmanager.py:5440
+msgid "link_renamed"
+msgstr "Посилання «{old}» перейменовано на «{new}» (оновлено карток: {n})"
+
+#: src/tkpostcards/tkmanager.py:5504
+msgid "link_new_btn"
+msgstr "Нове посилання…"
+
+#: src/tkpostcards/tkmanager.py:5510
+msgid "link_editor_hint"
+msgstr "Виберіть наявне посилання або створіть нове"
+
+#: src/tkpostcards/tkmanager.py:5555
+msgid "link_unknown"
+msgstr "Посилання немає в базі даних"
+
+#: src/tkpostcards/tkmanager.py:5632
 msgid "travel_title"
 msgstr "Подорожі"
 
-#: tkpostcards/tkmanager.py:4549
+#: src/tkpostcards/tkmanager.py:5655
 msgid "travel_list_label"
 msgstr "Список подорожей"
 
-#: tkpostcards/tkmanager.py:4582
+#: src/tkpostcards/tkmanager.py:5688
 msgid "travel_new"
 msgstr "Нова"
 
-#: tkpostcards/tkmanager.py:4592
+#: src/tkpostcards/tkmanager.py:5698
 msgid "travel_detail_label"
 msgstr "Назва"
 
-#: tkpostcards/tkmanager.py:4609
+#: src/tkpostcards/tkmanager.py:5715
 msgid "travel_id"
 msgstr "Id"
 
-#: tkpostcards/tkmanager.py:4633
+#: src/tkpostcards/tkmanager.py:5739
 msgid "travel_title2_field"
 msgstr "Підзаголовок"
 
-#: tkpostcards/tkmanager.py:4645
+#: src/tkpostcards/tkmanager.py:5751
 msgid "travel_collection"
 msgstr "Колекції"
 
-#: tkpostcards/tkmanager.py:4656
+#: src/tkpostcards/tkmanager.py:5762
 msgid "travel_start"
 msgstr "Початкова точка"
 
-#: tkpostcards/tkmanager.py:4671
+#: src/tkpostcards/tkmanager.py:5777
 msgid "travel_delete"
 msgstr "Видалити"
 
-#: tkpostcards/tkmanager.py:4674
+#: src/tkpostcards/tkmanager.py:5780
 msgid "travel_map_btn"
 msgstr "Карта"
 
-#: tkpostcards/tkmanager.py:4708
+#: src/tkpostcards/tkmanager.py:5814
 msgid "travel_count"
 msgstr "{n} подорожей"
 
-#: tkpostcards/tkmanager.py:4809
+#: src/tkpostcards/tkmanager.py:5915
 msgid "map_unavailable"
 msgstr "Інтерактивна карта недоступна (відсутній Pillow)."
 
-#: tkpostcards/tkmanager.py:4823
+#: src/tkpostcards/tkmanager.py:5929
 msgid "travel_id_required"
 msgstr "Id обов'язковий"
 
-#: tkpostcards/tkmanager.py:4847
+#: src/tkpostcards/tkmanager.py:5953
 msgid "travel_saved"
 msgstr "Збережено ✓"
 
-#: tkpostcards/tkmanager.py:4853
+#: src/tkpostcards/tkmanager.py:5959
 msgid "travel_delete_confirm"
 msgstr "Видалити подорож {id}?"
 
-#: tkpostcards/tkmanager.py:4914 tkpostcards/tkmanager.py:4948
+#: src/tkpostcards/tkmanager.py:6020 src/tkpostcards/tkmanager.py:6054
 msgid "map_title"
 msgstr "Карта — {id} — {title}"
 
-#: tkpostcards/tkmanager.py:4923
+#: src/tkpostcards/tkmanager.py:6029
 msgid "map_provider_google"
 msgstr "Google Maps"
 
-#: tkpostcards/tkmanager.py:4926
+#: src/tkpostcards/tkmanager.py:6032
 msgid "map_provider_osm"
 msgstr "OpenStreetMap"
 
-#: tkpostcards/tkmanager.py:4961
+#: src/tkpostcards/tkmanager.py:6067
 msgid "map_fit"
 msgstr "Вписати"
 
-#: tkpostcards/tkmanager.py:4964
+#: src/tkpostcards/tkmanager.py:6070
 msgid "map_refresh"
 msgstr "Оновити"
 
-#: tkpostcards/tkmanager.py:4987
+#: src/tkpostcards/tkmanager.py:6093
 msgid "map_loading"
 msgstr "Завантаження карти…"
 
-#: tkpostcards/tkmanager.py:5075
+#: src/tkpostcards/tkmanager.py:6181
 msgid "map_count"
 msgstr "{cards} листівок — {pois} цікавих місць у зоні"
 
-#: tkpostcards/tkmanager.py:5229
+#: src/tkpostcards/tkmanager.py:6335
 msgid "map_drag_updated"
 msgstr "GPS-позицію листівки {id} оновлено (потрібно зберегти)"
 
-#: tkpostcards/tkmanager.py:5240
+#: src/tkpostcards/tkmanager.py:6346
 msgid "map_copy_gps_confirm"
 msgstr "Скопіювати позицію ({point}) у буфер обміну?"
 
-#: tkpostcards/tkmanager.py:5244
+#: src/tkpostcards/tkmanager.py:6350
 msgid "map_gps_copied"
 msgstr "Позицію скопійовано в буфер обміну"
 
-#: tkpostcards/tkmanager.py:5263
+#: src/tkpostcards/tkmanager.py:6369
 msgid "auth_title"
 msgstr "Керування доступом"
 
-#: tkpostcards/tkmanager.py:5284
+#: src/tkpostcards/tkmanager.py:6390
 msgid "auth_list_label"
 msgstr "Користувачі"
 
-#: tkpostcards/tkmanager.py:5299
+#: src/tkpostcards/tkmanager.py:6405
 msgid "auth_new"
 msgstr "Новий"
 
-#: tkpostcards/tkmanager.py:5309
+#: src/tkpostcards/tkmanager.py:6415
 msgid "auth_detail_label"
 msgstr "Деталі"
 
-#: tkpostcards/tkmanager.py:5315
+#: src/tkpostcards/tkmanager.py:6421
 msgid "auth_email"
 msgstr "Email"
 
-#: tkpostcards/tkmanager.py:5327
+#: src/tkpostcards/tkmanager.py:6433
 msgid "auth_password"
 msgstr "Пароль"
 
-#: tkpostcards/tkmanager.py:5339
+#: src/tkpostcards/tkmanager.py:6445
 msgid "auth_password_confirm"
 msgstr "Підтвердження пароля"
 
-#: tkpostcards/tkmanager.py:5348
+#: src/tkpostcards/tkmanager.py:6454
 msgid "auth_password_hint"
 msgstr "Залиште порожнім, щоб зберегти поточний пароль"
 
-#: tkpostcards/tkmanager.py:5354
+#: src/tkpostcards/tkmanager.py:6460
 msgid "auth_show_password"
 msgstr "Показати пароль"
 
-#: tkpostcards/tkmanager.py:5367
+#: src/tkpostcards/tkmanager.py:6473
 msgid "auth_delete"
 msgstr "Видалити"
 
-#: tkpostcards/tkmanager.py:5388
+#: src/tkpostcards/tkmanager.py:6494
 msgid "auth_count"
 msgstr "{n} обліков. записів"
 
-#: tkpostcards/tkmanager.py:5400
+#: src/tkpostcards/tkmanager.py:6506
 msgid "auth_selected"
 msgstr "Обрано обліковий запис {email}"
 
-#: tkpostcards/tkmanager.py:5421
+#: src/tkpostcards/tkmanager.py:6527
 msgid "auth_email_required"
 msgstr "Email обов'язковий"
 
-#: tkpostcards/tkmanager.py:5428
+#: src/tkpostcards/tkmanager.py:6534
 msgid "auth_password_required"
 msgstr "Пароль обов'язковий"
 
-#: tkpostcards/tkmanager.py:5431
+#: src/tkpostcards/tkmanager.py:6537
 msgid "auth_password_mismatch"
 msgstr "Паролі не збігаються"
 
-#: tkpostcards/tkmanager.py:5446
+#: src/tkpostcards/tkmanager.py:6552
 msgid "auth_saved"
 msgstr "Обліковий запис {email} збережено"
 
-#: tkpostcards/tkmanager.py:5452
+#: src/tkpostcards/tkmanager.py:6558
 msgid "auth_delete_confirm"
 msgstr "Підтвердіть видалення {email}"
 
-#: tkpostcards/tkmanager.py:5504 tkpostcards/tkmanager.py:5523
+#: src/tkpostcards/tkmanager.py:6610 src/tkpostcards/tkmanager.py:6629
 msgid "settings_title"
 msgstr "Налаштування"
 
-#: tkpostcards/tkmanager.py:5546
+#: src/tkpostcards/tkmanager.py:6652
 msgid "settings_file_format"
 msgstr "Формат сканованих зображень"
 
-#: tkpostcards/tkmanager.py:5552
+#: src/tkpostcards/tkmanager.py:6658
 msgid "settings_file_format_help"
 msgstr "Розширення зображень, що зберігаються в каталозі листівок (напр., tiff)."
 
-#: tkpostcards/tkmanager.py:5557
+#: src/tkpostcards/tkmanager.py:6663
 msgid "settings_restart_notice"
 msgstr ""
 "Формат зображень і колекції карти буде враховано лише після наступного "
 "запуску інших інструментів (tkscan, tktools, веб-сайт)."
 
-#: tkpostcards/tkmanager.py:5596
+#: src/tkpostcards/tkmanager.py:6702
 msgid "settings_map_unknown"
 msgstr "Ці колекції карти відсутні у списку колекцій: {names}"
 
-#: tkpostcards/tkmanager.py:5601
+#: src/tkpostcards/tkmanager.py:6707
 msgid "settings_format_required"
 msgstr "Формат сканованих зображень обов'язковий."
 
-#: tkpostcards/tkmanager.py:5627
+#: src/tkpostcards/tkmanager.py:6733
 msgid "settings_saved"
 msgstr "Налаштування збережено."
 
-#: tkpostcards/tkmanager.py:5655
+#: src/tkpostcards/tkmanager.py:6761
 msgid "tsearch_title"
 msgstr "Текстовий пошук"
 
-#: tkpostcards/tkmanager.py:5699
+#: src/tkpostcards/tkmanager.py:6815
 msgid "tsearch_label"
 msgstr "Текст"
 
-#: tkpostcards/tkmanager.py:5712
+#: src/tkpostcards/tkmanager.py:6828
 msgid "tsearch_coll_filter"
 msgstr "Колекція"
 
-#: tkpostcards/tkmanager.py:5724
+#: src/tkpostcards/tkmanager.py:6840
 msgid "tsearch_with_doubles"
 msgstr "Включати дублікати"
 
-#: tkpostcards/tkmanager.py:5775
+#: src/tkpostcards/tkmanager.py:6916
 msgid "tsearch_type_more"
 msgstr "Текстовий пошук"
 
-#: tkpostcards/tkmanager.py:5825
+#: src/tkpostcards/tkmanager.py:6995
 msgid "tsearch_results"
 msgstr "{n} знайдених листівок"
 
-#: tkpostcards/tkscan.py:456
+#: src/tkpostcards/tkscan.py:489
 msgid "Import folder is not empty"
 msgstr "Папка імпорту не порожня"
 
-#: tkpostcards/tkscan.py:462
+#: src/tkpostcards/tkscan.py:495
 msgid "The import folder already contains files:"
 msgstr "Папка імпорту вже містить файли:"
 
-#: tkpostcards/tkscan.py:477
+#: src/tkpostcards/tkscan.py:510
 msgid "What do you want to do?"
 msgstr "Що ви хочете зробити?"
 
-#: tkpostcards/tkscan.py:483
+#: src/tkpostcards/tkscan.py:516
 msgid "Delete files and continue"
 msgstr "Видалити файли та продовжити"
 
-#: tkpostcards/tkscan.py:486
+#: src/tkpostcards/tkscan.py:519
 msgid "Continue and add files"
 msgstr "Продовжити та додати файли"
 
-#: tkpostcards/tkscan.py:488
+#: src/tkpostcards/tkscan.py:521
 msgid "Quit"
 msgstr "Вийти"
 
-#: tkpostcards/tkscan.py:582
+#: src/tkpostcards/tkscan.py:615
 msgid "Scanned Images"
 msgstr "Скановані зображення"
 
-#: tkpostcards/tkscan.py:595 tkpostcards/tkscan.py:641
-#: tkpostcards/tkscan.py:714
+#: src/tkpostcards/tkscan.py:628 src/tkpostcards/tkscan.py:674
+#: src/tkpostcards/tkscan.py:747
 msgid "Total scanned:"
 msgstr "Всього відскановано:"
 
-#: tkpostcards/tkscan.py:597
+#: src/tkpostcards/tkscan.py:630
 msgid "(Double-click to enlarge)"
 msgstr "(Подвійний клік для збільшення)"
 
-#: tkpostcards/tkscan.py:613
+#: src/tkpostcards/tkscan.py:646
 msgid "No images yet"
 msgstr "Поки що немає зображень"
 
-#: tkpostcards/tkscan.py:676 tkpostcards/tkscan.py:736
+#: src/tkpostcards/tkscan.py:709 src/tkpostcards/tkscan.py:769
 msgid "Delete"
-msgstr ""
+msgstr "Видалити"
 
-#: tkpostcards/tkscan.py:689
+#: src/tkpostcards/tkscan.py:722
 msgid "Delete image"
-msgstr ""
+msgstr "Видалити зображення"
 
-#: tkpostcards/tkscan.py:690
+#: src/tkpostcards/tkscan.py:723
 #, python-brace-format
 msgid ""
 "Delete {name}?\n"
 "This cannot be undone."
 msgstr ""
+"Видалити {name}?\n"
+"Цю дію неможливо скасувати."
 
-#: tkpostcards/tkscan.py:768
+#: src/tkpostcards/tkscan.py:801
 msgid "Postcard Scanner"
 msgstr "Сканер листівок"
 
-#: tkpostcards/tkscan.py:824
+#: src/tkpostcards/tkscan.py:857
 msgid "Settings"
 msgstr "Налаштування"
 
-#: tkpostcards/tkscan.py:830
+#: src/tkpostcards/tkscan.py:863
 msgid "Scanner:"
 msgstr "Сканер:"
 
-#: tkpostcards/tkscan.py:835
+#: src/tkpostcards/tkscan.py:868
 msgid "Refresh Scanners"
 msgstr "Оновити сканери"
 
-#: tkpostcards/tkscan.py:840
+#: src/tkpostcards/tkscan.py:873
 msgid "Resolution:"
 msgstr "Роздільна здатність:"
 
-#: tkpostcards/tkscan.py:848
+#: src/tkpostcards/tkscan.py:881
 msgid "File format:"
 msgstr "Формат файлу:"
 
-#: tkpostcards/tkscan.py:856
+#: src/tkpostcards/tkscan.py:889
 msgid "Destination folder:"
 msgstr "Папка призначення:"
 
-#: tkpostcards/tkscan.py:860
+#: src/tkpostcards/tkscan.py:893
 msgid "Browse"
 msgstr "Огляд"
 
-#: tkpostcards/tkscan.py:865
+#: src/tkpostcards/tkscan.py:898
 msgid "File prefix:"
 msgstr "Префікс файлу:"
 
-#: tkpostcards/tkscan.py:875
+#: src/tkpostcards/tkscan.py:908
 msgid "Scan area (mm):"
 msgstr "Область сканування (мм):"
 
-#: tkpostcards/tkscan.py:900
+#: src/tkpostcards/tkscan.py:933
 msgid "Border crop (px):"
 msgstr "Обрізка країв (пікс.):"
 
-#: tkpostcards/tkscan.py:907
+#: src/tkpostcards/tkscan.py:940
 msgid "px (each side)"
 msgstr "пікс. (з кожного боку)"
 
-#: tkpostcards/tkscan.py:917
+#: src/tkpostcards/tkscan.py:950
 msgid "JPEG quality:"
 msgstr "Якість JPEG:"
 
-#: tkpostcards/tkscan.py:927
+#: src/tkpostcards/tkscan.py:960
 msgid "PNG compress:"
 msgstr "Стиснення PNG:"
 
-#: tkpostcards/tkscan.py:937
+#: src/tkpostcards/tkscan.py:970
 msgid "TIFF compression:"
 msgstr "Стиснення TIFF:"
 
-#: tkpostcards/tkscan.py:948
+#: src/tkpostcards/tkscan.py:981
 msgid "Batch Mode"
 msgstr "Пакетний режим"
 
-#: tkpostcards/tkscan.py:952
+#: src/tkpostcards/tkscan.py:985
 msgid "Batch interval (s):"
 msgstr "Інтервал пакету (с):"
 
-#: tkpostcards/tkscan.py:963 tkpostcards/tkscan.py:1416
+#: src/tkpostcards/tkscan.py:996 src/tkpostcards/tkscan.py:1455
 msgid "Start Batch"
 msgstr "Почати пакет"
 
-#: tkpostcards/tkscan.py:967 tkpostcards/tkscan.py:1405
-#: tkpostcards/tkscan.py:1417
+#: src/tkpostcards/tkscan.py:1000 src/tkpostcards/tkscan.py:1444
+#: src/tkpostcards/tkscan.py:1456
 msgid "Pause"
 msgstr "Пауза"
 
-#: tkpostcards/tkscan.py:971
+#: src/tkpostcards/tkscan.py:1004
 msgid "Stop"
 msgstr "Зупинити"
 
-#: tkpostcards/tkscan.py:985 tkpostcards/tkscan.py:1359
+#: src/tkpostcards/tkscan.py:1018 src/tkpostcards/tkscan.py:1398
 msgid "Scan Now"
 msgstr "Сканувати зараз"
 
-#: tkpostcards/tkscan.py:989 tkpostcards/tkscan.py:1291
-#: tkpostcards/tkscan.py:1326
+#: src/tkpostcards/tkscan.py:1022 src/tkpostcards/tkscan.py:1327
+#: src/tkpostcards/tkscan.py:1365
 msgid "Preview"
 msgstr "Перегляд"
 
-#: tkpostcards/tkscan.py:1008
+#: src/tkpostcards/tkscan.py:1041
 msgid "Clear log"
 msgstr "Очистити журнал"
 
-#: tkpostcards/tkscan.py:1088
+#: src/tkpostcards/tkscan.py:1121
 msgid "Select destination folder"
 msgstr "Вибрати папку призначення"
 
-#: tkpostcards/tkscan.py:1155
+#: src/tkpostcards/tkscan.py:1188
 #, python-brace-format
 msgid "Scanners found: {count}"
 msgstr "Знайдено сканерів: {count}"
 
-#: tkpostcards/tkscan.py:1215
+#: src/tkpostcards/tkscan.py:1248
 msgid "Scanning..."
 msgstr "Сканування..."
 
-#: tkpostcards/tkscan.py:1226
+#: src/tkpostcards/tkscan.py:1262
 msgid "Simulated scan (no scanner)"
 msgstr "Симульоване сканування (сканер відсутній)"
 
-#: tkpostcards/tkscan.py:1232
+#: src/tkpostcards/tkscan.py:1268
 msgid "Scan complete"
 msgstr "Сканування завершено"
 
-#: tkpostcards/tkscan.py:1240 tkpostcards/tkscan.py:1241
+#: src/tkpostcards/tkscan.py:1276 src/tkpostcards/tkscan.py:1277
 msgid "Scan failed"
 msgstr "Помилка сканування"
 
-#: tkpostcards/tkscan.py:1284
+#: src/tkpostcards/tkscan.py:1320
 msgid "Previewing..."
 msgstr "Перегляд..."
 
-#: tkpostcards/tkscan.py:1299
+#: src/tkpostcards/tkscan.py:1338
 msgid "Simulated preview (no scanner)"
 msgstr "Симульований перегляд (сканер відсутній)"
 
-#: tkpostcards/tkscan.py:1305
+#: src/tkpostcards/tkscan.py:1344
 msgid "Preview complete"
 msgstr "Перегляд завершено"
 
-#: tkpostcards/tkscan.py:1320 tkpostcards/tkscan.py:1321
+#: src/tkpostcards/tkscan.py:1359 src/tkpostcards/tkscan.py:1360
 msgid "Preview failed"
 msgstr "Помилка перегляду"
 
-#: tkpostcards/tkscan.py:1362 tkpostcards/tkscan.py:1406
+#: src/tkpostcards/tkscan.py:1401 src/tkpostcards/tkscan.py:1445
 msgid "Batch running"
 msgstr "Пакет виконується"
 
-#: tkpostcards/tkscan.py:1363
+#: src/tkpostcards/tkscan.py:1402
 #, python-brace-format
 msgid "Batch started (interval={interval}s)"
 msgstr "Пакет розпочато (інтервал={interval} с)"
 
-#: tkpostcards/tkscan.py:1389 tkpostcards/tkscan.py:1401
-#: tkpostcards/tkscan.py:1402
+#: src/tkpostcards/tkscan.py:1428 src/tkpostcards/tkscan.py:1440
+#: src/tkpostcards/tkscan.py:1441
 msgid "Paused"
 msgstr "Призупинено"
 
-#: tkpostcards/tkscan.py:1392
+#: src/tkpostcards/tkscan.py:1431
 msgid "Next scan in:"
 msgstr "Наступне сканування через:"
 
-#: tkpostcards/tkscan.py:1400 tkpostcards/tkscan.py:1407
+#: src/tkpostcards/tkscan.py:1439 src/tkpostcards/tkscan.py:1446
 msgid "Resume"
 msgstr "Продовжити"
 
-#: tkpostcards/tkscan.py:1420 tkpostcards/tkscan.py:1421
+#: src/tkpostcards/tkscan.py:1459 src/tkpostcards/tkscan.py:1460
 msgid "Stopped"
 msgstr "Зупинено"
 
-#: tkpostcards/tkscan.py:1463
+#: src/tkpostcards/tkscan.py:1502
 msgid "Finishing scan before closing..."
-msgstr ""
+msgstr "Завершення сканування перед закриттям..."
 
-#: tkpostcards/scripts/tktools.py:49
+#: src/tkpostcards/libs/delcampe.py:406
+#, python-brace-format
+msgid "Network error on {url}: {exc}"
+msgstr "Помилка мережі для {url}: {exc}"
+
+#: src/tkpostcards/libs/delcampe.py:421
+#, python-brace-format
+msgid ""
+"HTTP {code} from Delcampe: session refused or anti-bot protection. Copy a"
+" fresh cookie from your browser (and its User-Agent, see [delcampe] "
+"user_agent)."
+msgstr ""
+"HTTP {code} від Delcampe: сесію відхилено або спрацював захист від ботів."
+" Скопіюйте свіжий cookie з браузера (і його User-Agent, див. [delcampe] "
+"user_agent)."
+
+#: src/tkpostcards/libs/delcampe.py:427
+msgid "Delcampe redirected to the login page: session expired."
+msgstr "Delcampe перенаправив на сторінку входу: сесія закінчилася."
+
+#: src/tkpostcards/libs/delcampe.py:455
+msgid "Not logged in: the cookie is missing, wrong or expired."
+msgstr "Вхід не виконано: cookie відсутній, неправильний або застарілий."
+
+#: src/tkpostcards/libs/delcampe.py:577
+msgid "ended"
+msgstr "завершено"
+
+#: src/tkpostcards/libs/delcampe.py:595
+#, python-brace-format
+msgid "{n} watched item(s), {s} seller(s)"
+msgstr "Відстежуваних лотів: {n}, продавців: {s}"
+
+#: src/tkpostcards/libs/delcampe.py:602
+#, python-brace-format
+msgid "{n} item(s)"
+msgstr "лотів: {n}"
+
+#: src/tkpostcards/libs/delcampe.py:608
+msgid "none listed"
+msgstr "не вказано"
+
+#: src/tkpostcards/libs/delcampe.py:609
+msgid "Payment"
+msgstr "Оплата"
+
+#: src/tkpostcards/libs/delcampe.py:612
+msgid "bid"
+msgstr "торги"
+
+#: src/tkpostcards/libs/delcampe.py:612
+msgid "fixed"
+msgstr "фікс."
+
+#: src/tkpostcards/libs/delcampe.py:613
+msgid "[LEADING]"
+msgstr "[ЛІДИРУЄ]"
+
+#: src/tkpostcards/libs/delcampe.py:613
+msgid "[outbid?]"
+msgstr "[перебито?]"
+
+#: src/tkpostcards/libs/mask_editor.py:110
+#: src/tkpostcards/libs/mask_editor.py:470
+#: src/tkpostcards/libs/mask_editor.py:521
+#: src/tkpostcards/libs/mask_editor.py:568
+#: src/tkpostcards/libs/mask_editor.py:576
+#: src/tkpostcards/libs/mask_editor.py:591
+msgid "mask_editor_title"
+msgstr "COLMAP masks"
+
+#: src/tkpostcards/libs/mask_editor.py:131
+msgid "mask_undo"
+msgstr "Undo"
+
+#: src/tkpostcards/libs/mask_editor.py:132
+msgid "mask_redo"
+msgstr "Redo"
+
+#: src/tkpostcards/libs/mask_editor.py:133
+msgid "mask_save"
+msgstr "Save"
+
+#: src/tkpostcards/libs/mask_editor.py:134
+msgid "mask_clear"
+msgstr "Keep all"
+
+#: src/tkpostcards/libs/mask_editor.py:135
+msgid "mask_exclude_all"
+msgstr "Mask all"
+
+#: src/tkpostcards/libs/mask_editor.py:138
+msgid "mask_auto_one"
+msgstr "Auto (this card)"
+
+#: src/tkpostcards/libs/mask_editor.py:139
+msgid "mask_auto_all"
+msgstr "Auto (collection)"
+
+#: src/tkpostcards/libs/mask_editor.py:143
+msgid "mask_stop"
+msgstr "Stop"
+
+#: src/tkpostcards/libs/mask_editor.py:145
+msgid "mask_show"
+msgstr "Show mask"
+
+#: src/tkpostcards/libs/mask_editor.py:160
+msgid "mask_size"
+msgstr "Size"
+
+#: src/tkpostcards/libs/mask_editor.py:186
+msgid "mask_help"
+msgstr ""
+"Left click: paint · Right click: the opposite · ←/→: previous/next card ·"
+" Ctrl+Z: undo · Ctrl+Y: redo · Ctrl+S: save · M: show/hide · [ ]: size"
+
+#: src/tkpostcards/libs/mask_editor.py:263
+msgid "mask_status"
+msgstr "Card {id} ({n}/{total}) — mask: {src} — {coll}"
+
+#: src/tkpostcards/libs/mask_editor.py:288
+msgid "mask_no_image"
+msgstr "Image not found: {path}"
+
+#: src/tkpostcards/libs/mask_editor.py:483
+msgid "mask_remote_wait"
+msgstr ""
+"SAM is running on {helper}… (the first card may take a while: the server "
+"loads the model)"
+
+#: src/tkpostcards/libs/mask_editor.py:484
+msgid "mask_loading_model"
+msgstr "Loading SAM (first run: downloading the model)…"
+
+#: src/tkpostcards/libs/mask_editor.py:521
+msgid "mask_overwrite_q"
+msgstr ""
+"Also regenerate existing automatic masks?\n"
+"\n"
+"Yes: replace them\n"
+"No: only cards without a mask\n"
+"\n"
+"Masks edited by hand are never overwritten."
+
+#: src/tkpostcards/libs/mask_editor.py:554
+msgid "mask_batch_progress"
+msgstr "Generating: {i}/{total}"
+
+#: src/tkpostcards/libs/mask_editor.py:569
+msgid "mask_batch_done"
+msgstr ""
+"Done: {done} generated, {skipped} skipped, {missing} without image, "
+"{error} failed"
+
+#: src/tkpostcards/libs/mask_editor.py:577
+msgid "mask_error"
+msgstr "Error: {error}"
+
+#: src/tkpostcards/libs/mask_editor.py:591
+msgid "mask_save_q"
+msgstr "Save the mask changes?"
+
+#: src/tkpostcards/scripts/tktools.py:51
 msgid "Export postcards"
 msgstr "Експортувати листівки"
 
-#: tkpostcards/scripts/tktools.py:54
+#: src/tkpostcards/scripts/tktools.py:56
 msgid "Export to PNG"
 msgstr "Експортувати в PNG"
 
-#: tkpostcards/scripts/tktools.py:60
+#: src/tkpostcards/scripts/tktools.py:62
 msgid "Generate database"
 msgstr "Згенерувати базу даних"
 
-#: tkpostcards/scripts/tktools.py:68
+#: src/tkpostcards/scripts/tktools.py:70
 msgid "Sync database"
 msgstr "Синхронізувати базу даних"
 
-#: tkpostcards/scripts/tktools.py:76
+#: src/tkpostcards/scripts/tktools.py:78
 msgid "Delete card in database and its linked json and images"
 msgstr "Видалити листівку з бази даних разом із пов'язаними json та зображеннями"
 
-#: tkpostcards/scripts/tktools.py:83 tkpostcards/scripts/tktools.py:252
+#: src/tkpostcards/scripts/tktools.py:85 src/tkpostcards/scripts/tktools.py:273
 msgid "Give me id(s) to add"
 msgstr "Вкажіть ідентифікатор(и) для додавання"
 
-#: tkpostcards/scripts/tktools.py:85
+#: src/tkpostcards/scripts/tktools.py:87
 #, python-brace-format
 msgid "Do you want to delete card with id {pcid} ?"
 msgstr "Видалити листівку з ідентифікатором {pcid}?"
 
-#: tkpostcards/scripts/tktools.py:94
+#: src/tkpostcards/scripts/tktools.py:96
 msgid "Prepare scanned postcards for import"
 msgstr "Підготувати скановані листівки до імпорту"
 
-#: tkpostcards/scripts/tktools.py:95
+#: src/tkpostcards/scripts/tktools.py:97
 msgid "Prefix of scanned files"
 msgstr "Префікс сканованих файлів"
 
-#: tkpostcards/scripts/tktools.py:97
+#: src/tkpostcards/scripts/tktools.py:99
 msgid ""
 "Name of the import profile (\"profil d'import\") controlling the scan "
 "correction (white threshold, crop margin, ...). Defaults to the "
 "[tkimport] scan_profile setting in the configuration file, or \"cpa\" if "
 "unset. See also \"tktools scan profiles\"."
 msgstr ""
+"Назва профілю імпорту («profil d'import»), що керує корекцією скану "
+"(поріг білого, поле обрізання тощо). За замовчуванням — параметр "
+"scan_profile у [tkimport] конфігураційного файлу, а якщо його не задано —"
+" \"cpa\". Див. також \"tktools scan profiles\"."
 
-#: tkpostcards/scripts/tktools.py:103 tkpostcards/scripts/tktools.py:677
+#: src/tkpostcards/scripts/tktools.py:105
+#: src/tkpostcards/scripts/tktools.py:952
 msgid ""
 "One-off override of the white threshold for background transparency, on "
 "top of --profile."
-msgstr ""
+msgstr "Разове перевизначення порога білого для прозорості тла, понад --profile."
 
-#: tkpostcards/scripts/tktools.py:115 tkpostcards/scripts/tktools.py:689
+#: src/tkpostcards/scripts/tktools.py:117
+#: src/tkpostcards/scripts/tktools.py:964
 #, python-brace-format
 msgid "Unknown import profile: {name}"
-msgstr ""
+msgstr "Невідомий профіль імпорту: {name}"
 
-#: tkpostcards/scripts/tktools.py:132
+#: src/tkpostcards/scripts/tktools.py:136
 msgid "List available import profiles (\"profils d'import\")"
-msgstr ""
+msgstr "Показати доступні профілі імпорту («profils d'import»)"
 
-#: tkpostcards/scripts/tktools.py:141
+#: src/tkpostcards/scripts/tktools.py:145
 msgid "built-in"
-msgstr ""
+msgstr "вбудований"
 
-#: tkpostcards/scripts/tktools.py:141
+#: src/tkpostcards/scripts/tktools.py:145
 msgid "custom"
-msgstr ""
+msgstr "власний"
 
-#: tkpostcards/scripts/tktools.py:156
+#: src/tkpostcards/scripts/tktools.py:152
+msgid ""
+"no processing at all: the raw file is copied as-is (no crop, no deskew, "
+"no transparency)"
+msgstr ""
+"без обробки: вихідний файл копіюється як є (без обрізання, вирівнювання "
+"та прозорості)"
+
+#: src/tkpostcards/scripts/tktools.py:170
 msgid "Re-save every TIFF in datadir/cards using lossless deflate compression"
 msgstr ""
+"Повторно зберегти кожен TIFF у datadir/cards зі стисненням deflate без "
+"втрат"
 
-#: tkpostcards/scripts/tktools.py:158
+#: src/tkpostcards/scripts/tktools.py:172
 msgid "List the files that would be recompressed, without touching them."
-msgstr ""
+msgstr "Показати файли, які було б повторно стиснуто, не змінюючи їх."
 
-#: tkpostcards/scripts/tktools.py:184
+#: src/tkpostcards/scripts/tktools.py:198
 #, python-brace-format
 msgid "No TIFF file found in {dir}"
-msgstr ""
+msgstr "У {dir} не знайдено файлів TIFF"
 
-#: tkpostcards/scripts/tktools.py:188
+#: src/tkpostcards/scripts/tktools.py:202
 msgid "TIFF files"
-msgstr ""
+msgstr "Файли TIFF"
 
-#: tkpostcards/scripts/tktools.py:222
+#: src/tkpostcards/scripts/tktools.py:236
 #, python-brace-format
 msgid "Failed on {path}: {exc}"
-msgstr ""
+msgstr "Помилка для {path}: {exc}"
 
-#: tkpostcards/scripts/tktools.py:227
+#: src/tkpostcards/scripts/tktools.py:241
 #, python-brace-format
 msgid "{converted} converted, {skipped} already deflate, {failed} failed"
-msgstr ""
+msgstr "{converted} перетворено, {skipped} уже в deflate, {failed} з помилками"
 
-#: tkpostcards/scripts/tktools.py:231
+#: src/tkpostcards/scripts/tktools.py:245
 msgid "Add postcards"
 msgstr "Додати листівки"
 
-#: tkpostcards/scripts/tktools.py:234 tkpostcards/scripts/tktools.py:560
+#: src/tkpostcards/scripts/tktools.py:248
+#: src/tkpostcards/scripts/tktools.py:655
 msgid ""
-"OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"). Defaults to"
-" the [tkimport] ocr_langs setting in the configuration file."
+"OCR languages (tesseract codes, e.g. \"fra\" or \"fra+eng\"; PaddleOCR "
+"codes such as \"fr\" work with both engines). Defaults to the [tkimport] "
+"ocr_langs setting in the configuration file."
 msgstr ""
-"Мови OCR (коди tesseract, напр. \"fra\" або \"fra+eng\"). За "
-"замовчуванням використовується налаштування [tkimport] ocr_langs у файлі "
-"конфігурації."
+"Мови OCR (коди tesseract, напр. \"fra\" або \"fra+eng\"; коди PaddleOCR, "
+"як-от \"fr\", працюють з обома рушіями). За замовчуванням — параметр "
+"ocr_langs у [tkimport] конфігураційного файлу."
 
-#: tkpostcards/scripts/tktools.py:238 tkpostcards/scripts/tktools.py:589
+#: src/tkpostcards/scripts/tktools.py:254
+#: src/tkpostcards/scripts/tktools.py:661
+msgid ""
+"OCR engine. Defaults to the [tkimport] ocr_engine setting in the "
+"configuration file, or \"tesseract\". Runs here, or on the simpostcards "
+"server (external_helper), which must have the engine."
+msgstr ""
+"Рушій OCR. За замовчуванням — параметр ocr_engine у [tkimport] "
+"конфігураційного файлу, а якщо його не задано — \"tesseract\". Працює тут"
+" або на сервері simpostcards (external_helper), де цей рушій має бути "
+"встановлений."
+
+#: src/tkpostcards/scripts/tktools.py:259
+#: src/tkpostcards/scripts/tktools.py:697
 msgid ""
 "Target language for the translated caption (e.g. \"fr\"). Defaults to the"
 " [tkimport] detect_lang setting in the configuration file, or \"fr\" if "
@@ -1714,7 +2268,8 @@ msgstr ""
 "параметр detect_lang розділу [tkimport] конфігураційного файлу, або "
 "\"fr\", якщо не вказано."
 
-#: tkpostcards/scripts/tktools.py:242 tkpostcards/scripts/tktools.py:613
+#: src/tkpostcards/scripts/tktools.py:263
+#: src/tkpostcards/scripts/tktools.py:721
 msgid ""
 "Comma-separated list of object labels to always exclude from "
 "detected_objects (e.g. \"tie,person\", or their translation in --detect-"
@@ -1726,85 +2281,105 @@ msgstr ""
 "напр. \"cravate,personne\"). За замовчуванням використовується параметр "
 "excluded_objects розділу [tkimport] конфігураційного файлу."
 
-#: tkpostcards/scripts/tktools.py:273 tkpostcards/scripts/tktools.py:576
-#: tkpostcards/scripts/tktools.py:657 tkpostcards/scripts/tktools.py:700
+#: src/tkpostcards/scripts/tktools.py:294
+#: src/tkpostcards/scripts/tktools.py:684
+#: src/tkpostcards/scripts/tktools.py:777
+#: src/tkpostcards/scripts/tktools.py:981
 msgid "Postcards"
 msgstr "Листівки"
 
-#: tkpostcards/scripts/tktools.py:294
+#: src/tkpostcards/scripts/tktools.py:321
+msgid "WARNING: "
+msgstr "УВАГА: "
+
+#: src/tkpostcards/scripts/tktools.py:353
+msgid "[tkimport] ocr_min_score must be a number between 0 and 1"
+msgstr "[tkimport] ocr_min_score має бути числом від 0 до 1"
+
+#: src/tkpostcards/scripts/tktools.py:364
+msgid "Supported language codes: "
+msgstr "Підтримувані коди мов: "
+
+#: src/tkpostcards/scripts/tktools.py:366
+msgid "OCR languages installed there: "
+msgstr "Мови OCR, встановлені там: "
+
+#: src/tkpostcards/scripts/tktools.py:374
 msgid "Backup cards directory"
 msgstr "Резервне копіювання каталогу листівок"
 
-#: tkpostcards/scripts/tktools.py:295
+#: src/tkpostcards/scripts/tktools.py:375
 msgid "Compression level"
 msgstr "Рівень стиснення"
 
-#: tkpostcards/scripts/tktools.py:296 tkpostcards/scripts/tktools.py:313
+#: src/tkpostcards/scripts/tktools.py:376
+#: src/tkpostcards/scripts/tktools.py:393
 msgid "Name of archive to create (backup_(date).tar.zst if None)"
 msgstr "Назва архіву для створення (backup_(date).tar.zst, якщо не вказано)"
 
-#: tkpostcards/scripts/tktools.py:311
+#: src/tkpostcards/scripts/tktools.py:391
 msgid "Extract cards in directory"
 msgstr "Витягти листівки в каталог"
 
-#: tkpostcards/scripts/tktools.py:312
+#: src/tkpostcards/scripts/tktools.py:392
 msgid "Destination dir"
 msgstr "Каталог призначення"
 
-#: tkpostcards/scripts/tktools.py:322
+#: src/tkpostcards/scripts/tktools.py:402
 msgid "Need a dest directory"
 msgstr "Потрібен каталог призначення"
 
-#: tkpostcards/scripts/tktools.py:332
+#: src/tkpostcards/scripts/tktools.py:412
 msgid "Index similar postcards"
 msgstr "Індексувати схожі листівки"
 
-#: tkpostcards/scripts/tktools.py:362
+#: src/tkpostcards/scripts/tktools.py:445
 msgid "Find similar postcards from directory"
 msgstr "Знайти схожі листівки в каталозі"
 
-#: tkpostcards/scripts/tktools.py:403
+#: src/tkpostcards/scripts/tktools.py:489
 msgid "Find similar postcard from url"
 msgstr "Знайти схожу листівку за url"
 
-#: tkpostcards/scripts/tktools.py:441
+#: src/tkpostcards/scripts/tktools.py:530
 msgid "Find similar postcard from clipboard"
 msgstr "Знайти схожу листівку з буфера обміну"
 
-#: tkpostcards/scripts/tktools.py:476
+#: src/tkpostcards/scripts/tktools.py:568
 msgid "List torch devices available for similarity search"
-msgstr ""
+msgstr "Показати пристрої torch, доступні для пошуку схожості"
 
-#: tkpostcards/scripts/tktools.py:482
+#: src/tkpostcards/scripts/tktools.py:574
 msgid "torch is not installed"
-msgstr ""
+msgstr "torch не встановлено"
 
-#: tkpostcards/scripts/tktools.py:496
+#: src/tkpostcards/scripts/tktools.py:588
 #, python-brace-format
 msgid "Currently configured device: {device}"
-msgstr ""
+msgstr "Наразі налаштований пристрій: {device}"
 
-#: tkpostcards/scripts/tktools.py:498
+#: src/tkpostcards/scripts/tktools.py:590
 msgid "Currently configured device: (auto)"
-msgstr ""
+msgstr "Наразі налаштований пристрій: (авто)"
 
-#: tkpostcards/scripts/tktools.py:501
+#: src/tkpostcards/scripts/tktools.py:593
 msgid "Check for missing ids and replace cards wih last ones"
 msgstr "Перевірити відсутні ідентифікатори та замінити картки останніми"
 
-#: tkpostcards/scripts/tktools.py:557
+#: src/tkpostcards/scripts/tktools.py:652
 msgid "Redo OCR for postcards"
 msgstr "Повторити розпізнавання OCR для листівок"
 
-#: tkpostcards/scripts/tktools.py:568 tkpostcards/scripts/tktools.py:624
+#: src/tkpostcards/scripts/tktools.py:670
+#: src/tkpostcards/scripts/tktools.py:733
 msgid "Give me a name"
 msgstr "Вкажіть назву"
 
-#: tkpostcards/scripts/tktools.py:586
+#: src/tkpostcards/scripts/tktools.py:694
 msgid "Redo content detection for postcards"
 msgstr "Повторити розпізнавання вмісту для листівок"
 
-#: tkpostcards/scripts/tktools.py:593
+#: src/tkpostcards/scripts/tktools.py:701
 msgid ""
 "Name of the HuggingFace image captioning model to use. Defaults to the "
 "[tkimport] model_name setting in the configuration file, or \"Salesforce"
@@ -1814,7 +2389,7 @@ msgstr ""
 "використовується параметр model_name розділу [tkimport] конфігураційного "
 "файлу, або \"Salesforce/blip-image-captioning-large\", якщо не вказано."
 
-#: tkpostcards/scripts/tktools.py:598
+#: src/tkpostcards/scripts/tktools.py:706
 msgid ""
 "Name of the HuggingFace object detection model to use. Defaults to the "
 "[tkimport] objects_model_name setting in the configuration file, or "
@@ -1825,7 +2400,7 @@ msgstr ""
 "конфігураційного файлу, або \"facebook/detr-resnet-101\", якщо не "
 "вказано."
 
-#: tkpostcards/scripts/tktools.py:603
+#: src/tkpostcards/scripts/tktools.py:711
 msgid ""
 "Minimum confidence score (0-1) for an object detection to be kept. "
 "Defaults to the [tkimport] objects_threshold setting in the configuration"
@@ -1837,7 +2412,7 @@ msgstr ""
 "[tkimport] конфігураційного файлу, або 0.92, якщо не вказано (високе "
 "значення обрано навмисно, щоб надати перевагу якості над кількістю)."
 
-#: tkpostcards/scripts/tktools.py:609
+#: src/tkpostcards/scripts/tktools.py:717
 msgid ""
 "Maximum number of detected objects to keep, once sorted by confidence. "
 "Defaults to the [tkimport] max_objects setting in the configuration file,"
@@ -1847,183 +2422,440 @@ msgstr ""
 " за рівнем довіри. За замовчуванням використовується параметр max_objects"
 " розділу [tkimport] конфігураційного файлу, або 10, якщо не вказано."
 
-#: tkpostcards/scripts/tktools.py:668
+#: src/tkpostcards/scripts/tktools.py:800
+#, python-brace-format
+msgid ""
+"{n} postcard(s) were stored in English (language {lang!r} unavailable or "
+"translation failed); translate them with: kttools detect-translate --lang"
+" {lang}"
+msgstr ""
+"Листівок, збережених англійською (мова {lang!r} недоступна або переклад "
+"не вдався): {n}; перекладіть їх командою: kttools detect-translate --lang"
+" {lang}"
+
+#: src/tkpostcards/scripts/tktools.py:807
+msgid ""
+"Translate the detection texts (caption and objects) that are still in "
+"English, using the simpostcards server (external_helper). A text is "
+"considered untranslated when its language marker is \"en\" (detection "
+"language unavailable or translation failed at the time); texts of cards "
+"stored before the markers existed are recognised by a heuristic (see "
+"--no-guess). Texts edited by hand in ktmanager are never touched."
+msgstr ""
+"Перекладає тексти розпізнавання (підпис і об'єкти), що досі англійською, "
+"за допомогою сервера simpostcards (external_helper). Текст вважається "
+"неперекладеним, коли його мовний маркер — \"en\" (мова розпізнавання була"
+" недоступна або переклад тоді не вдався); тексти листівок, збережених до "
+"появи маркерів, визначаються евристикою (див. --no-guess). Тексти, "
+"змінені вручну в ktmanager, ніколи не змінюються."
+
+#: src/tkpostcards/scripts/tktools.py:815
+#: src/tkpostcards/scripts/tktools.py:1167
+#: src/tkpostcards/scripts/tktools.py:1252
+msgid "Only the cards of this collection"
+msgstr "Лише листівки цієї колекції"
+
+#: src/tkpostcards/scripts/tktools.py:817
+msgid ""
+"Target language (e.g. \"fr\"). Defaults to the [tkimport] detect_lang "
+"setting in the configuration file, or \"fr\"."
+msgstr ""
+"Цільова мова (напр. \"fr\"). За замовчуванням — параметр detect_lang у "
+"[tkimport] конфігураційного файлу, а якщо його не задано — \"fr\"."
+
+#: src/tkpostcards/scripts/tktools.py:820
+msgid "Only list what would be translated"
+msgstr "Лише показати, що було б перекладено"
+
+#: src/tkpostcards/scripts/tktools.py:822
+msgid ""
+"Only translate texts whose marker says \"en\"; do not guess for older "
+"cards that have no marker"
+msgstr ""
+"Перекладати лише тексти з маркером \"en\"; не вгадувати для старіших "
+"листівок без маркера"
+
+#: src/tkpostcards/scripts/tktools.py:835
+msgid ""
+"The translation is done by the simpostcards server: set external_helper "
+"in the configuration file (or use --external-helper)."
+msgstr ""
+"Переклад виконує сервер simpostcards: задайте external_helper у "
+"конфігураційному файлі (або використайте --external-helper)."
+
+#: src/tkpostcards/scripts/tktools.py:841
+msgid "The detection texts are already in English: nothing to do."
+msgstr "Тексти розпізнавання вже англійською: робити нічого."
+
+#: src/tkpostcards/scripts/tktools.py:847
+#, python-brace-format
+msgid ""
+"The translation service is rate-limiting the server: waiting {delay:.0f}s"
+" before retrying ({n}/3)..."
+msgstr ""
+"Служба перекладу обмежує швидкість запитів сервера: очікування "
+"{delay:.0f} с перед повторною спробою ({n}/3)..."
+
+#: src/tkpostcards/scripts/tktools.py:863
+#, python-brace-format
+msgid "Cannot reach the server {helper}: {exc}"
+msgstr "Не вдається підключитися до сервера {helper}: {exc}"
+
+#: src/tkpostcards/scripts/tktools.py:871
+msgid ""
+"WARNING: the server did not report a translation engine: it runs an older"
+" simpostcards (no local translation engine, no protection against "
+"Google's refusals). Redeploy it from the latest sources."
+msgstr ""
+"УВАГА: сервер не повідомив про рушій перекладу: на ньому працює старіша "
+"версія simpostcards (без локального рушія перекладу та без захисту від "
+"відмов Google). Розгорніть її знову з найновіших джерел."
+
+#: src/tkpostcards/scripts/tktools.py:876
+#, python-brace-format
+msgid "Translation engine on the server: {engine}"
+msgstr "Рушій перекладу на сервері: {engine}"
+
+#: src/tkpostcards/scripts/tktools.py:881
+#: src/tkpostcards/scripts/tktools.py:1192
+msgid "No card selected"
+msgstr "Листівку не вибрано"
+
+#: src/tkpostcards/scripts/tktools.py:884
+msgid "Translate"
+msgstr "Переклад"
+
+#: src/tkpostcards/scripts/tktools.py:899
+#, python-brace-format
+msgid "Lost the server {helper}: {exc}"
+msgstr "Втрачено зв'язок із сервером {helper}: {exc}"
+
+#: src/tkpostcards/scripts/tktools.py:909
+msgid "Examples of texts judged \"unknown\" (left as is):"
+msgstr "Приклади текстів, визнаних «невідомими» (залишено як є):"
+
+#: src/tkpostcards/scripts/tktools.py:915
+#, python-brace-format
+msgid "{done} of {planned} text(s) translated before the interruption"
+msgstr "Перекладено {done} із {planned} текстів до переривання"
+
+#: src/tkpostcards/scripts/tktools.py:919
+msgid "would be translated"
+msgstr "було б перекладено"
+
+#: src/tkpostcards/scripts/tktools.py:919
+msgid "translated"
+msgstr "перекладено"
+
+#: src/tkpostcards/scripts/tktools.py:920
+#, python-brace-format
+msgid "{fields} text(s) in {cards} card(s) {verb} to {lang}"
+msgstr "{fields} текст(ів) у {cards} листівках {verb} мовою {lang}"
+
+#: src/tkpostcards/scripts/tktools.py:925
+msgid "nothing to translate"
+msgstr "нічого перекладати"
+
+#: src/tkpostcards/scripts/tktools.py:926
+#, python-brace-format
+msgid "already in {lang}"
+msgstr "уже мовою {lang}"
+
+#: src/tkpostcards/scripts/tktools.py:927
+msgid "edited by hand, never touched"
+msgstr "змінено вручну, не змінюються"
+
+#: src/tkpostcards/scripts/tktools.py:928
+msgid "marked as another language"
+msgstr "позначено іншою мовою"
+
+#: src/tkpostcards/scripts/tktools.py:929
+msgid ""
+"no language marker and not recognisable as English: assumed already "
+"translated (check with --dry-run)"
+msgstr ""
+"немає мовного маркера й не схоже на англійську: вважається вже "
+"перекладеним (перевірте з --dry-run)"
+
+#: src/tkpostcards/scripts/tktools.py:932
+msgid "Left as is:"
+msgstr "Залишено як є:"
+
+#: src/tkpostcards/scripts/tktools.py:936
+msgid "No JSON for: "
+msgstr "Немає JSON для: "
+
+#: src/tkpostcards/scripts/tktools.py:939
+#, python-brace-format
+msgid ""
+"Translation interrupted ({error}). What was done is saved; run the "
+"command again to continue."
+msgstr ""
+"Переклад перервано ({error}). Виконане збережено; запустіть команду ще "
+"раз, щоб продовжити."
+
+#: src/tkpostcards/scripts/tktools.py:943
 msgid "Redo transparent on postcards"
 msgstr "Повторити прозорість на листівках"
 
-#: tkpostcards/scripts/tktools.py:671
+#: src/tkpostcards/scripts/tktools.py:946
 msgid ""
 "Name of the import profile (\"profil d'import\") whose transparency "
 "settings should be used (white threshold, band, contour detection). "
 "Defaults to the [tkimport] scan_profile setting in the configuration "
 "file, or \"cpa\" if unset. See also \"tktools scan profiles\"."
 msgstr ""
+"Назва профілю імпорту («profil d'import»), параметри прозорості якого "
+"слід використати (поріг білого, смуга, визначення контуру). За "
+"замовчуванням — параметр scan_profile у [tkimport] конфігураційного "
+"файлу, а якщо його не задано — \"cpa\". Див. також \"tktools scan "
+"profiles\"."
 
-#: tkpostcards/scripts/tktools.py:737
+#: src/tkpostcards/scripts/tktools.py:971
+#, python-brace-format
+msgid ""
+"Profile {name!r} does not apply background transparency "
+"(skip_processing/skip_transparency); pick another profile."
+msgstr ""
+"Профіль {name!r} не застосовує прозорість тла "
+"(skip_processing/skip_transparency); виберіть інший профіль."
+
+#: src/tkpostcards/scripts/tktools.py:1018
 msgid "Calculate travels and add them to database"
 msgstr "Обчислити маршрути та додати їх до бази даних"
 
-#: tkpostcards/scripts/tktools.py:745
+#: src/tkpostcards/scripts/tktools.py:1027
 msgid "Publish data to a remote web server"
 msgstr "Опублікувати дані на віддаленому веб-сервері"
 
-#: tkpostcards/scripts/tktools.py:747
+#: src/tkpostcards/scripts/tktools.py:1029
 msgid "Update all data (travel, ...) before publishing"
 msgstr "Оновити всі дані (подорожі тощо) перед публікацією"
 
-#: tkpostcards/scripts/tktools.py:754
+#: src/tkpostcards/scripts/tktools.py:1036
 msgid "Give me a config"
 msgstr "Вкажіть конфігурацію"
 
-#: tkpostcards/scripts/tktools.py:759
+#: src/tkpostcards/scripts/tktools.py:1043
 msgid "Fix non-reciprocal double relations between cards"
 msgstr "Виправити нереципрокні зв'язки дублікатів між картками"
 
-#: tkpostcards/scripts/tktools.py:760
+#: src/tkpostcards/scripts/tktools.py:1044
 msgid "Do not update files"
 msgstr "Не оновлювати файли"
 
+#: src/tkpostcards/scripts/tktools.py:1156
+msgid "Masks (stamps, borders) to feed pycolmap"
+msgstr "Маски (марки, краї) для pycolmap"
+
+#: src/tkpostcards/scripts/tktools.py:1162
+msgid ""
+"Generate masks: SAM detects stamps on the recto, the transparent "
+"background and the card border are masked too. Masks edited by hand in "
+"ktmanager are never overwritten unless --force-manual."
+msgstr ""
+"Створити маски: SAM знаходить марки на лицьовій стороні; прозоре тло та "
+"край листівки також маскуються. Маски, змінені вручну в ktmanager, ніколи"
+" не перезаписуються без --force-manual."
+
+#: src/tkpostcards/scripts/tktools.py:1169
+msgid "R = recto (default), V = verso"
+msgstr "R = лицьовий бік (за замовчуванням), V = зворотний бік"
+
+#: src/tkpostcards/scripts/tktools.py:1171
+msgid "Regenerate existing automatic masks"
+msgstr "Створити заново наявні автоматичні маски"
+
+#: src/tkpostcards/scripts/tktools.py:1173
+msgid "Also overwrite masks edited by hand"
+msgstr "Також перезаписувати маски, змінені вручну"
+
+#: src/tkpostcards/scripts/tktools.py:1175
+msgid ""
+"Skip stamp detection: only mask the transparent background and the border"
+" (fast, no torch needed)"
+msgstr ""
+"Пропустити виявлення марок: маскувати лише прозоре тло та край (швидко, "
+"torch не потрібен)"
+
+#: src/tkpostcards/scripts/tktools.py:1178
+msgid ""
+"Hugging Face SAM model. Defaults to [masks] sam_model, or facebook/sam-"
+"vit-base. Ignored with an external helper: the server's "
+"segment_model_name applies."
+msgstr ""
+"Модель SAM з Hugging Face. За замовчуванням — sam_model у [masks] або "
+"facebook/sam-vit-base. Ігнорується із зовнішнім сервером: діє "
+"segment_model_name сервера."
+
+#: src/tkpostcards/scripts/tktools.py:1182
+msgid ""
+"Run SAM here even if an external helper is configured ([DEFAULT] "
+"external_helper or --external-helper)"
+msgstr ""
+"Виконувати SAM тут, навіть якщо налаштовано зовнішній сервер ([DEFAULT] "
+"external_helper або --external-helper)"
+
+#: src/tkpostcards/scripts/tktools.py:1198
+#, python-brace-format
+msgid "SAM computed by {helper}"
+msgstr "SAM обчислено на {helper}"
+
 # --- masks (COLMAP) ---
+#: src/tkpostcards/scripts/tktools.py:1200
+msgid "Masks"
+msgstr "Маски"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "nav_masks"
-msgstr "Masks (COLMAP)"
+#: src/tkpostcards/scripts/tktools.py:1206
+#, python-brace-format
+msgid "{n} stamp(s)"
+msgstr "марок: {n}"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_editor_title"
-msgstr "COLMAP masks"
+#: src/tkpostcards/scripts/tktools.py:1223
+#, python-brace-format
+msgid ""
+"{done} generated, {skipped} skipped, {missing} without image, {error} "
+"failed"
+msgstr ""
+"{done} створено, {skipped} пропущено, {missing} без зображення, {error} з"
+" помилками"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_tool_brush_off"
-msgstr "Brush: ignore"
+#: src/tkpostcards/scripts/tktools.py:1227
+msgid "How many cards have a mask"
+msgstr "Скільки листівок мають маску"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_tool_brush_on"
-msgstr "Brush: keep"
+#: src/tkpostcards/scripts/tktools.py:1240
+#, python-brace-format
+msgid "{n} cards: {a} automatic, {m} manual, {x} without mask"
+msgstr "{n} листівок: {a} автоматичних, {m} ручних, {x} без маски"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_tool_rect_off"
-msgstr "Rectangle: ignore"
+#: src/tkpostcards/scripts/tktools.py:1244
+msgid "Without mask: "
+msgstr "Без маски: "
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_tool_rect_on"
-msgstr "Rectangle: keep"
+#: src/tkpostcards/scripts/tktools.py:1248
+msgid ""
+"Write images/ and masks/ ready for pycolmap (mask_path = masks/, "
+"image_path = images/)"
+msgstr ""
+"Записати images/ та masks/, готові для pycolmap (mask_path = masks/, "
+"image_path = images/)"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_size"
-msgstr "Size"
+#: src/tkpostcards/scripts/tktools.py:1256
+msgid "Output directory (images/ and masks/ are created in it)"
+msgstr "Вихідний каталог (в ньому створюються images/ і masks/)"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_show"
-msgstr "Show mask"
+#: src/tkpostcards/scripts/tktools.py:1258
+msgid "Longest side of the exported images, in pixels"
+msgstr "Довша сторона експортованих зображень, у пікселях"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_undo"
-msgstr "Undo"
+#: src/tkpostcards/scripts/tktools.py:1264
+msgid "Export"
+msgstr "Експорт"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_save"
-msgstr "Save"
+#: src/tkpostcards/scripts/tktools.py:1272
+#, python-brace-format
+msgid "{n} cards exported to {d}"
+msgstr "{n} листівок експортовано до {d}"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_clear"
-msgstr "Keep all"
+#: src/tkpostcards/scripts/tktools.py:1274
+msgid "Image not found: "
+msgstr "Зображення не знайдено: "
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_auto_one"
-msgstr "Auto (this card)"
+#: src/tkpostcards/scripts/tktools.py:1277
+msgid "Delcampe tools (website, no paid API account needed)"
+msgstr "Інструменти Delcampe (вебсайт, платний обліковий запис API не потрібен)"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_auto_all"
-msgstr "Auto (collection)"
+#: src/tkpostcards/scripts/tktools.py:1283
+msgid ""
+"Watched items grouped by seller, with time left and the seller's payment "
+"methods. Uses the session cookie of your browser ([delcampe] cookie / "
+"cookie_file in postcards.conf, or $DELCAMPE_COOKIE)."
+msgstr ""
+"Відстежувані лоти, згруповані за продавцями, із часом, що залишився, та "
+"способами оплати продавця. Використовує cookie сесії вашого браузера "
+"([delcampe] cookie / cookie_file у postcards.conf або $DELCAMPE_COOKIE)."
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_stop"
-msgstr "Stop"
+#: src/tkpostcards/scripts/tktools.py:1288
+msgid "Which watched items to list"
+msgstr "Які відстежувані лоти показувати"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_status"
-msgstr "Card {id} ({n}/{total}) — mask: {src} — {coll}"
+#: src/tkpostcards/scripts/tktools.py:1291
+msgid "Sellers order: soonest ending item, name, or number of items"
+msgstr ""
+"Порядок продавців: за найближчим завершенням лота, за назвою або за "
+"кількістю лотів"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_src_none"
-msgstr "none"
+#: src/tkpostcards/scripts/tktools.py:1293
+msgid "Output format"
+msgstr "Формат виводу"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_src_auto"
-msgstr "auto"
+#: src/tkpostcards/scripts/tktools.py:1295
+msgid "Do not look up payment methods (a single request in total)"
+msgstr "Не шукати способи оплати (усього один запит)"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_src_manual"
-msgstr "manual"
+#: src/tkpostcards/scripts/tktools.py:1297
+msgid "Ignore the seller cache and look payment methods up again"
+msgstr "Ігнорувати кеш продавців і знову шукати способи оплати"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_no_image"
-msgstr "Image not found: {path}"
+#: src/tkpostcards/scripts/tktools.py:1299
+msgid "Stop after this many pages of the list"
+msgstr "Зупинитися після такої кількості сторінок списку"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_help"
-msgstr "Left click: paint · Right click: the opposite · ←/→: previous/next card · Ctrl+Z: undo · Ctrl+Y: redo · Ctrl+S: save · M: show/hide · [ ]: size"
+#: src/tkpostcards/scripts/tktools.py:1301
+msgid "Seconds between two requests (default [delcampe] delay, 1.0)"
+msgstr "Секунд між двома запитами (за замовчуванням [delcampe] delay, 1.0)"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_need_libs"
-msgstr "Automatic generation requires: pip install pypostcards[masks]"
+#: src/tkpostcards/scripts/tktools.py:1303
+msgid "Session cookie header copied from your browser"
+msgstr "Заголовок cookie сесії, скопійований з вашого браузера"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_overwrite_q"
-msgstr "Also regenerate existing automatic masks?\n\nYes: replace them\nNo: only cards without a mask\n\nMasks edited by hand are never overwritten."
+#: src/tkpostcards/scripts/tktools.py:1305
+msgid "Write the result to this file instead of stdout"
+msgstr "Записати результат у цей файл замість stdout"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_save_q"
-msgstr "Save the mask changes?"
+#: src/tkpostcards/scripts/tktools.py:1313
+#, python-brace-format
+msgid "Missing dependency ({e}). Install: pip install requests beautifulsoup4"
+msgstr "Бракує залежності ({e}). Встановіть: pip install requests beautifulsoup4"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_loading_model"
-msgstr "Loading SAM (first run: downloading the model)…"
+#: src/tkpostcards/scripts/tktools.py:1323
+msgid ""
+"No session cookie. In your browser, logged in to Delcampe, open the "
+"developer tools > Network, click any delcampe.net request and copy its "
+"'Cookie' header, then either put it in postcards.conf ([delcampe] cookie "
+"= ...), or export DELCAMPE_COOKIE, or pass --cookie. It works like a "
+"password: keep it private."
+msgstr ""
+"Немає cookie сесії. У браузері, де ви ввійшли в Delcampe, відкрийте "
+"інструменти розробника > Мережа, клацніть будь-який запит до delcampe.net"
+" і скопіюйте його заголовок «Cookie», потім або вставте його в "
+"postcards.conf ([delcampe] cookie = ...), або експортуйте "
+"DELCAMPE_COOKIE, або передайте --cookie. Він працює як пароль: тримайте "
+"його в таємниці."
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_batch_progress"
-msgstr "Generating: {i}/{total}"
+#: src/tkpostcards/scripts/tktools.py:1340
+#, python-brace-format
+msgid "Page {p}/{n}: {g} item(s) so far"
+msgstr "Сторінка {p}/{n}: поки що лотів — {g}"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_batch_done"
-msgstr "Done: {done} generated, {skipped} skipped, {missing} without image, {error} failed"
+#: src/tkpostcards/scripts/tktools.py:1346
+msgid "No watched item."
+msgstr "Немає відстежуваних лотів."
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_error"
-msgstr "Error: {error}"
+#: src/tkpostcards/scripts/tktools.py:1348
+msgid "Sellers"
+msgstr "Продавці"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_need_libs_remote"
-msgstr "Automatic generation through external_helper requires: pip install requests numpy opencv-python-headless"
+#: src/tkpostcards/scripts/tktools.py:1372
+#, python-brace-format
+msgid "Written to {f}"
+msgstr "Записано до {f}"
 
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_remote_wait"
-msgstr "SAM is running on {helper}… (the first card may take a while: the server loads the model)"
-
-#: src/tkpostcards/tkmanager.py
-msgid "nav_poi_filter_label"
-msgstr "POI"
-
-#: src/tkpostcards/tkmanager.py
-msgid "gall_no_collection"
-msgstr "No collection"
-
-#: src/tkpostcards/tkmanager.py
-msgid "gall_empty"
-msgstr "No card matches this filter."
-
-#: src/tkpostcards/tkmanager.py
-msgid "side_mask"
-msgstr "Mask"
-
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_redo"
-msgstr "Redo"
-
-#: src/tkpostcards/libs/mask_editor.py
-msgid "mask_exclude_all"
-msgstr "Mask all"
+#: src/tkpostcards/scripts/tktools.py:1375
+#, python-brace-format
+msgid "{n} request(s) made to Delcampe"
+msgstr "Запитів до Delcampe: {n}"
 
 #~ msgid "White threshold:"
 #~ msgstr "Поріг білого:"
@@ -2040,35 +2872,36 @@ msgstr "Mask all"
 #~ msgid "white threshold for background transpare"
 #~ msgstr "поріг білого для прозорості фону"
 
+#~ msgid ""
+#~ "La précédente analyse n'a pas été "
+#~ "terminée ... je ne sais pas quoi"
+#~ " faire"
+#~ msgstr "Попередній аналіз не завершено... незрозуміло, що робити"
 
-#: tkpostcards/tkimport.py:472
-msgid "Cancel"
-msgstr "Скасувати"
+#~ msgid "mask_tool_brush_off"
+#~ msgstr "Brush: ignore"
 
-#: tkpostcards/tkimport.py:1205
-msgid "Cancel all…"
-msgstr "Скасувати все…"
+#~ msgid "mask_tool_brush_on"
+#~ msgstr "Brush: keep"
 
-#: tkpostcards/tkimport.py:1537
-msgid "Cancelled #{pcid} ({side}); pick a profile and analyze again to redo it."
-msgstr "Скасовано #{pcid} ({side}); виберіть профіль і повторіть аналіз, щоб переробити."
+#~ msgid "mask_tool_rect_off"
+#~ msgstr "Rectangle: ignore"
 
-#: tkpostcards/tkimport.py:1553
-msgid "Nothing to cancel."
-msgstr "Нічого скасовувати."
+#~ msgid "mask_tool_rect_on"
+#~ msgstr "Rectangle: keep"
 
-#: tkpostcards/tkimport.py:1556
-msgid "Cancel all"
-msgstr "Скасувати все"
+#~ msgid "mask_src_auto"
+#~ msgstr "auto"
 
-#: tkpostcards/tkimport.py:1557
-msgid "Delete every analyzed (not yet added) recto/verso file so you can pick a different profile and analyze again? This cannot be undone."
-msgstr "Видалити всі проаналізовані (ще не додані) файли лицьової/зворотної сторони, щоб можна було вибрати інший профіль і повторити аналіз? Це неможливо скасувати."
+#~ msgid "mask_src_manual"
+#~ msgstr "manual"
 
-#: tkpostcards/tkimport.py:1575
-msgid "Cancelled {count} postcard(s); pick a profile and analyze again."
-msgstr "Скасовано {count} листівок(и); виберіть профіль і повторіть аналіз."
+#~ msgid "mask_need_libs"
+#~ msgstr "Automatic generation requires: pip install pypostcards[masks]"
 
-#: src/tkpostcards/tkmanager.py:157 src/tkpostcards/tkmanager.py:2722
-msgid "field_storage"
-msgstr "Зберігання"
+#~ msgid "mask_need_libs_remote"
+#~ msgstr ""
+#~ "Automatic generation through external_helper "
+#~ "requires: pip install requests numpy "
+#~ "opencv-python-headless"
+

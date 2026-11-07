@@ -98,6 +98,7 @@ Autres points d'entrée (tous relatifs au préfixe, ``/api/v1/sync`` par défaut
     GET    /list?path=        inventaire récursif {"files": {rel: [taille, mtime]}}
     GET    /ls?path=          contenu direct d'un répertoire
     GET    /stat?path=        {"exists", "is_dir", "size", "mtime"}
+    GET    /usage[?refresh=1] taille des données sur le disque (voir ci-dessous)
     POST   /mkdir             {"path"}
     POST   /commit            {"root", "session", "files": [{"p","t","m"}],
                                "delete": [rel], "done": bool}
@@ -106,6 +107,26 @@ Autres points d'entrée (tous relatifs au préfixe, ``/api/v1/sync`` par défaut
     GET    /file?path=        téléchargement (Range/If-Modified-Since gérés)
     DELETE /file?path=        suppression d'un fichier
     POST   /restart           redémarre l'appli web (voir ci-dessous)
+
+Taille des données (``GET /usage``)
+-----------------------------------
+Renvoie ``{"bytes", "disk_bytes", "files", "measured_at", "cached",
+"ttl_s"}`` : somme des tailles de fichiers du DATADIR, espace réellement alloué
+sur le disque (blocs) et nombre de fichiers. Tout le DATADIR est compté, y
+compris les données protégées (sessions, cache) puisqu'elles occupent le disque,
+sauf le staging interne ``.sync-staging``. Les liens symboliques ne sont pas
+suivis et un fichier à liens physiques multiples n'est compté qu'une fois.
+
+Le parcours coûte cher sur une grande collection : le résultat est mis en cache
+``[flask] disk_usage_cache_ttl_s`` secondes (4 h par défaut, 0 = pas de cache),
+dans le même cache que ``data_cache`` (Redis partagé si ``[redis] url`` est
+défini, sinon mémoire du worker). Il est invalidé dès qu'une requête
+d'écriture authentifiée de ce blueprint aboutit ou échoue en cours de route
+(``put``, ``commit``, ``mkdir``, ``lock``, ``DELETE /file``, ``restart``), donc
+une synchronisation n'est jamais suivie d'une valeur périmée. ``?refresh=1``
+force un nouveau parcours. SANS Redis et avec plusieurs workers, l'invalidation
+ne vaut que pour le worker qui a reçu l'écriture : les autres gardent leur
+valeur jusqu'à expiration -- configurez Redis (ou réduisez le TTL).
 
 Redémarrage de l'appli web
 --------------------------
@@ -146,9 +167,9 @@ import zlib
 from pathlib import Path
 from typing import Any
 
-from flask import Blueprint, Response, current_app, request, send_file
+from flask import Blueprint, Response, current_app, g, request, send_file
 
-from flpostcards.extensions import limiter
+from flpostcards.extensions import cache, limiter
 
 bp = Blueprint("sync", __name__)
 
@@ -267,6 +288,7 @@ def _authenticate() -> None:
         raise SyncError(411, "Content-Length required")
     if length is not None and length > _max_body():
         raise SyncError(413, "request body too large (sync_max_body_mb)")
+    g.sync_authenticated = True  # voir _after_write
 
 
 # ---------------------------------------------------------------------------
@@ -574,6 +596,103 @@ def commit():
     if body.get("done") and _SESSION_RE.fullmatch(session or ""):
         shutil.rmtree(os.path.join(_base(), STAGING, session), ignore_errors=True)
     return _json({"ok": ok, "errors": errors, "deleted": deleted})
+
+
+# ---------------------------------------------------------------------------
+# Taille des données sur le disque (mise en cache, invalidée par toute écriture)
+# ---------------------------------------------------------------------------
+
+_USAGE_KEY = "sync_disk_usage"
+_USAGE_EPOCH_KEY = "sync_disk_usage_epoch"
+_DEFAULT_USAGE_TTL = 4 * 3600
+_usage_lock = threading.Lock()  # un seul parcours à la fois par processus
+
+
+def _usage_ttl() -> int:
+    try:
+        return max(0, int(current_app.config.get("DISK_USAGE_CACHE_TTL_S", _DEFAULT_USAGE_TTL)))
+    except (TypeError, ValueError):
+        return _DEFAULT_USAGE_TTL
+
+
+def _measure_disk() -> dict:
+    """Parcourt le DATADIR (hors staging) : tailles, espace alloué, fichiers."""
+    total = disk = files = 0
+    seen: set[tuple[int, int]] = set()
+    for root, dirs, names in os.walk(_base(), followlinks=False):
+        if root == _base() and STAGING in dirs:
+            dirs.remove(STAGING)  # transitoire : pas des « données »
+        for name in names:
+            try:
+                st = os.lstat(os.path.join(root, name))
+            except OSError:
+                continue  # disparu pendant le parcours
+            if not stat_mod.S_ISREG(st.st_mode):
+                continue
+            if st.st_nlink > 1:
+                if (st.st_dev, st.st_ino) in seen:
+                    continue
+                seen.add((st.st_dev, st.st_ino))
+            files += 1
+            total += st.st_size
+            disk += getattr(st, "st_blocks", 0) * 512 or st.st_size
+    return {"bytes": total, "disk_bytes": disk, "files": files,
+            "measured_at": time.time()}
+
+
+def _invalidate_usage() -> None:
+    """Périme la mesure en cache. Le jeton d'époque protège d'une course : un
+    parcours commencé AVANT cette invalidation ne peut pas remettre sa valeur
+    (déjà périmée) en cache en terminant APRÈS elle."""
+    try:
+        cache.delete(_USAGE_KEY)
+        cache.set(_USAGE_EPOCH_KEY, time.time_ns(), timeout=86400)
+    except Exception:  # cache (Redis) indisponible : ne jamais bloquer une synchro
+        current_app.logger.warning("sync : cache de taille non invalidé", exc_info=True)
+
+
+@bp.after_request
+def _after_write(resp: Response) -> Response:
+    # Seulement si l'authentification a réussi : un jeton invalide ne doit pas
+    # pouvoir vider le cache en boucle. Aussi sur les réponses d'erreur : un lot
+    # peut avoir écrit des fichiers avant d'échouer.
+    if request.method in ("POST", "PUT", "DELETE") and g.get("sync_authenticated"):
+        _invalidate_usage()
+    return resp
+
+
+@bp.route("/usage")
+def usage():
+    ttl = _usage_ttl()
+    refresh = request.args.get("refresh", "").lower() in ("1", "true", "yes")
+    if ttl and not refresh:
+        try:
+            cached = cache.get(_USAGE_KEY)
+        except Exception:
+            cached = None
+        if cached is not None:
+            return _json({**cached, "cached": True, "ttl_s": ttl})
+    with _usage_lock:
+        # Un autre thread a pu remplir le cache pendant qu'on attendait.
+        if ttl and not refresh:
+            try:
+                cached = cache.get(_USAGE_KEY)
+            except Exception:
+                cached = None
+            if cached is not None:
+                return _json({**cached, "cached": True, "ttl_s": ttl})
+        try:
+            epoch = cache.get(_USAGE_EPOCH_KEY)
+        except Exception:
+            epoch = None
+        value = _measure_disk()
+        if ttl:
+            try:
+                if cache.get(_USAGE_EPOCH_KEY) == epoch:  # pas d'écriture entre-temps
+                    cache.set(_USAGE_KEY, value, timeout=ttl)
+            except Exception:
+                current_app.logger.warning("sync : taille non mise en cache", exc_info=True)
+    return _json({**value, "cached": False, "ttl_s": ttl})
 
 
 # ---------------------------------------------------------------------------
