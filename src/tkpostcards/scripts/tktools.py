@@ -14,40 +14,6 @@ from tqdm import tqdm
 from .. import cli, _
 from . import split_ids
 
-def _travels(common):
-
-    from pathlib import Path
-    import json
-    from libpostcards.model import Model
-    from libpostcards.travel import (
-        ParcoursCartes
-    )
-    datadir = Path(common.datadir)
-    model = Model(common.datadir)
-    data = model.list_cards()
-    with open(datadir / "travels.json", "r", encoding="utf-8") as f:
-        travels = json.load(f)
-
-    travel = ParcoursCartes(data)
-    travel_data = {}
-    for tt in travels:
-        travel_data = travel.calculer(
-            *travels[tt]['start'],
-            collection=travels[tt]['collection'],
-            )
-        travel_data['id'] = travels[tt]['id']
-        travel_data['title'] = travels[tt]['title']
-        travel_data['title2'] = travels[tt]['title2']
-        # Voir le même commentaire dans ParcoursCartes.travels()
-        # (libpostcards/travel.py) : source de vérité dans travels.json.
-        travel_data['position'] = travels[tt].get('position', 0)
-
-        # model.write_travel() met à jour mdate lui-même, uniquement si
-        # "cards" a réellement changé par rapport à la version déjà en
-        # base (cf. sa docstring) : pas besoin de le faire ici.
-        model.write_travel(travel_data)
-
-
 @cli.command(help=_("Export postcards"))
 @click.pass_obj
 def export(common):

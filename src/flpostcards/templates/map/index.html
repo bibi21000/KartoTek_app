@@ -21,7 +21,7 @@
                 </option>
                 {% for c in collections %}
                 <option value="{{ c }}" {% if c == current_collection %}selected{% endif %}>
-                    {{ c }}
+                    {{ c | collection_label }}
                 </option>
                 {% endfor %}
             </select>

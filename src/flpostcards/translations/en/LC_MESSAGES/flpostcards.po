@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-06 15:11+0100\n"
+"POT-Creation-Date: 2026-11-12 00:06+0100\n"
 "PO-Revision-Date: 2026-06-14 12:15+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,15 +18,15 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/flpostcards/__init__.py:589
+#: src/flpostcards/__init__.py:611
 msgid "Afficher l'adresse email"
 msgstr "Show email address"
 
-#: src/flpostcards/__init__.py:723 src/flpostcards/__init__.py:728
+#: src/flpostcards/__init__.py:750 src/flpostcards/__init__.py:755
 msgid "Page introuvable"
 msgstr "Page not found"
 
-#: src/flpostcards/__init__.py:725
+#: src/flpostcards/__init__.py:752
 msgid ""
 "Cette page n'existe pas ou plus. Elle a peut-être été déplacée, ou le "
 "lien que vous avez suivi est incorrect."
@@ -34,23 +34,23 @@ msgstr ""
 "This page doesn't exist (anymore). It may have moved, or the link you "
 "followed may be incorrect."
 
-#: src/flpostcards/__init__.py:730
+#: src/flpostcards/__init__.py:757
 msgid "La page demandée n'existe pas ou plus sur ce site de cartes postales."
 msgstr "The requested page doesn't exist (anymore) on this postcard site."
 
-#: src/flpostcards/__init__.py:742
+#: src/flpostcards/__init__.py:769
 msgid "Erreur inattendue"
 msgstr "Unexpected error"
 
-#: src/flpostcards/__init__.py:744
+#: src/flpostcards/__init__.py:771
 msgid "Une erreur inattendue est survenue. Merci de réessayer dans un instant."
 msgstr "An unexpected error occurred. Please try again in a moment."
 
-#: src/flpostcards/__init__.py:747
+#: src/flpostcards/__init__.py:774
 msgid "Erreur"
 msgstr "Error"
 
-#: src/flpostcards/__init__.py:748
+#: src/flpostcards/__init__.py:775
 msgid "Une erreur inattendue est survenue."
 msgstr "An unexpected error occurred."
 
@@ -99,34 +99,34 @@ msgstr "Failed to send message. Please try again later."
 msgid "Contactez-moi à propos de ma collection de cartes postales."
 msgstr "Contact me about my postcard collection."
 
-#: src/flpostcards/blueprints/gallery/__init__.py:145
+#: src/flpostcards/blueprints/gallery/__init__.py:146
 #, python-format
 msgid "Toutes les cartes postales - %(collection)s"
 msgstr "All postcards - %(collection)s"
 
-#: src/flpostcards/blueprints/gallery/__init__.py:148
+#: src/flpostcards/blueprints/gallery/__init__.py:150
 msgid "Toutes les cartes postales"
 msgstr "All postcards"
 
-#: src/flpostcards/blueprints/gallery/__init__.py:181
+#: src/flpostcards/blueprints/gallery/__init__.py:183
 msgid "Parcourez ma collection de cartes postales anciennes."
 msgstr "Browse my collection of old postcards."
 
-#: src/flpostcards/blueprints/home/__init__.py:65
+#: src/flpostcards/blueprints/home/__init__.py:66
 #, python-format
 msgid "Ma collection de cartes postales - %(collection)s"
 msgstr "My postcard collection - %(collection)s"
 
-#: src/flpostcards/blueprints/home/__init__.py:69
+#: src/flpostcards/blueprints/home/__init__.py:70
 msgid "Ma collection de cartes postales"
 msgstr "My postcard collection"
 
-#: src/flpostcards/blueprints/home/__init__.py:99
+#: src/flpostcards/blueprints/home/__init__.py:100
 #: src/flpostcards/templates/base.html:12
 msgid "Découvrez ma collection de cartes postales anciennes."
 msgstr "Discover my collection of old postcards."
 
-#: src/flpostcards/blueprints/home/__init__.py:399
+#: src/flpostcards/blueprints/home/__init__.py:400
 #: src/flpostcards/templates/card/detail.html:3
 #: src/flpostcards/templates/card/detail.html:159
 #: src/flpostcards/templates/gallery/index.html:103
@@ -134,44 +134,44 @@ msgstr "Discover my collection of old postcards."
 msgid "Carte #%(id)s"
 msgstr "Card #%(id)s"
 
-#: src/flpostcards/blueprints/home/__init__.py:420
+#: src/flpostcards/blueprints/home/__init__.py:421
 msgid "Retour à la galerie"
 msgstr "Back to gallery"
 
-#: src/flpostcards/blueprints/home/__init__.py:422
+#: src/flpostcards/blueprints/home/__init__.py:423
 msgid "Retour à la balade"
 msgstr "Back to the walk"
 
-#: src/flpostcards/blueprints/home/__init__.py:424
+#: src/flpostcards/blueprints/home/__init__.py:425
 msgid "Retour à la carte"
 msgstr "Back to map"
 
-#: src/flpostcards/blueprints/home/__init__.py:426
+#: src/flpostcards/blueprints/home/__init__.py:427
 #: src/flpostcards/templates/card/detail.html:19
 msgid "Retour au diaporama"
 msgstr "Back to slideshow"
 
-#: src/flpostcards/blueprints/home/__init__.py:474
+#: src/flpostcards/blueprints/home/__init__.py:475
 #: src/flpostcards/templates/base.html:74
 msgid "Accueil"
 msgstr "Home"
 
-#: src/flpostcards/blueprints/home/__init__.py:499
+#: src/flpostcards/blueprints/home/__init__.py:500
 #, python-format
 msgid "Point d'intérêt #%(id)s"
 msgstr "Point of interest #%(id)s"
 
-#: src/flpostcards/blueprints/map/__init__.py:35
+#: src/flpostcards/blueprints/map/__init__.py:37
 #, python-format
 msgid "Carte - %(collection)s"
 msgstr "Map - %(collection)s"
 
-#: src/flpostcards/blueprints/map/__init__.py:37
+#: src/flpostcards/blueprints/map/__init__.py:40
 #: src/flpostcards/templates/base.html:90
 msgid "Carte"
 msgstr "Map"
 
-#: src/flpostcards/blueprints/map/__init__.py:63
+#: src/flpostcards/blueprints/map/__init__.py:66
 msgid "Localisez ma collection de cartes postales sur la carte."
 msgstr "Locate my postcard collection on the map."
 
@@ -188,45 +188,45 @@ msgstr "Privacy policy"
 msgid "Quelles données ce site KartoTek collecte et pourquoi."
 msgstr "What data this KartoTek site collects, and why."
 
-#: src/flpostcards/blueprints/slideshow/__init__.py:102
+#: src/flpostcards/blueprints/slideshow/__init__.py:103
 #, python-format
 msgid "Diaporama - %(collection)s"
 msgstr "Slideshow - %(collection)s"
 
-#: src/flpostcards/blueprints/slideshow/__init__.py:105
+#: src/flpostcards/blueprints/slideshow/__init__.py:106
 #: src/flpostcards/templates/base.html:78
 msgid "Diaporama"
 msgstr "Slideshow"
 
-#: src/flpostcards/blueprints/slideshow/__init__.py:116
+#: src/flpostcards/blueprints/slideshow/__init__.py:117
 msgid "Toutes mes cartes postales en diaporama."
 msgstr "All my postcards in a slideshow."
 
-#: src/flpostcards/blueprints/travel/__init__.py:72
+#: src/flpostcards/blueprints/travel/__init__.py:78
 #, python-format
 msgid "%(h)d h %(m)d min"
 msgstr "%(h)dh %(m)dmin"
 
-#: src/flpostcards/blueprints/travel/__init__.py:74
+#: src/flpostcards/blueprints/travel/__init__.py:80
 #, python-format
 msgid "%(h)d h"
 msgstr "%(h)dh"
 
-#: src/flpostcards/blueprints/travel/__init__.py:75
+#: src/flpostcards/blueprints/travel/__init__.py:81
 #, python-format
 msgid "%(m)d min"
 msgstr "%(m)dmin"
 
-#: src/flpostcards/blueprints/travel/__init__.py:86
+#: src/flpostcards/blueprints/travel/__init__.py:107
 msgid "Balades dans le temps au fil des cartes postales"
 msgstr "Strolls through time, one postcard at a time"
 
-#: src/flpostcards/blueprints/travel/__init__.py:96
-#: src/flpostcards/blueprints/travel/__init__.py:139
+#: src/flpostcards/blueprints/travel/__init__.py:117
+#: src/flpostcards/blueprints/travel/__init__.py:160
 msgid "Suivez mes parcours à travers ma collection de cartes postales."
 msgstr "Follow my journeys through my collection of old postcards."
 
-#: src/flpostcards/blueprints/travel/__init__.py:118
+#: src/flpostcards/blueprints/travel/__init__.py:139
 #, python-format
 msgid "Parcours #%(id)s"
 msgstr "Itinerary #%(id)s"

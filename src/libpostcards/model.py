@@ -136,10 +136,12 @@ CARD_STATUSES = ("active", "exchanged", "trade")
 DEFAULT_CARD_STATUS = "active"
 
 _DDL_TRAVELS = """
+-- Résultat du calcul de parcours (ParcoursCartes) d'une collection dont
+-- le champ "travel" est vrai dans collections.json. ``id`` est l'id de la
+-- collection ; titre, description et ordre d'affichage viennent de la
+-- table collections (jointure, voir Model.list_travels).
 CREATE TABLE IF NOT EXISTS travels (
     id          TEXT PRIMARY KEY,
-    title       TEXT,
-    title2      TEXT,
     distance_m  INTEGER,
     distance_km REAL,
     start_lat   REAL,
@@ -148,8 +150,7 @@ CREATE TABLE IF NOT EXISTS travels (
     end_lon     REAL,
     count       INTEGER,
     cards       TEXT,       -- JSON array sérialisé [{id, title}, ...]
-    mdate       INTEGER,    -- timestamp UNIX de dernière modification de "cards"
-    position    INTEGER NOT NULL DEFAULT 0  -- ordre d'affichage, voir travels.json
+    mdate       INTEGER     -- timestamp UNIX de dernière modification de "cards"
 );
 """
 
@@ -177,9 +178,16 @@ CREATE TABLE IF NOT EXISTS links (
 
 _DDL_COLLECTIONS = """
 CREATE TABLE IF NOT EXISTS collections (
-    name         TEXT PRIMARY KEY,
-    position     INTEGER NOT NULL,   -- ordre d'affichage dans "collections"
-    map_position INTEGER             -- ordre dans "collections_map", NULL si absente du sous-ensemble
+    id          TEXT PRIMARY KEY,
+    title       TEXT,
+    description TEXT,
+    published   INTEGER NOT NULL DEFAULT 0,   -- 1 = visible sur flpostcards
+    links       TEXT,                         -- JSON array sérialisé d'identifiants de liens (table links)
+    sort_order  INTEGER NOT NULL DEFAULT 0,   -- champ "order" : ordre d'affichage des collections
+    on_map      INTEGER NOT NULL DEFAULT 1,   -- champ "map" : 1 = proposée sur la carte /map/ (collections_map)
+    travel      INTEGER NOT NULL DEFAULT 0,   -- champ "travel" : 1 = un travel (parcours) est défini
+    start_lat   REAL,                         -- champ "start" : point de départ du travel
+    start_lon   REAL
 );
 """
 
@@ -320,13 +328,13 @@ def _row_to_card(row: sqlite3.Row) -> dict:
 
 
 def _travel_to_row(travel: dict) -> dict:
-    """Convertit un dict trajet en ligne SQL (champs plats)."""
+    """Convertit un dict trajet calculé en ligne SQL (champs plats).
+    Titre, description et ordre ne sont pas stockés ici : ils viennent
+    de la collection (voir ``Model.list_travels``)."""
     start = travel.get("start") or []
     end = travel.get("end") or []
     return {
         "id": str(travel["id"]),
-        "title": travel.get("title"),
-        "title2": travel.get("title2"),
         "distance_m": travel.get("distance_m"),
         "distance_km": travel.get("distance_km"),
         "start_lat": start[0] if len(start) > 0 else None,
@@ -336,53 +344,19 @@ def _travel_to_row(travel: dict) -> dict:
         "count": travel.get("count"),
         "cards": json.dumps(travel.get("cards") or [], ensure_ascii=False),
         "mdate": travel.get("mdate"),
-        "position": travel.get("position") or 0,
     }
 
 
 def _row_to_travel(row: sqlite3.Row) -> dict:
-    """Convertit une ligne SQL en dict trajet."""
+    """Convertit une ligne SQL (travels JOIN collections) en dict
+    trajet : champs calculés + ``title``, ``description`` et ``order``
+    de la collection."""
     d = dict(row)
     d["start"] = [d.pop("start_lat"), d.pop("start_lon")]
     d["end"] = [d.pop("end_lat"), d.pop("end_lon")]
     raw_cards = d.get("cards")
     d["cards"] = json.loads(raw_cards) if raw_cards else []
     return d
-
-
-def _backfill_travel_positions(travels: dict) -> bool:
-    """
-    S'assure que chaque entrée de ``travels`` (dict ``travel_id ->
-    {...}``, format travels.json) a un champ ``position`` numérique.
-
-    Les entrées qui n'en ont pas encore (travels.json antérieur à
-    l'introduction de ce champ) reçoivent une position stable, à la
-    suite des positions déjà attribuées explicitement -- départagées
-    entre elles par id (ordre alphabétique, celui qu'affichait
-    tkmanager avant les boutons +/-), pas une position recalculée
-    séparément à chaque entrée au fil de l'eau : c'est justement ce
-    qui causait des sauts d'ordre incohérents en éditant un trajet
-    sans toucher à son rang (voir read_travels_json/write_travel_json).
-
-    Modifie ``travels`` EN PLACE. Retourne True si au moins une entrée
-    a été complétée (l'appelant sait alors qu'il doit persister le
-    résultat).
-    """
-    missing = sorted(
-        tid for tid, t in travels.items()
-        if not isinstance(t.get("position"), (int, float))
-    )
-    if not missing:
-        return False
-    existing_positions = [
-        t.get("position") for t in travels.values()
-        if isinstance(t.get("position"), (int, float))
-    ]
-    next_position = (max(existing_positions) + 1) if existing_positions else 0
-    for tid in missing:
-        travels[tid]["position"] = next_position
-        next_position += 1
-    return True
 
 
 def _poi_to_row(poi: dict) -> dict:
@@ -444,6 +418,79 @@ def _link_to_row(link: dict) -> dict:
 def _row_to_link(row: sqlite3.Row) -> dict:
     """Convertit une ligne SQL en dict lien."""
     return dict(row)
+
+
+def _clean_bool(value: Any) -> bool:
+    """Normalise un booléen lu dans un JSON ou un formulaire (accepte
+    aussi "true"/"false", "1"/"0", "yes"/"no")."""
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on", "oui")
+    return bool(value)
+
+
+def _clean_order(value: Any, default: int = 0) -> int:
+    """Normalise un numéro d'ordre : entier, ou ``default`` si vide ou
+    invalide."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _clean_start(value: Any) -> list[float] | None:
+    """Normalise un point de départ ``[lat, lon]`` (flottants), ou
+    ``None`` s'il est absent ou invalide."""
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        return None
+    try:
+        return [float(value[0]), float(value[1])]
+    except (TypeError, ValueError):
+        return None
+
+
+def _clean_collection(collection: dict, default_order: int = 0) -> dict:
+    """Normalise une collection ``{id, title, description, published,
+    order, map, travel, start, links}`` : ``id`` obligatoire (chaîne non vide),
+    ``title`` et ``description`` optionnels (``None`` si vides),
+    ``published`` booléen (faux par défaut), ``order`` entier (ordre
+    d'affichage, ``default_order`` si absent), ``map`` booléen
+    (proposée sur la carte /map/, vrai par défaut), ``travel`` booléen
+    (la collection a un parcours défini, faux par défaut), ``start``
+    point de départ ``[lat, lon]`` de ce parcours (ou ``None``), ``links`` liste d'identifiants de liens (table ``links``). Lève
+    ``ValueError`` si l'id est vide."""
+    cid = str(collection.get("id") or "").strip()
+    if not cid:
+        raise ValueError("L'id d'une collection ne peut pas être vide.")
+    title = str(collection.get("title") or "").strip() or None
+    description = str(collection.get("description") or "").strip() or None
+    return {
+        "id": cid,
+        "title": title,
+        "description": description,
+        "published": _clean_bool(collection.get("published", False)),
+        "order": _clean_order(collection.get("order"), default_order),
+        "map": _clean_bool(collection.get("map", True)),
+        "travel": _clean_bool(collection.get("travel", False)),
+        "start": _clean_start(collection.get("start")),
+        "links": _clean_id_list(collection.get("links")),
+    }
+
+
+def _row_to_collection(row: sqlite3.Row) -> dict:
+    """Convertit une ligne SQL en dict collection (``published`` en
+    booléen, ``links`` en liste, ``sort_order`` exposé comme ``order``)."""
+    d = dict(row)
+    d["order"] = d.pop("sort_order", 0)
+    d["published"] = bool(d.get("published"))
+    d["map"] = bool(d.pop("on_map", 1))
+    d["travel"] = bool(d.get("travel"))
+    lat, lon = d.pop("start_lat", None), d.pop("start_lon", None)
+    d["start"] = [lat, lon] if lat is not None and lon is not None else None
+    raw = d.get("links")
+    d["links"] = json.loads(raw) if raw else []
+    return d
 
 
 # Colonnes parcourues par la recherche textuelle (voir _text_search_condition).
@@ -564,6 +611,8 @@ class Model:
         self.links_json    = self.datadir / "links.json"
         self.collections_json = self.datadir / "collections.json"
         self.updates_json  = self.datadir / "updates.json"
+        # Ancien fichier des parcours : fusionné dans collections.json
+        # (champs travel/start) puis renommé, voir _migrate_travels_json().
         self.travels_json  = self.datadir / "travels.json"
         self._conn: sqlite3.Connection | None = None
         # Signature (mtime, inode) du fichier sqlite au moment de
@@ -645,8 +694,29 @@ class Model:
             # recrée tout le fichier sqlite à partir des JSON de cards/ —
             # ces tables n'en font pas partie et seraient sinon perdues à
             # la prochaine régénération sans cette création défensive.
-            self._conn.executescript(_DDL_AUTHS + _DDL_COLLECTIONS + _DDL_LINKS)
+            #
+            # Migration de la table collections : une ancienne version
+            # (name, position, map_position, ou sans sort_order/on_map/travel)
+            # est remplacée par la nouvelle puis repeuplée depuis
+            # collections.json (dont l'ancien format est converti, voir
+            # sync_collections()).
+            legacy_collections = False
+            _coll_cols = {
+                r[1] for r in self._conn.execute("PRAGMA table_info(collections)")
+            }
+            if _coll_cols and "travel" not in _coll_cols:
+                self._conn.execute("DROP TABLE collections")
+                legacy_collections = True
+            self._conn.executescript(
+                _DDL_AUTHS + _DDL_COLLECTIONS + _DDL_LINKS + _DDL_TRAVELS)
             self._conn.commit()
+            if legacy_collections:
+                try:
+                    self.sync_collections()
+                except Exception:
+                    logger.exception(
+                        "Migration de la table collections : échec de la "
+                        "resynchronisation depuis collections.json")
 
             # Migration défensive, une fois : une base existante générée
             # avant l'introduction de refresh_tokens.sqlite peut encore
@@ -662,20 +732,6 @@ class Model:
             # ne modifie pas une table déjà présente sans cette colonne).
             try:
                 self._conn.execute("ALTER TABLE travels ADD COLUMN mdate INTEGER")
-                self._conn.commit()
-            except sqlite3.OperationalError:
-                pass  # colonne déjà présente
-
-            # Ajout défensif de travels.position (ordre d'affichage, voir
-            # travels.json / reorder_travels_json) sur une base existante
-            # créée avant son introduction. DEFAULT 0 : les trajets
-            # existants se retrouvent tous à la même position tant qu'ils
-            # n'ont pas été explicitement réordonnés (list_travels() les
-            # départage alors par id, voir plus bas).
-            try:
-                self._conn.execute(
-                    "ALTER TABLE travels ADD COLUMN position INTEGER NOT NULL DEFAULT 0"
-                )
                 self._conn.commit()
             except sqlite3.OperationalError:
                 pass  # colonne déjà présente
@@ -761,6 +817,16 @@ class Model:
                 )
             except sqlite3.NotSupportedError:
                 self._conn.create_function("search_match", -1, _search_match)
+
+            # Fusion de travels.json dans collections.json (une fois : le
+            # fichier est ensuite renommé en travels.json.bak).
+            self._db_signature = self._current_db_signature()
+            try:
+                self._migrate_travels_json()
+            except Exception:
+                logger.exception(
+                    "Migration de travels.json vers collections.json : échec")
+            self._db_signature = self._current_db_signature()
 
         return self._conn
 
@@ -953,31 +1019,53 @@ class Model:
     # Travels
     # ------------------------------------------------------------------
 
-    def read_travel(self, travel_id: str) -> dict | None:
-        """
-        Lit un trajet depuis la base SQLite.
+    # Un travel (parcours) n'est plus une entité séparée : c'est une
+    # collection dont le champ ``travel`` est vrai et dont ``start`` donne
+    # le point de départ (collections.json). Son id est celui de la
+    # collection ; titre, description et ordre d'affichage sont ceux de la
+    # collection. La table ``travels`` ne contient que le résultat du
+    # calcul (distance, cartes dans l'ordre du parcours...).
 
-        Retourne None si l'id n'existe pas.
+    _TRAVEL_SELECT = (
+        "SELECT t.id, t.distance_m, t.distance_km, t.start_lat, t.start_lon, "
+        "t.end_lat, t.end_lon, t.count, t.cards, t.mdate, "
+        'c.title AS title, c.description AS description, c.sort_order AS "order" '
+        "FROM travels t JOIN collections c ON c.id = t.id "
+        "WHERE c.travel = 1"
+    )
+
+    def read_travel(self, travel_id: str, published_only: bool = True) -> dict | None:
+        """
+        Lit le parcours calculé d'une collection depuis la base SQLite
+        (``travel_id`` = id de la collection).
+
+        ``published_only`` : ne retourne le parcours que si sa collection
+        est publiée (c'est ce que montre flpostcards).
+        Retourne None si le parcours n'existe pas.
         """
         conn = self._get_conn()
-        cur = conn.execute("SELECT * FROM travels WHERE id = ?", (travel_id,))
-        row = cur.fetchone()
+        sql = self._TRAVEL_SELECT + " AND t.id = ?"
+        if published_only:
+            sql += " AND c.published = 1"
+        row = conn.execute(sql, (str(travel_id),)).fetchone()
         return _row_to_travel(row) if row else None
 
-    def list_travels(self) -> list[dict]:
-        """Retourne la liste de tous les trajets, dans l'ordre d'affichage
-        (colonne ``position``, voir travels.json / reorder_travels_json —
-        c'est cet ordre que suit la page /travel/ de flpostcards). ``id``
-        en second critère pour départager les trajets à égalité de
-        position (ex : tous à la position par défaut 0, base migrée
-        avant l'introduction de ce champ, jamais réordonnée depuis)."""
+    def list_travels(self, published_only: bool = True) -> list[dict]:
+        """Retourne les parcours calculés, dans l'ordre (``order``) de
+        leur collection -- c'est l'ordre de la page /travel/ de
+        flpostcards. ``published_only`` : seulement ceux dont la
+        collection est publiée."""
         conn = self._get_conn()
-        cur = conn.execute("SELECT * FROM travels ORDER BY position, id")
-        return [_row_to_travel(r) for r in cur.fetchall()]
+        sql = self._TRAVEL_SELECT
+        if published_only:
+            sql += " AND c.published = 1"
+        sql += " ORDER BY c.sort_order, c.rowid"
+        return [_row_to_travel(r) for r in conn.execute(sql).fetchall()]
 
     def write_travel(self, travel: dict) -> None:
         """
-        Écrit (INSERT OR REPLACE) un trajet dans la base SQLite.
+        Écrit (INSERT OR REPLACE) un parcours calculé dans la base SQLite
+        (``travel["id"]`` = id de la collection).
 
         Le champ ``mdate`` (date de dernière modification) est calculé ici,
         pas fourni par l'appelant : il n'est mis à jour (timestamp UNIX
@@ -1007,39 +1095,123 @@ class Model:
         conn.commit()
 
     def delete_travel(self, travel_id: str) -> None:
-        """Supprime un trajet de la base."""
+        """Supprime un parcours calculé de la base."""
         conn = self._get_conn()
-        conn.execute("DELETE FROM travels WHERE id = ?", (travel_id,))
+        conn.execute("DELETE FROM travels WHERE id = ?", (str(travel_id),))
         conn.commit()
 
-    def reorder_travels(self, ordered_ids: list[str]) -> None:
-        """
-        Met à jour uniquement la colonne ``position`` de la table SQL
-        ``travels`` (contrairement à reorder_travels_json, qui met à
-        jour travels.json -- la source de vérité persistante).
-
-        À quoi ça sert : tkmanager (boutons +/- de TravelManagerView)
-        appelle les deux à la suite, pour que le nouvel ordre soit
-        visible sur /travel/ de flpostcards tout de suite, sans
-        attendre la prochaine régénération complète des trajets
-        (ParcoursCartes.travels(), qui recalcule aussi distance/cartes
-        via ortools -- coûteux, inutile pour un simple changement
-        d'ordre). Cette mise à jour SQL n'est cependant que le
-        raccourci immédiat : c'est bien travels.json (reorder_travels_json)
-        qui reste la source de vérité, reprise à la prochaine
-        régénération.
-
-        Les ids de ``ordered_ids`` absents de la table (trajet jamais
-        encore calculé) sont ignorés silencieusement (UPDATE ... WHERE
-        id = ? ne fait rien s'il ne matche aucune ligne) : leur
-        position sera reprise depuis travels.json à son premier calcul.
-        """
+    def prune_travels(self) -> int:
+        """Supprime les parcours calculés dont la collection n'existe plus
+        ou n'a plus ``travel`` vrai. Retourne le nombre de lignes
+        supprimées."""
         conn = self._get_conn()
-        conn.executemany(
-            "UPDATE travels SET position = ? WHERE id = ?",
-            [(position, travel_id) for position, travel_id in enumerate(ordered_ids)],
-        )
+        cur = conn.execute(
+            "DELETE FROM travels WHERE id NOT IN "
+            "(SELECT id FROM collections WHERE travel = 1)")
         conn.commit()
+        return cur.rowcount
+
+    def _migrate_travels_json(self) -> None:
+        """Fusionne l'ancien travels.json dans collections.json.
+
+        Pour chaque parcours ``{id, title, title2, start, collection,
+        position}`` : la collection ``collection`` (créée, publiée, si elle
+        n'existe pas) reçoit ``travel = true`` et ``start`` ; son ``title``
+        et sa ``description`` sont repris du parcours (``title`` et
+        ``title2``) seulement s'ils sont vides (les valeurs déjà saisies
+        sur la collection priment) ; ``position`` disparaît (c'est
+        ``order`` de la collection qui sert désormais). Les lignes déjà
+        calculées de la table ``travels`` sont renommées de l'ancien id du
+        parcours vers l'id de la collection.
+
+        Les parcours sans collection, ou en double pour une même
+        collection, ne peuvent pas être fusionnés : ils sont ignorés (avec
+        un avertissement) mais restent dans la sauvegarde. Une fois la
+        fusion écrite, travels.json est renommé en travels.json.bak.
+        """
+        if not self.travels_json.exists():
+            return
+        with self.travels_json.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+        if isinstance(data, dict):
+            entries = list(data.values())
+        elif isinstance(data, list):
+            entries = list(data)
+        else:
+            entries = []
+        entries = [e for e in entries if isinstance(e, dict) and e.get("id")]
+
+        def _pos(e: dict) -> float:
+            p = e.get("position")
+            return p if isinstance(p, (int, float)) else 0
+        entries.sort(key=lambda e: (_pos(e), str(e["id"])))
+
+        collections = self._read_collections_json()
+        by_id = {c["id"]: c for c in collections}
+        next_order = max((c["order"] for c in collections), default=-1) + 1
+        done: set[str] = set()
+        renames: list[tuple[str, str]] = []
+
+        for entry in entries:
+            tid = str(entry["id"]).strip()
+            cid = str(entry.get("collection") or "").strip()
+            if not cid:
+                logger.warning(
+                    "travels.json : le parcours %s n'a pas de collection, "
+                    "il ne peut pas être fusionné (voir travels.json.bak)", tid)
+                continue
+            if cid in done:
+                logger.warning(
+                    "travels.json : plusieurs parcours pour la collection %s, "
+                    "%s ignoré (voir travels.json.bak)", cid, tid)
+                continue
+            collection = by_id.get(cid)
+            if collection is None:
+                collection = _clean_collection(
+                    {"id": cid, "published": True, "map": False,
+                     "order": next_order})
+                next_order += 1
+                collections.append(collection)
+                by_id[cid] = collection
+            collection["travel"] = True
+            collection["start"] = _clean_start(entry.get("start"))
+            if not collection["title"]:
+                collection["title"] = str(entry.get("title") or "").strip() or None
+            if not collection["description"]:
+                collection["description"] = (
+                    str(entry.get("title2") or "").strip() or None)
+            done.add(cid)
+            renames.append((tid, cid))
+
+        collections.sort(key=lambda c: c["order"])
+        self._write_collections_json(collections)
+        self._write_collections_db(collections)
+
+        # Résultats déjà calculés : l'id du parcours devient celui de la
+        # collection.
+        conn = self._conn
+        cols = ("id", "distance_m", "distance_km", "start_lat", "start_lon",
+                "end_lat", "end_lon", "count", "cards", "mdate")
+        rows: dict[str, dict] = {}
+        for tid, cid in renames:
+            r = conn.execute(
+                "SELECT * FROM travels WHERE id = ?", (tid,)).fetchone()
+            if r is not None:
+                rows[cid] = {k: r[k] for k in cols}
+                rows[cid]["id"] = cid
+        for tid, cid in renames:
+            conn.execute("DELETE FROM travels WHERE id IN (?, ?)", (tid, cid))
+        for cid, r in rows.items():
+            conn.execute(
+                f"INSERT INTO travels ({', '.join(cols)}) "
+                f"VALUES ({', '.join(':' + k for k in cols)})", r)
+        conn.commit()
+
+        backup = self.travels_json.with_suffix(".json.bak")
+        self.travels_json.replace(backup)
+        logger.info(
+            "travels.json fusionné dans collections.json (%d parcours), "
+            "ancien fichier conservé : %s", len(done), backup)
 
     # ------------------------------------------------------------------
     # Synchronisation JSON → SQLite
@@ -1776,109 +1948,271 @@ class Model:
     # ------------------------------------------------------------------
     # Collections
     # ------------------------------------------------------------------
+    #
+    # collections.json (source de vérité, modifiable via tkmanager et
+    # synchronisé vers le serveur par tkpostcards.libs.publish) est un
+    # tableau d'objets, dans l'ordre d'affichage :
+    #
+    #   [{"id": "Louhans", "title": "Louhans et environs",
+    #     "description": "...", "published": true,
+    #     "order": 0, "map": true,
+    #     "travel": true, "start": [46.697018, 5.657401],
+    #     "links": ["lien-1", "lien-2"]}, ...]
+    #
+    # ``order`` trie l'affichage des collections ; ``map`` indique si la
+    # collection est proposée sur la carte /map/ (liste collections_map,
+    # dans l'ordre de ``order``). ``travel`` indique qu'un parcours
+    # (page /travel/) est défini pour la collection, ``start`` en est le
+    # point de départ [lat, lon] ; le parcours calculé est dans la table
+    # ``travels`` (voir ParcoursCartes.travels).
+    #
+    # La table SQLite ``collections`` en est une copie (même principe que
+    # pois.json / table pois) : elle sert aux lectures, pour éviter de
+    # rouvrir et reparser le JSON à chaque requête. Les cartes référencent
+    # une collection par son ``id`` (champ ``collections`` de la carte).
+    #
+    # Ancien format (lu et converti automatiquement, voir
+    # sync_collections()) : {"collections": ["A", "B"],
+    # "collections_map": ["A"]} -- chaque nom devient un ``id`` publié,
+    # ``order`` suit l'ordre de la liste et ``map`` vaut vrai pour les
+    # noms de ``collections_map`` (pour tous si ce sous-ensemble est vide).
 
-    def _read_collections_json(self) -> dict:
-        """Read collections.json and return the raw dict
-        ``{"collections": [...], "collections_map": [...]}``.
+    def _read_collections_json(self) -> list[dict]:
+        """Read collections.json and return the normalised list of
+        collections (see :func:`_clean_collection`), in file order.
 
-        Returns an empty dict if the file is absent or unreadable.
+        The legacy format ``{"collections": [...], "collections_map":
+        [...]}`` is converted on the fly (every name becomes a published
+        collection without title). Returns an empty list if the file is
+        absent or unreadable. Invalid entries (no id) and duplicate ids
+        are ignored.
         """
         try:
             with self.collections_json.open(encoding="utf-8") as fh:
                 data = json.load(fh)
-            if isinstance(data, dict):
-                return data
         except (OSError, json.JSONDecodeError):
-            pass
-        return {}
+            return []
 
-    def _write_collections_json(
-        self, collections: list[str], collections_map: list[str]
-    ) -> None:
-        """Atomically write collections.json."""
+        if isinstance(data, dict):
+            # Ancien format : simple liste de noms
+            map_names = [str(c) for c in (data.get("collections_map") or [])]
+            raw = [
+                {
+                    "id": name, "published": True, "order": i,
+                    "map": (not map_names) or str(name) in map_names,
+                }
+                for i, name in enumerate(data.get("collections") or [])
+            ]
+        elif isinstance(data, list):
+            raw = [
+                c if isinstance(c, dict) else {"id": c, "published": True}
+                for c in data
+            ]
+        else:
+            return []
+
+        result: list[dict] = []
+        seen: set[str] = set()
+        for index, entry in enumerate(raw):
+            try:
+                # Sans "order", l'ordre du fichier fait foi.
+                collection = _clean_collection(entry, default_order=index)
+            except ValueError:
+                continue
+            if collection["id"] in seen:
+                continue
+            seen.add(collection["id"])
+            result.append(collection)
+        result.sort(key=lambda c: c["order"])   # tri stable
+        return result
+
+    def _write_collections_json(self, collections: list[dict]) -> None:
+        """Atomically write collections.json (list of collections)."""
         self.datadir.mkdir(parents=True, exist_ok=True)
-        data = {
-            "collections": list(collections),
-            "collections_map": list(collections_map),
-        }
         tmp = self.collections_json.with_suffix(".json.tmp")
         with tmp.open("w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=2)
+            json.dump(
+                [_clean_collection(c) for c in collections],
+                fh, ensure_ascii=False, indent=2,
+            )
         tmp.replace(self.collections_json)
 
-    def _write_collections_db(
-        self, collections: list[str], collections_map: list[str]
-    ) -> None:
+    def _write_collections_db(self, collections: list[dict]) -> None:
         """Replace the content of the SQLite ``collections`` table with
-        ``collections``/``collections_map`` (full rewrite, order preserved
-        via the ``position``/``map_position`` columns).
-        """
+        ``collections`` (full rewrite)."""
         conn = self._get_conn()
-        map_positions = {name: i for i, name in enumerate(collections_map)}
-        rows = [
-            (name, position, map_positions.get(name))
-            for position, name in enumerate(collections)
-        ]
         conn.execute("DELETE FROM collections")
-        if rows:
-            conn.executemany(
-                "INSERT INTO collections (name, position, map_position) "
-                "VALUES (?, ?, ?)",
-                rows,
+        for collection in collections:
+            conn.execute(
+                "INSERT INTO collections "
+                "(id, title, description, published, links, sort_order, on_map, "
+                "travel, start_lat, start_lon) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    collection["id"],
+                    collection["title"],
+                    collection["description"],
+                    1 if collection["published"] else 0,
+                    json.dumps(collection["links"], ensure_ascii=False),
+                    collection["order"],
+                    1 if collection["map"] else 0,
+                    1 if collection["travel"] else 0,
+                    collection["start"][0] if collection["start"] else None,
+                    collection["start"][1] if collection["start"] else None,
+                ),
             )
         conn.commit()
 
-    def get_collections(self) -> tuple[list[str], list[str]]:
-        """Return ``(collections, collections_map)`` from SQLite.
+    def list_collections(self, published_only: bool = False) -> list[dict]:
+        """Return the collections ``[{id, title, description, published,
+        order, map, links}]`` from SQLite, sorted by ``order``.
 
-        ``collections.json`` reste la source de vérité (modifiable via
-        tkmanager, synchronisée vers le serveur distant par
-        ``tkpostcards.libs.publish``) ; la table SQLite ``collections``
-        en est une copie tenue à jour par ``set_collections()`` /
-        ``sync_collections()``, utilisée ici en lecture pour éviter de
-        réouvrir et reparser le JSON à chaque requête (même principe que
-        les POIs : ``pois.json`` / table ``pois``).
-
-        Si ``collections_map`` est vide, retombe sur la liste complète
-        des collections.
+        ``published_only`` : ne retourne que celles dont ``published``
+        est vrai (c'est ce que flpostcards affiche).
         """
         conn = self._get_conn()
-        cur = conn.execute(
-            "SELECT name, map_position FROM collections ORDER BY position"
-        )
-        rows = cur.fetchall()
-        collections = [row["name"] for row in rows]
-        collections_map = [
-            row["name"]
-            for row in sorted(
-                (r for r in rows if r["map_position"] is not None),
-                key=lambda r: r["map_position"],
-            )
-        ]
-        if not collections_map:
-            collections_map = list(collections)
-        return collections, collections_map
+        sql = "SELECT * FROM collections"
+        if published_only:
+            sql += " WHERE published = 1"
+        sql += " ORDER BY sort_order, rowid"
+        return [_row_to_collection(r) for r in conn.execute(sql).fetchall()]
 
-    def set_collections(
-        self, collections: list[str], collections_map: list[str]
-    ) -> None:
-        """Write collections.json (source de vérité) puis recopie le
-        résultat dans la table SQLite ``collections``.
+    @staticmethod
+    def map_collection_ids(collections: list[dict]) -> list[str]:
+        """Ids of the collections offered on the map (/map/) -- the
+        ``collections_map`` list: those whose ``map`` field is true, in
+        the order of the given list (sorted by ``order``)."""
+        return [c["id"] for c in collections if c.get("map")]
+
+    def get_collection(self, collection_id: str) -> dict | None:
+        """Return one collection by id (or ``None``)."""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT * FROM collections WHERE id = ?", (str(collection_id),)
+        ).fetchone()
+        return _row_to_collection(row) if row else None
+
+    def write_collection(self, collection: dict) -> None:
+        """Create or update a collection in collections.json (source de
+        vérité) then in SQLite.
+
+        ``title``, ``description``, ``published`` and ``links`` are
+        replaced by the given values ; ``order``, ``map``, ``travel`` and
+        ``start`` too when given, otherwise an existing collection keeps
+        its own and a new one goes last (``order`` = highest + 1, ``map``
+        true, no travel).
         """
-        self._write_collections_json(collections, collections_map)
-        self._write_collections_db(collections, collections_map)
+        collections = self._read_collections_json()
+        next_order = max((c["order"] for c in collections), default=-1) + 1
+        existing = next(
+            (c for c in collections if c["id"] == str(collection.get("id")).strip()),
+            None,
+        )
+        collection = dict(collection)
+        if existing is not None:
+            # Keys not given keep their current value.
+            for key in ("order", "map", "travel", "start"):
+                if key not in collection:
+                    collection[key] = existing[key]
+        collection = _clean_collection(
+            collection,
+            default_order=existing["order"] if existing else next_order)
+        if existing is not None:
+            collections[collections.index(existing)] = collection
+        else:
+            collections.append(collection)
+        collections.sort(key=lambda c: c["order"])
+        self._write_collections_json(collections)
+        self._write_collections_db(collections)
+
+    def delete_collection(self, collection_id: str) -> int:
+        """Delete a collection from collections.json and SQLite, and
+        remove its id from the ``collections`` field of every card that
+        references it (cards are rewritten through ``write_json``, like
+        for :meth:`delete_link`).
+
+        Returns the number of cards updated.
+        """
+        collection_id = str(collection_id)
+        collections = [
+            c for c in self._read_collections_json()
+            if c["id"] != collection_id
+        ]
+        self._write_collections_json(collections)
+        self._write_collections_db(collections)
+        self.delete_travel(collection_id)
+
+        updated = 0
+        for card_id in self._cards_in_collection(collection_id):
+            card = self.load_json(card_id)
+            current = [str(x) for x in (card.get("collections") or [])]
+            if collection_id not in current:
+                continue
+            card["collections"] = [x for x in current if x != collection_id]
+            self.write_json(card)
+            updated += 1
+
+        logger.info(
+            "delete_collection : collection %s supprimée (%d carte(s) mise(s) à jour)",
+            collection_id, updated,
+        )
+        return updated
+
+    def _cards_in_collection(self, collection_id: str) -> list[str]:
+        """Ids des cartes dont le champ ``collections`` contient
+        ``collection_id``."""
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT id FROM cards WHERE EXISTS ("
+            "  SELECT 1 FROM json_each(cards.collections)"
+            "  WHERE json_each.value = ?)",
+            (collection_id,),
+        )
+        return [r["id"] for r in cur.fetchall()]
+
+    def reorder_collections(self, ids: list[str]) -> None:
+        """Set the display order: the ``order`` field of the collections
+        in ``ids`` becomes 0, 1, 2... in that order, followed by the
+        others in their current order. Unknown ids are ignored."""
+        collections = self._read_collections_json()
+        by_id = {c["id"]: c for c in collections}
+        ordered: list[dict] = []
+        for cid in ids:
+            c = by_id.pop(str(cid), None)
+            if c is not None:
+                ordered.append(c)
+        ordered.extend(c for c in collections if c["id"] in by_id)
+        for i, c in enumerate(ordered):
+            c["order"] = i
+        self._write_collections_json(ordered)
+        self._write_collections_db(ordered)
 
     def sync_collections(self) -> int:
         """Synchronise collections.json → SQLite (recopie complète).
 
         Appelée par ``generate()`` (comme ``sync_pois()``) pour peupler
         la table ``collections`` depuis le JSON lors d'une régénération
-        complète de la base. Retourne le nombre de collections importées.
+        complète de la base. Si le fichier est encore dans l'ancien
+        format (``{"collections": [...], "collections_map": [...]}``),
+        il est réécrit dans le nouveau. Retourne le nombre de
+        collections importées.
         """
-        data = self._read_collections_json()
-        collections = [str(c) for c in (data.get("collections") or [])]
-        collections_map = [str(c) for c in (data.get("collections_map") or [])]
-        self._write_collections_db(collections, collections_map)
+        collections = self._read_collections_json()
+        try:
+            with self.collections_json.open(encoding="utf-8") as fh:
+                is_legacy = isinstance(json.load(fh), dict)
+        except (OSError, json.JSONDecodeError):
+            is_legacy = False
+        if is_legacy:
+            try:
+                self._write_collections_json(collections)
+                logger.info(
+                    "collections.json converti au nouveau format "
+                    "(%d collection(s))", len(collections))
+            except OSError as exc:
+                logger.warning(
+                    "collections.json : conversion impossible (%s)", exc)
+        self._write_collections_db(collections)
         return len(collections)
 
     def _ensure_poi(self, poi_id: str) -> None:
@@ -2609,159 +2943,3 @@ class Model:
             logger.info("delete_update : %d entrée(s) supprimée(s) pour carte %s / %s",
                         removed, cid, email)
         return bool(removed)
-
-
-    # ------------------------------------------------------------------
-    # Travel models (travels.json only — no SQLite)
-    # ------------------------------------------------------------------
-    # travels.json format:
-    # {
-    #   "seille": {
-    #     "id": "seille",
-    #     "title": "La Seille de sa source à la Saône",
-    #     "title2": null,
-    #     "start": [46.697018, 5.657401],
-    #     "collection": "Seille",
-    #     "position": 0
-    #   },
-    #   ...
-    # }
-
-    def read_travels_json(self) -> dict:
-        """Read travels.json and return {travel_id: {...}}.
-
-        Accepts both the dict format ``{id: {...}}`` and the legacy list
-        format ``[{...}, ...]`` (converting it automatically).
-        Returns an empty dict if the file is absent or unreadable.
-
-        Comble aussi défensivement le champ ``position`` (ordre
-        d'affichage) des entrées qui n'en ont pas encore (travels.json
-        antérieur à l'introduction de ce champ) : elles reçoivent une
-        position stable, à la suite des positions déjà attribuées, en
-        les départageant par id -- sans ce comblement, chaque entrée
-        manquante recevait sa position au coup par coup, à la première
-        occasion (write_travel_json), ce qui la faisait sauter en
-        position 0 ou en doublon avec une autre au lieu de rester à sa
-        place, y compris en l'éditant simplement (sans vouloir changer
-        l'ordre). Persisté immédiatement si au moins une entrée a été
-        complétée, pour que ce comblement ne se reproduise qu'une fois.
-        """
-        if not self.travels_json.exists():
-            return {}
-        with self.travels_json.open(encoding="utf-8") as fh:
-            data = json.load(fh)
-        if isinstance(data, dict):
-            result = data
-        elif isinstance(data, list):
-            # Convert list → dict, using the "id" field as key
-            result = {}
-            for entry in data:
-                if isinstance(entry, dict) and entry.get("id"):
-                    result[str(entry["id"])] = entry
-        else:
-            return {}
-
-        if _backfill_travel_positions(result):
-            self._write_travels_json(result)
-            logger.info(
-                "read_travels_json : position manquante complétée pour "
-                "un ou plusieurs trajets"
-            )
-        return result
-
-    def _write_travels_json(self, travels: dict) -> None:
-        """Atomically write {travel_id: {...}} to travels.json."""
-        self.datadir.mkdir(parents=True, exist_ok=True)
-        tmp = self.travels_json.with_suffix(".json.tmp")
-        with tmp.open("w", encoding="utf-8") as fh:
-            json.dump(travels, fh, ensure_ascii=False, indent=2, sort_keys=True)
-        tmp.replace(self.travels_json)
-
-    def write_travel_json(self, travel: dict) -> None:
-        """Insert or replace a travel model entry in travels.json.
-
-        The ``id`` field is required. All other fields are optional.
-
-        ``position`` (ordre d'affichage sur la page /travel/ de
-        flpostcards, voir reorder_travels_json) est géré ici plutôt que
-        laissé à l'appelant : si ``travel`` n'en fournit pas (c'est le
-        cas du formulaire TravelManagerView dans tkmanager, qui n'édite
-        que title/title2/collection/start — la position ne se change
-        que via les boutons +/-, voir reorder_travels_json), la position
-        déjà en place est conservée pour une entrée existante, ou la
-        nouvelle entrée est placée en fin de liste.
-        """
-        travel_id = str(travel.get("id", "")).strip()
-        if not travel_id:
-            raise ValueError("Travel id must not be empty")
-        travels = self.read_travels_json()
-        entry = dict(travel)
-        entry["id"] = travel_id
-        if entry.get("position") is None:
-            existing = travels.get(travel_id)
-            if existing is not None and existing.get("position") is not None:
-                entry["position"] = existing["position"]
-            else:
-                positions = [
-                    t.get("position") for t in travels.values()
-                    if isinstance(t.get("position"), (int, float))
-                ]
-                entry["position"] = (max(positions) + 1) if positions else 0
-        travels[travel_id] = entry
-        self._write_travels_json(travels)
-        logger.info("write_travel_json : trajet %s enregistré", travel_id)
-
-    def reorder_travels_json(self, ordered_ids: list[str]) -> None:
-        """
-        Redéfinit l'ordre d'affichage (champ ``position``) des trajets
-        dans travels.json : ``ordered_ids`` doit contenir l'identifiant
-        de CHAQUE trajet existant, dans l'ordre d'affichage voulu (même
-        principe que get_collections/set_collections pour les
-        collections).
-
-        Utilisé par tkmanager pour les boutons +/- de réorganisation
-        (TravelManagerView) : après un échange local dans la liste
-        affichée, la liste complète des ids dans le nouvel ordre est
-        repassée ici en une fois.
-
-        Le nouvel ordre n'atteint la page /travel/ de flpostcards
-        qu'après la prochaine régénération des trajets (ParcoursCartes.
-        travels(), voir "tktools similar travels"/scheduled job — cette
-        méthode ne touche que travels.json, pas la table SQL "travels"
-        que list_travels() interroge).
-
-        Lève ValueError si ``ordered_ids`` ne correspond pas exactement
-        aux trajets existants.
-        """
-        travels = self.read_travels_json()
-        if set(ordered_ids) != set(travels.keys()):
-            raise ValueError(
-                "reorder_travels_json: ordered_ids ne correspond pas "
-                "exactement aux trajets existants"
-            )
-        for position, travel_id in enumerate(ordered_ids):
-            travels[travel_id]["position"] = position
-        self._write_travels_json(travels)
-        logger.info(
-            "reorder_travels_json : nouvel ordre enregistré (%d trajets)",
-            len(travels),
-        )
-
-    def delete_travel_json(self, travel_id: str) -> bool:
-        """Remove a travel model entry from travels.json.
-
-        Returns True if it existed.
-        """
-        travels = self.read_travels_json()
-        if travel_id not in travels:
-            return False
-        del travels[travel_id]
-        if travels:
-            self._write_travels_json(travels)
-        else:
-            try:
-                self.travels_json.unlink()
-            except OSError:
-                pass
-        logger.info("delete_travel_json : trajet %s supprimé", travel_id)
-        return True

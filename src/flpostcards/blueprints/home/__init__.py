@@ -21,6 +21,7 @@ from flask import (
 )
 
 from flpostcards.alt_text import build_recto_alt
+from flpostcards.data_cache import collection_label
 from flpostcards.images import (
     SIZE_SMALL,
     SIZE_THUMB,
@@ -63,7 +64,7 @@ def index():
     if collection:
         page_title = gettext(
             "Ma collection de cartes postales - %(collection)s",
-            collection=collection,
+            collection=collection_label(collection),
         )
     else:
         page_title = gettext("Ma collection de cartes postales")
@@ -519,8 +520,8 @@ def card_detail(card_id: str):
 
         points_of_interest.append({"id": poi["id"], "name": poi_name, "cards": related})
 
-    # Liens du bas de fiche : ceux de la carte et ceux de ses POIs, à plat,
-    # sans distinction d'origine ni doublon (voir Model.resolve_card_links).
+    # Liens du bas de fiche : ceux de la carte, de ses POIs et de ses
+    # collections publiées, à plat, sans distinction d'origine ni doublon (voir Model.resolve_card_links).
     # Un POI compte même s'il n'a aucune autre carte (donc absent de la
     # section "Points d'intérêt" ci-dessus).
     card_links = [
@@ -528,9 +529,17 @@ def card_detail(card_id: str):
         if l["url"].lower().startswith(("http://", "https://"))
     ]
 
+    # Collections de la carte : seules les collections publiées sont
+    # montrées (et reliées au diaporama) ; affichées par leur title.
+    published_collections = set(current_app.config.get("COLLECTIONS", []))
+    card_collections = [
+        c for c in (card.get("collections") or []) if c in published_collections
+    ]
+
     return render_template(
         "card/detail.html",
         card=card,
+        card_collections=card_collections,
         card_links=card_links,
         images=images,
         images_small=images_small,

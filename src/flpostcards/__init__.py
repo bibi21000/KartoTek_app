@@ -21,6 +21,24 @@ from flpostcards.extensions import cache, limiter
 LANGUAGES = ["fr", "en", "uk"]
 
 
+def apply_collections(app: Flask, collections: list[dict]) -> None:
+    """Publie dans la config de ``app`` les collections visibles par les
+    visiteurs (déjà filtrées sur ``published``) :
+
+    - ``COLLECTIONS`` : leurs ids, triés selon leur ``order`` ;
+    - ``COLLECTIONS_MAP`` : ceux proposés sur la carte /map/, ceux dont
+      ``map`` est vrai, dans l'ordre de ``order`` (voir
+      ``Model.map_collection_ids``) ;
+    - ``COLLECTION_TITLES`` : ``{id: title}`` pour celles qui ont un
+      titre (sinon l'id est affiché, voir ``data_cache.collection_label``).
+    """
+    app.config["COLLECTIONS"] = [c["id"] for c in collections]
+    app.config["COLLECTIONS_MAP"] = Model.map_collection_ids(collections)
+    app.config["COLLECTION_TITLES"] = {
+        c["id"]: c["title"] for c in collections if c.get("title")
+    }
+
+
 def select_locale() -> str:
     """Détermine la langue à utiliser pour la requête courante."""
     return request.accept_languages.best_match(LANGUAGES) or "fr"
@@ -72,19 +90,23 @@ def load_config(app: Flask, config_path: str | Path = "postcards.conf") -> None:
     torch_device = parser.get("DEFAULT", "torch_device", fallback="").strip()
     app.config["TORCH_DEVICE"] = torch_device or None
 
-    # Liste des collections connues, et sous-ensemble proposé comme
-    # filtre sur la carte publique (/map/) : ne vivent plus dans
-    # postcards.conf, mais dans <datadir>/collections.json (voir
-    # libpostcards.model.Model.get_collections), pour pouvoir être
-    # modifiées depuis tkmanager sans redémarrer l'appli Flask -- valeur
-    # initiale ici (utilisée pour les toutes premières requêtes, ou si
-    # le cache est indisponible) ; rafraîchie ensuite avant chaque
-    # requête depuis flpostcards.data_cache (TTL [flask]
-    # json_cache_ttl_s, 15 min par défaut), voir le before_request
-    # ci-dessous dans create_app().
-    collections, collections_map = Model(app.config["DATADIR"]).get_collections()
-    app.config["COLLECTIONS"] = collections
-    app.config["COLLECTIONS_MAP"] = collections_map
+    # Collections publiées (``published`` vrai dans
+    # <datadir>/collections.json, voir
+    # libpostcards.model.Model.list_collections) : seules celles-ci sont
+    # proposées aux visiteurs (filtres, diaporama, carte, API).
+    # COLLECTIONS = leurs ids (utilisés pour valider ?collection=...),
+    # COLLECTION_TITLES = {id: title} pour l'affichage (le title s'il
+    # est renseigné, sinon l'id -- voir data_cache.collection_label).
+    # Elles ne vivent pas dans postcards.conf mais dans collections.json,
+    # pour pouvoir être modifiées depuis tkmanager sans redémarrer
+    # l'appli Flask -- valeur initiale ici (utilisée pour les toutes
+    # premières requêtes, ou si le cache est indisponible) ; rafraîchie
+    # ensuite avant chaque requête depuis flpostcards.data_cache (TTL
+    # [flask] json_cache_ttl_s, 15 min par défaut), voir le
+    # before_request ci-dessous dans create_app().
+    apply_collections(
+        app, Model(app.config["DATADIR"]).list_collections(published_only=True)
+    )
 
     if parser.has_section("flask"):
         defaults = set(parser.defaults().keys())
@@ -635,19 +657,24 @@ def create_app(config_path: str | Path = "postcards.conf") -> Flask:
     # Modèle partagé (lecture uniquement côté Flask)
     app.model = Model(app.config["DATADIR"])
 
-    # Rafraîchit COLLECTIONS/COLLECTIONS_MAP (voir plus haut) depuis le
+    # Rafraîchit COLLECTIONS/COLLECTION_TITLES (voir plus haut) depuis le
     # cache JSON (flpostcards.data_cache, TTL [flask] json_cache_ttl_s)
-    # avant chaque requête -- tous les lecteurs existants
-    # (current_app.config.get("COLLECTIONS"/"COLLECTIONS_MAP")) restent
-    # inchangés, ils voient juste une valeur périodiquement rafraîchie
-    # au lieu d'une valeur figée au démarrage du worker.
+    # avant chaque requête -- tous les lecteurs
+    # (current_app.config.get("COLLECTIONS")) voient ainsi une valeur
+    # périodiquement rafraîchie au lieu d'une valeur figée au démarrage
+    # du worker.
     @app.before_request
     def _refresh_collections_cache():
         from flpostcards import data_cache
 
-        collections, collections_map = data_cache.get_collections_cached()
-        current_app.config["COLLECTIONS"] = collections
-        current_app.config["COLLECTIONS_MAP"] = collections_map
+        apply_collections(current_app, data_cache.get_collections_cached())
+
+    # Libellé d'une collection dans les templates : {{ c | collection_label }}
+    @app.template_filter("collection_label")
+    def collection_label_filter(collection_id):
+        from flpostcards import data_cache
+
+        return data_cache.collection_label(collection_id)
 
     from flpostcards.blueprints.home import bp as home_bp
     app.register_blueprint(home_bp)

@@ -10,6 +10,7 @@ from flask_babel import gettext
 
 from flpostcards.gallery_og_image import get_or_render_collage
 from flpostcards.alt_text import build_recto_alt
+from flpostcards.data_cache import collection_label
 from flpostcards.images import SIZE_THUMB, card_images
 
 bp = Blueprint("gallery", __name__, template_folder="../../templates")
@@ -142,7 +143,8 @@ def index():
 
     if collection:
         page_title = gettext(
-            "Toutes les cartes postales - %(collection)s", collection=collection
+            "Toutes les cartes postales - %(collection)s",
+            collection=collection_label(collection),
         )
     else:
         page_title = gettext("Toutes les cartes postales")

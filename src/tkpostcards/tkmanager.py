@@ -13,6 +13,7 @@ import re
 import sys
 import textwrap
 import threading
+import time
 import unicodedata
 import webbrowser
 from datetime import date, datetime
@@ -2181,10 +2182,10 @@ class App(tk.Tk):
         self._search_win: SearchView | None = None
         self._text_search_win: "TextSearchView | None" = None
         self._doubles_win: "DoublesSearchView | None" = None
+        self._coll_win: "CollectionManagerView | None" = None
         self._poi_win: "PoiManagerView | None" = None
         self._link_win: "LinkManagerView | None" = None
         self._auth_win: "AuthManagerView | None" = None
-        self._travel_win: "TravelManagerView | None" = None
         self._settings_win: "SettingsView | None" = None
         # Shared PostcardSearcher instance — loaded once, reused by all
         # sub-windows (SearchView, DoublesSearchView) to avoid loading
@@ -2323,12 +2324,33 @@ class App(tk.Tk):
         return cfg
 
     def _load_collections(self) -> list[str]:
-        """Read the list of collections from ``<datadir>/collections.json``."""
+        """Ids of ALL the collections (published or not) from
+        ``<datadir>/collections.json``, in display order. tkmanager always
+        shows the id, never the title (see CollectionManagerView)."""
         try:
-            collections, _map = self.model.get_collections()
-            return collections
+            return [c["id"] for c in self.model.list_collections()]
         except Exception:
             return []
+
+    def _refresh_collections(self, cards_changed: bool = False):
+        """Reload the collection ids after the collection manager changed
+        them: update the navigation filter drop-down, and drop the active
+        filter if its collection no longer exists. ``cards_changed``:
+        cards were rewritten (collection deleted), reload the displayed
+        one."""
+        self.collections = self._load_collections()
+        self._nav_filter_menu.config(
+            values=[_("tsearch_all")] + self.collections)
+        if self._nav_collection and self._nav_collection not in self.collections:
+            self._nav_collection = None
+            self._nav_filter_var.set(_("tsearch_all"))
+            self._scan_ids()
+            cards_changed = True
+        # Reload the displayed card unless the user is in the middle of
+        # an edit.
+        if cards_changed and self._ids and not self._dirty:
+            idx = min(self._current_idx, len(self._ids) - 1)
+            self._load_card(idx)
 
     def _load_last_filter(self) -> str | None:
         """Read the last used collection filter from postcards.conf."""
@@ -3281,11 +3303,10 @@ class App(tk.Tk):
                       state=tk.NORMAL if self.similarity_available() else tk.DISABLED)
         m.add_command(label=_("nav_doubles"), command=self._open_doubles_search,
                       state=tk.NORMAL if self.similarity_available() else tk.DISABLED)
+        m.add_command(label=_("nav_collections"), command=self._open_collection_manager)
         m.add_command(label=_("nav_pois"), command=self._open_poi_manager)
         m.add_command(label=_("nav_links"), command=self._open_link_manager)
         m.add_command(label=_("nav_auths"), command=self._open_auth_manager)
-        m.add_command(label=_("nav_travels"), command=self._open_travel_manager,
-                      state=tk.NORMAL if self.travel_available() else tk.DISABLED)
         m.add_command(label=_("nav_gallery"), command=self._open_gallery)
         m.add_command(label=_("nav_masks"), command=self._open_mask_editor)
         m.add_separator()
@@ -3439,6 +3460,14 @@ class App(tk.Tk):
             return
         self._doubles_win = DoublesSearchView(self, self._t)
 
+    # ── Collection manager ────────────────────────────────────────────────────
+    def _open_collection_manager(self):
+        if self._coll_win and self._coll_win.winfo_exists():
+            self._coll_win.lift()
+            self._coll_win.focus_force()
+            return
+        self._coll_win = CollectionManagerView(self, self._t)
+
     # ── POI manager ───────────────────────────────────────────────────────────
     def _open_poi_manager(self):
         if self._poi_win and self._poi_win.winfo_exists():
@@ -3462,14 +3491,6 @@ class App(tk.Tk):
             self._auth_win.focus_force()
             return
         self._auth_win = AuthManagerView(self, self._t)
-
-    # ── Travel manager ────────────────────────────────────────────────────────
-    def _open_travel_manager(self):
-        if self._travel_win and self._travel_win.winfo_exists():
-            self._travel_win.lift()
-            self._travel_win.focus_force()
-            return
-        self._travel_win = TravelManagerView(self, self._t)
 
     # ── Settings ──────────────────────────────────────────────────────────────
     def _open_settings(self):
@@ -4197,6 +4218,23 @@ class DoublesSearchView(tk.Toplevel):
         self._searcher: "PostcardSearcher | None" = None
         self._last_cv_w = 0
         self._pending_draw: str | None = None
+        # Affichage progressif : les paires arrivent par blocs pendant la
+        # recherche et sont dessinées au fur et à mesure (_pump).
+        self._running = False       # recherche en cours
+        self._search_token = 0      # change à chaque (ré)lancement/annulation
+        self._drawn_count = 0       # nb de tuiles déjà dessinées
+        self._drawn_w = 0           # largeur du canvas au dernier dessin
+        self._pump_job: str | None = None
+        self._computing = False     # comparaison des cartes en cours
+        # Vignettes : décodées par un pool de threads, jamais dans le
+        # thread Tk (sinon la fenêtre se fige le temps de décoder chaque
+        # image) ; _poll_img_queue les place sur le canvas à mesure.
+        self._img_result_queue: "queue.Queue" = queue.Queue()
+        self._img_pending: set = set()   # clés (chemin, w, h) en cours
+        self._img_coords: dict = {}      # clé -> [(x0, y0, w, h, tag), ...]
+        self._img_seq = 0
+        self._draw_gen = 0               # invalide les chargements périmés
+        self._thumb_pool = None
 
         # Load saved parameters
         self._def_threshold = self._app.get_search_conf("tkmanager", "doubles_threshold", "90")
@@ -4210,6 +4248,8 @@ class DoublesSearchView(tk.Toplevel):
         self._build_results()
         self._build_statusbar()
         self._cv.bind("<Configure>", self._on_cv_configure)
+        self.bind("<Destroy>", self._on_destroy)
+        self.after(30, self._poll_img_queue)
 
         # Use the shared PostcardSearcher from App (loaded once, no GPU reload)
         self._load_index_async()
@@ -4313,47 +4353,109 @@ class DoublesSearchView(tk.Toplevel):
         self._btn_run.config(state=tk.DISABLED, text=_("search_running"))
         self._status.set(_("search_running"))
         self._results = []
+        self._tkimg.clear()
+        self._reset_images()
+        self._search_token += 1
+        token = self._search_token
+        self._running = True
+        self._computing = True
         self._draw()
 
-        def on_progress(done: int, total: int):
+        def post(fn, *args):
             if self.winfo_exists():
-                self.after(0, lambda d=done, t=total: self._status.set(
-                    _("search_running_progress").format(done=d, total=t)))
+                self.after(0, lambda: fn(*args))
 
         def worker():
-            original_tqdm = self._searcher.tqdm
-            self._searcher.tqdm = _ProgressIter(on_progress)
+            pending: list[dict] = []
+            last_flush = 0.0
+            done = total = 0
             try:
-                results = self._searcher.find_missing_doubles(
-                    self._app.model, threshold=threshold)
+                for done, total, errors in self._searcher.iter_missing_doubles(
+                        self._app.model, threshold=threshold):
+                    if token != self._search_token:
+                        return          # annulée (Clear / fenêtre fermée)
+                    pending.extend(errors)
+                    now = time.monotonic()
+                    # On regroupe les envois (~4/s) : inutile de réveiller
+                    # l'interface à chaque ligne comparée.
+                    if now - last_flush >= 0.25:
+                        post(self._on_batch, pending, done, total, token)
+                        pending, last_flush = [], now
+                post(self._on_batch, pending, done, total, token)
             except Exception as e:
-                results = []
-                if self.winfo_exists():
-                    self.after(0, lambda err=e: messagebox.showerror(
-                        _("error_title"), str(err), parent=self))
-            finally:
-                self._searcher.tqdm = original_tqdm
-            if self.winfo_exists():
-                self.after(0, lambda r=results: self._on_results(r))
+                post(lambda err=e: messagebox.showerror(
+                    _("error_title"), str(err), parent=self))
+            if token == self._search_token:
+                post(self._on_search_done, token)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_results(self, results: list[dict]):
-        if not self.winfo_exists():
+    def _on_destroy(self, event):
+        if event.widget is self:
+            self._search_token += 1     # arrête le worker en cours
+            self._reset_images()        # et les chargements de vignettes
+
+    def _on_batch(self, batch: list[dict], done: int, total: int, token: int):
+        """Reçoit un bloc de paires trouvées pendant la recherche."""
+        if token != self._search_token or not self.winfo_exists():
             return
-        self._results = results
-        n = len(results)
-        self._status.set(_("doubles_done").format(n=n))
-        self._btn_run.config(state=tk.NORMAL, text=_("doubles_run"))
-        self._tkimg.clear()
+        self._results.extend(batch)
+        self._status.set(_("doubles_progress").format(
+            done=done, total=total, n=len(self._results)))
+        if batch:
+            self._schedule_pump()
+
+    def _on_search_done(self, token: int):
+        """La comparaison des cartes est terminée. La recherche, elle, ne
+        l'est vraiment qu'une fois les vignettes toutes chargées (voir
+        _update_loading_status)."""
+        if token != self._search_token or not self.winfo_exists():
+            return
+        self._computing = False
+        if self._pump_job:
+            self.after_cancel(self._pump_job)
+            self._pump_job = None
+        # Pendant la recherche, les paires sont affichées dans l'ordre de
+        # découverte ; on les classe par score décroissant une fois pour
+        # toutes à la fin (un seul redessin). Les vignettes déjà chargées
+        # restent en cache : seules les manquantes sont encore à charger.
+        self._results.sort(key=lambda r: float(r.get("score", 0)), reverse=True)
         self._draw()
+        self._update_loading_status()
+
+    def _update_loading_status(self):
+        """Barre d'état une fois la comparaison terminée : « Chargement
+        des images… » tant qu'il reste des vignettes à afficher, puis
+        « Recherche terminée » et réactivation du bouton."""
+        if not self._running or self._computing:
+            return
+        if (self._img_pending or self._pending_draw
+                or self._drawn_count < len(self._results)):
+            self._status.set(_("doubles_loading_images").format(
+                remaining=len(self._img_pending)))
+            return
+        self._running = False
+        self._status.set(_("doubles_done").format(n=len(self._results)))
+        self._btn_run.config(state=tk.NORMAL, text=_("doubles_run"))
 
     def _clear_results(self):
+        # Annule aussi une recherche en cours.
+        self._search_token += 1
+        if self._running:
+            self._running = False
+            self._btn_run.config(state=tk.NORMAL, text=_("doubles_run"))
+        if self._pump_job:
+            self.after_cancel(self._pump_job)
+            self._pump_job = None
+        self._computing = False
+        self._reset_images()
         self._results = []
+        self._drawn_count = 0
         self._tkimg.clear()
         self._status.set("")
         self._cv.delete("all")
         self._hits = []
+        self._edit_hits = []
 
     # ── Canvas drawing ────────────────────────────────────────────────────────
     def _on_cv_configure(self, event):
@@ -4383,13 +4485,27 @@ class DoublesSearchView(tk.Toplevel):
         self._hits = []
         self._edit_hits = []
 
+        self._drawn_w = cv_w
+        self._img_coords = {}   # placeholders recréés ci-dessous
+
         if not self._results:
-            self._cv.create_text(cv_w // 2, 60,
-                                 text=_("search_empty"),
-                                 fill=FG_LABEL, font=FONT_TITLE)
+            self._drawn_count = 0
+            if not self._computing:     # sinon : résultats pas encore arrivés
+                self._cv.create_text(cv_w // 2, 60,
+                                     text=_("search_empty"),
+                                     fill=FG_LABEL, font=FONT_TITLE)
             self._cv.configure(scrollregion=(0, 0, cv_w, 120))
             return
 
+        lay = self._layout(cv_w)
+        for pos, item in enumerate(self._results):
+            self._draw_tile(pos, item, lay)
+        self._drawn_count = len(self._results)
+        self._set_scrollregion(cv_w, lay, self._drawn_count)
+
+    def _layout(self, cv_w: int):
+        """Tile geometry for a canvas of width cv_w:
+        (margin, columns, tile_w, thumbnail_w, thumbnail_h, tile_h)."""
         M       = self.RES_PAD
         pair_w  = 2 * self.RES_W + 2  # two thumbnails + separator
         tile_w  = pair_w + 2 * M
@@ -4398,69 +4514,102 @@ class DoublesSearchView(tk.Toplevel):
         half    = (tile_w - 2 * M - 2) // 2
         img_h   = int(half * self.RES_H / self.RES_W)
         tile_h  = self.BADGE_H + img_h + self.CID_H + self.EDIT_H + 2 * M
+        return M, cols, tile_w, half, img_h, tile_h
 
-        for pos, item in enumerate(self._results):
-            pct   = float(item.get("score", 0))
-            file1 = self._resolve_path(item.get("file1"))
-            file2 = self._resolve_path(item.get("file2"))
-            id1   = item.get("id1")
-            id2   = item.get("id2")
-
-            row, col = divmod(pos, cols)
-            x0 = M + col * (tile_w + M)
-            y0 = M + row * (tile_h + M)
-            x1 = x0 + tile_w
-            y1 = y0 + tile_h
-
-            border = self._pct_color(pct)
-            self._cv.create_rectangle(x0, y0, x1, y1,
-                                      fill=BG_CARD, outline=border, width=2)
-
-            # Score badge
-            by0 = y0
-            by1 = by0 + self.BADGE_H
-            self._cv.create_rectangle(x0, by0, x1, by1,
-                                      fill=self._pct_bg(pct), outline="")
-            self._cv.create_text((x0 + x1) // 2, (by0 + by1) // 2,
-                                 text=f"{pct:.1f} %",
-                                 fill="#fff", font=("Courier", 9, "bold"))
-
-            # Two thumbnails side by side
-            iy0 = by1 + M
-            iy1 = iy0 + img_h
-            lx0 = x0 + M
-            self._draw_img(file1, lx0, iy0, lx0 + half, iy1)
-            sep_x = lx0 + half + 1
-            self._cv.create_line(sep_x, iy0, sep_x, iy1, fill=FG_ACCENT, width=2)
-            rx0 = sep_x + 1
-            self._draw_img(file2, rx0, iy0, x1 - M, iy1)
-
-            self._hits.append((lx0, iy0, lx0 + half, iy1, id1, file1))
-            self._hits.append((rx0, iy0, x1 - M, iy1, id2, file2))
-
-            # Card id label (large) above each edit button
-            cy0 = iy1 + 2
-            cy1 = cy0 + self.CID_H
-            self._cv.create_rectangle(lx0, cy0, lx0 + half, cy1,
-                                      fill=BG_CARD, outline="")
-            self._cv.create_text((lx0 + lx0 + half) // 2, (cy0 + cy1) // 2,
-                                 text=f"#{id1}" if id1 else "?",
-                                 fill=FG_ACCENT2, font=("Courier", 11, "bold"))
-            self._cv.create_rectangle(rx0, cy0, x1 - M, cy1,
-                                      fill=BG_CARD, outline="")
-            self._cv.create_text((rx0 + x1 - M) // 2, (cy0 + cy1) // 2,
-                                 text=f"#{id2}" if id2 else "?",
-                                 fill=FG_ACCENT2, font=("Courier", 11, "bold"))
-
-            # "Edit" buttons below each id label
-            ey0 = cy1 + 2
-            ey1 = ey0 + self.EDIT_H - 4
-            self._draw_edit_button(lx0, ey0, lx0 + half, ey1, id1)
-            self._draw_edit_button(rx0, ey0, x1 - M, ey1, id2)
-
-        n_rows  = (len(self._results) + cols - 1) // cols
+    def _set_scrollregion(self, cv_w: int, lay, count: int):
+        M, cols, _tile_w, _half, _img_h, tile_h = lay
+        n_rows  = (count + cols - 1) // cols
         total_h = n_rows * (tile_h + M) + M
         self._cv.configure(scrollregion=(0, 0, cv_w, total_h))
+
+    # ── Progressive drawing (tiles added while the search is running) ─────────
+    def _schedule_pump(self):
+        if self._pump_job is None:
+            self._pump_job = self.after(1, self._pump)
+
+    def _pump(self):
+        """Draw the tiles received but not yet drawn, in small slices so
+        the window stays responsive however many pairs a batch holds."""
+        self._pump_job = None
+        if not self.winfo_exists():
+            return
+        cv_w = self._cv.winfo_width()
+        if cv_w < 10 or cv_w != self._drawn_w:
+            # Window not mapped yet, or resized since the last drawing:
+            # the layout changed, redraw everything instead.
+            self._schedule_draw()
+            return
+        lay = self._layout(cv_w)
+        deadline = time.monotonic() + 0.03
+        while (self._drawn_count < len(self._results)
+               and time.monotonic() < deadline):
+            self._draw_tile(self._drawn_count,
+                            self._results[self._drawn_count], lay)
+            self._drawn_count += 1
+        self._set_scrollregion(cv_w, lay, self._drawn_count)
+        if self._drawn_count < len(self._results):
+            self._schedule_pump()
+
+    def _draw_tile(self, pos: int, item: dict, lay):
+        M, cols, tile_w, half, img_h, tile_h = lay
+
+        pct   = float(item.get("score", 0))
+        file1 = self._resolve_path(item.get("file1"))
+        file2 = self._resolve_path(item.get("file2"))
+        id1   = item.get("id1")
+        id2   = item.get("id2")
+
+        row, col = divmod(pos, cols)
+        x0 = M + col * (tile_w + M)
+        y0 = M + row * (tile_h + M)
+        x1 = x0 + tile_w
+        y1 = y0 + tile_h
+
+        border = self._pct_color(pct)
+        self._cv.create_rectangle(x0, y0, x1, y1,
+                                  fill=BG_CARD, outline=border, width=2)
+
+        # Score badge
+        by0 = y0
+        by1 = by0 + self.BADGE_H
+        self._cv.create_rectangle(x0, by0, x1, by1,
+                                  fill=self._pct_bg(pct), outline="")
+        self._cv.create_text((x0 + x1) // 2, (by0 + by1) // 2,
+                             text=f"{pct:.1f} %",
+                             fill="#fff", font=("Courier", 9, "bold"))
+
+        # Two thumbnails side by side
+        iy0 = by1 + M
+        iy1 = iy0 + img_h
+        lx0 = x0 + M
+        self._draw_img(file1, lx0, iy0, lx0 + half, iy1)
+        sep_x = lx0 + half + 1
+        self._cv.create_line(sep_x, iy0, sep_x, iy1, fill=FG_ACCENT, width=2)
+        rx0 = sep_x + 1
+        self._draw_img(file2, rx0, iy0, x1 - M, iy1)
+
+        self._hits.append((lx0, iy0, lx0 + half, iy1, id1, file1))
+        self._hits.append((rx0, iy0, x1 - M, iy1, id2, file2))
+
+        # Card id label (large) above each edit button
+        cy0 = iy1 + 2
+        cy1 = cy0 + self.CID_H
+        self._cv.create_rectangle(lx0, cy0, lx0 + half, cy1,
+                                  fill=BG_CARD, outline="")
+        self._cv.create_text((lx0 + lx0 + half) // 2, (cy0 + cy1) // 2,
+                             text=f"#{id1}" if id1 else "?",
+                             fill=FG_ACCENT2, font=("Courier", 11, "bold"))
+        self._cv.create_rectangle(rx0, cy0, x1 - M, cy1,
+                                  fill=BG_CARD, outline="")
+        self._cv.create_text((rx0 + x1 - M) // 2, (cy0 + cy1) // 2,
+                             text=f"#{id2}" if id2 else "?",
+                             fill=FG_ACCENT2, font=("Courier", 11, "bold"))
+
+        # "Edit" buttons below each id label
+        ey0 = cy1 + 2
+        ey1 = ey0 + self.EDIT_H - 4
+        self._draw_edit_button(lx0, ey0, lx0 + half, ey1, id1)
+        self._draw_edit_button(rx0, ey0, x1 - M, ey1, id2)
 
     def _draw_edit_button(self, x0: int, y0: int, x1: int, y1: int, cid):
         """Draw an "Edit" badge that opens the card in the main window."""
@@ -4472,33 +4621,128 @@ class DoublesSearchView(tk.Toplevel):
         self._edit_hits.append((x0, y0, x1, y1, cid))
 
 
+    # ── Thumbnails: background loading ────────────────────────────────────────
     def _draw_img(self, path: "Path | None", x0: int, y0: int, x1: int, y1: int):
-        """Display the image from its full path."""
+        """Show the thumbnail of *path*.
+
+        Already cached: drawn immediately. Otherwise a "…" placeholder is
+        drawn at once and the image is decoded by the thumbnail pool; the
+        real thumbnail replaces the placeholder as soon as it is ready
+        (_poll_img_queue). No file access happens in the Tk thread.
+        """
         w = x1 - x0
         h = y1 - y0
         if w <= 0 or h <= 0:
             return
         self._cv.create_rectangle(x0, y0, x1, y1, fill="#0a0a1a", outline="")
-        if path is None or not path.exists():
-            self._cv.create_text((x0 + x1) // 2, (y0 + y1) // 2,
-                                 text="—", fill=FG_LABEL, font=("Courier", 9))
+        if path is None:
+            self._draw_missing(x0, y0, w, h)
             return
         key = (str(path), w, h)
-        if key not in self._tkimg:
-            pil = load_pil(path, w, h)
-            if pil is None:
-                self._cv.create_text((x0 + x1) // 2, (y0 + y1) // 2,
-                                     text="—", fill=FG_LABEL, font=("Courier", 9))
-                return
-            pw, ph = pil.size
-            scale   = min(w / pw, h / ph)
-            nw, nh  = max(1, int(pw * scale)), max(1, int(ph * scale))
-            resized = pil.resize((nw, nh), Image.LANCZOS)
-            self._tkimg[key] = ImageTk.PhotoImage(resized)
+        if key in self._tkimg:
+            self._place_image(key, x0, y0, w, h)
+            return
+        tag = f"dimg{self._img_seq}"
+        self._img_seq += 1
+        self._cv.create_text((x0 + x1) // 2, (y0 + y1) // 2,
+                             text="…", fill=FG_LABEL, font=("Courier", 12),
+                             tags=(tag,))
+        self._img_coords.setdefault(key, []).append((x0, y0, w, h, tag))
+        if key not in self._img_pending:
+            self._img_pending.add(key)
+            if self._thumb_pool is None:
+                from concurrent.futures import ThreadPoolExecutor
+                self._thumb_pool = ThreadPoolExecutor(
+                    max_workers=4, thread_name_prefix="doubles-thumb")
+            self._thumb_pool.submit(
+                self._thumb_worker, self._draw_gen, key, path, w, h)
+
+    def _draw_missing(self, x0: int, y0: int, w: int, h: int):
+        self._cv.create_text(x0 + w // 2, y0 + h // 2,
+                             text="—", fill=FG_LABEL, font=("Courier", 9))
+
+    def _place_image(self, key: tuple, x0: int, y0: int, w: int, h: int):
+        """Draw an already-cached PhotoImage centered in the given box."""
         tkimg = self._tkimg[key]
         cx = x0 + (w - tkimg.width())  // 2
         cy = y0 + (h - tkimg.height()) // 2
         self._cv.create_image(cx, cy, image=tkimg, anchor=tk.NW)
+
+    def _thumb_candidates(self, path: Path) -> "list[Path]":
+        """Files to try, best first: the gallery thumbnail
+        ([tkmanager] gallery_images_dir, size_div3 by default -- a PNG a
+        third of the original size, ~10x faster to decode than the full
+        resolution image the index points to), then the indexed file."""
+        gallery = self._app.gallery_images_dir / f"{path.stem}.png"
+        return [gallery, path] if gallery != path else [path]
+
+    @staticmethod
+    def _load_thumb(path: Path, w: int, h: int) -> "Image.Image":
+        """Decode *path* and fit it in a w x h box (aspect ratio kept)."""
+        with Image.open(path) as img:
+            img.thumbnail((w, h), Image.LANCZOS)   # only ever shrinks
+            if img.mode not in ("RGB", "RGBA", "L"):
+                img = img.convert("RGB")
+            pw, ph = img.size
+            scale = min(w / pw, h / ph)
+            if scale != 1:                          # small image: scale up
+                img = img.resize((max(1, int(pw * scale)),
+                                  max(1, int(ph * scale))), Image.LANCZOS)
+            else:
+                img = img.copy()
+            return img
+
+    def _thumb_worker(self, gen: int, key: tuple, path: Path, w: int, h: int):
+        """Pool thread: find + decode one thumbnail. No Tk call here
+        (PhotoImage must be created in the main thread)."""
+        pil = None
+        if gen == self._draw_gen:       # search cleared/restarted: skip
+            for candidate in self._thumb_candidates(path):
+                try:
+                    if candidate.is_file():
+                        pil = self._load_thumb(candidate, w, h)
+                        break
+                except Exception:
+                    continue            # unreadable: try the next one
+        self._img_result_queue.put((gen, key, pil))
+
+    def _poll_img_queue(self):
+        """Main thread, every 30 ms: pick up the thumbnails the pool has
+        finished and swap them in for their placeholders, a few at a time
+        so the window stays responsive."""
+        if not self.winfo_exists():
+            return
+        got = False
+        deadline = time.monotonic() + 0.025
+        try:
+            while time.monotonic() < deadline:
+                gen, key, pil = self._img_result_queue.get_nowait()
+                if gen != self._draw_gen:
+                    continue            # from a previous search
+                got = True
+                self._img_pending.discard(key)
+                if pil is not None:
+                    self._tkimg[key] = ImageTk.PhotoImage(pil)
+                for (x0, y0, w, h, tag) in self._img_coords.get(key, []):
+                    self._cv.delete(tag)
+                    if pil is not None:
+                        self._place_image(key, x0, y0, w, h)
+                    else:
+                        self._draw_missing(x0, y0, w, h)
+        except queue.Empty:
+            pass
+        if got:
+            self._update_loading_status()
+        self.after(30, self._poll_img_queue)
+
+    def _reset_images(self):
+        """Forget every thumbnail load in flight (new search, Clear, close)."""
+        self._draw_gen += 1
+        self._img_pending = set()
+        self._img_coords = {}
+        if self._thumb_pool is not None:
+            self._thumb_pool.shutdown(wait=False, cancel_futures=True)
+            self._thumb_pool = None
 
     # ── Click → ImageViewer / Edit ──────────────────────────────────────────────
     def _on_click(self, event):
@@ -4576,6 +4820,414 @@ class DoublesSearchView(tk.Toplevel):
 # ─────────────────────────────────────────────────────────────────────────────
 #  POI (points of interest) manager
 # ─────────────────────────────────────────────────────────────────────────────
+class CollectionManagerView(tk.Toplevel):
+    """Manage the collections stored in ``collections.json`` (and the
+    ``collections`` table of the database).
+
+    Left: the list of ALL the collections, sorted by their ``order`` and
+    shown by id (those not published on the website are greyed), with
+    New / ▲ / ▼ (renumber the order). Right: a detail form (id, title,
+    order, published, map, travel + start point, description, links) with Save / Delete actions, backed by
+    Model.list_collections() / write_collection() / delete_collection() /
+    reorder_collections().
+
+    The id is what the cards store in their ``collections`` field, so it
+    cannot be changed once the collection exists. flpostcards only shows
+    the collections whose "published" box is ticked, labelled by their
+    title (or their id when there is none); the "map" box decides which
+    ones are offered on its map (``collections_map``) and the "travel"
+    box (with its start point) defines the route shown on /travel/
+    (computed by ``tktools travels`` / publish --full). The description
+    is the subtitle of the collection and of its travel.
+    """
+
+    def __init__(self, parent: "App", t):
+        super().__init__(parent)
+        self._app = parent
+        self._t   = t
+        self.title(_("coll_mgr_title"))
+        self.configure(bg=BG_MAIN)
+        self.geometry("800x700")
+        self.minsize(600, 560)
+        self.resizable(True, True)
+
+        self._collections: list[dict] = []
+        self._selected_id: str | None = None
+        self._links: list[str] = []
+        self._start_coord: list = []     # [lat, lon] of the travel, or []
+        self._map_win = None
+        self._is_new = False
+
+        self._build_ui()
+        self._reload()
+
+    # ── Construction ─────────────────────────────────────────────────────────
+    def _build_ui(self):
+        body = tk.Frame(self, bg=BG_MAIN)
+        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Left: list
+        left = tk.Frame(body, bg=BG_CARD)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
+
+        tk.Label(left, text=_("coll_mgr_list_label"), bg=BG_CARD, fg=FG_ACCENT,
+                 font=FONT_TITLE).pack(anchor=tk.W, padx=8, pady=(8, 4))
+
+        lb_frm = tk.Frame(left, bg=BG_CARD)
+        lb_frm.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
+        vsb = ttk.Scrollbar(lb_frm, orient=tk.VERTICAL)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self._lb = tk.Listbox(lb_frm, bg=BG_INPUT, fg=FG_TEXT,
+                              selectbackground=FG_ACCENT, font=FONT_INPUT,
+                              relief=tk.FLAT, activestyle="none",
+                              exportselection=False,
+                              yscrollcommand=vsb.set)
+        self._lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        vsb.config(command=self._lb.yview)
+        self._lb.bind("<<ListboxSelect>>", self._on_select)
+
+        btns = tk.Frame(left, bg=BG_CARD)
+        btns.pack(fill=tk.X, padx=8, pady=(0, 8))
+        tk.Button(btns, text=_("coll_mgr_new"), command=self._new,
+                  bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=8, cursor="hand2").pack(
+            side=tk.LEFT, fill=tk.X, expand=True)
+        for txt, delta in (("▲", -1), ("▼", 1)):
+            tk.Button(btns, text=txt, command=lambda d=delta: self._move(d),
+                      bg=BG_FIELD, fg=FG_TEXT, font=FONT_LABEL,
+                      relief=tk.FLAT, padx=8, cursor="hand2").pack(
+                side=tk.LEFT, padx=(4, 0))
+
+        # Right: detail form
+        right = tk.Frame(body, bg=BG_CARD, width=400)
+        right.pack(side=tk.LEFT, fill=tk.Y)
+        right.pack_propagate(False)
+
+        tk.Label(right, text=_("coll_mgr_detail_label"), bg=BG_CARD, fg=FG_ACCENT,
+                 font=FONT_TITLE).pack(anchor=tk.W, padx=10, pady=(10, 6))
+
+        # Actions (packed first so they stay visible at the bottom)
+        actions = tk.Frame(right, bg=BG_CARD)
+        actions.pack(fill=tk.X, padx=10, pady=10, side=tk.BOTTOM)
+        tk.Button(actions, text=_("btn_save_close"), command=self._save,
+                  bg=FG_ACCENT, fg="#fff", font=FONT_LABEL,
+                  relief=tk.FLAT, padx=10, cursor="hand2").pack(
+            side=tk.LEFT, padx=(0, 6))
+        self._btn_delete = tk.Button(
+            actions, text=_("coll_mgr_delete"), command=self._delete,
+            bg="#5a1a1a", fg=FG_TEXT, font=FONT_LABEL,
+            relief=tk.FLAT, padx=10, cursor="hand2", state=tk.DISABLED)
+        self._btn_delete.pack(side=tk.LEFT)
+        self._btn_map = tk.Button(
+            actions, text=_("travel_map_btn"), command=self._open_map,
+            bg=BG_FIELD, fg=FG_LINK, font=FONT_LABEL,
+            relief=tk.FLAT, padx=10, cursor="hand2", state=tk.DISABLED)
+        self._btn_map.pack(side=tk.RIGHT)
+
+        # Id
+        idf = tk.Frame(right, bg=BG_CARD)
+        idf.pack(fill=tk.X, padx=10, pady=4)
+        tk.Label(idf, text=_("coll_mgr_id"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, width=12, anchor=tk.W).pack(side=tk.LEFT)
+        self._id_var = tk.StringVar()
+        self._id_entry = tk.Entry(idf, textvariable=self._id_var,
+                                  bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                                  disabledbackground=BG_INPUT, disabledforeground=FG_LABEL,
+                                  font=FONT_INPUT, relief=tk.FLAT)
+        self._id_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        context_menu(self._id_entry)
+
+        # Title
+        tf = tk.Frame(right, bg=BG_CARD)
+        tf.pack(fill=tk.X, padx=10, pady=4)
+        tk.Label(tf, text=_("coll_mgr_title_field"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, width=12, anchor=tk.W).pack(side=tk.LEFT)
+        self._title_var = tk.StringVar()
+        self._title_entry = tk.Entry(tf, textvariable=self._title_var,
+                                     bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                                     font=FONT_INPUT, relief=tk.FLAT)
+        self._title_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        context_menu(self._title_entry)
+
+        # Order (display order of the collections)
+        of = tk.Frame(right, bg=BG_CARD)
+        of.pack(fill=tk.X, padx=10, pady=4)
+        tk.Label(of, text=_("coll_mgr_order"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, width=12, anchor=tk.W).pack(side=tk.LEFT)
+        self._order_var = tk.StringVar()
+        self._order_entry = tk.Entry(of, textvariable=self._order_var, width=8,
+                                     bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                                     font=FONT_INPUT, relief=tk.FLAT)
+        self._order_entry.pack(side=tk.LEFT)
+        context_menu(self._order_entry)
+
+        # Published / on the map
+        self._published_var = tk.BooleanVar(value=False)
+        self._map_var = tk.BooleanVar(value=True)
+        self._travel_var = tk.BooleanVar(value=False)
+        for text_key, var in (("coll_mgr_published", self._published_var),
+                              ("coll_mgr_map", self._map_var),
+                              ("coll_mgr_travel", self._travel_var)):
+            tk.Checkbutton(
+                right, text=_(text_key), variable=var,
+                bg=BG_CARD, fg=FG_TEXT, selectcolor=BG_FIELD,
+                activebackground=BG_CARD, activeforeground=FG_ACCENT2,
+                font=FONT_INPUT, relief=tk.FLAT, anchor=tk.W, cursor="hand2"
+            ).pack(fill=tk.X, padx=10, pady=2)
+
+        # Description
+        descf = tk.Frame(right, bg=BG_CARD)
+        descf.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+        tk.Label(descf, text=_("coll_mgr_description"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, anchor=tk.W).pack(anchor=tk.W)
+        self._desc_txt = tk.Text(descf, height=6, wrap=tk.WORD,
+                                 bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                                 font=FONT_INPUT, relief=tk.FLAT, padx=6, pady=4,
+                                 undo=True)
+        self._desc_txt.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
+        context_menu(self._desc_txt)
+
+        # Start point of the travel (route shown on the /travel/ page)
+        gf = tk.Frame(right, bg=BG_CARD)
+        gf.pack(fill=tk.X, padx=10, pady=4)
+        tk.Label(gf, text=_("travel_start"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, width=12, anchor=tk.W).pack(side=tk.LEFT)
+        self._start_lbl = tk.Label(gf, text="", bg=BG_INPUT, fg=FG_TEXT,
+                                   font=FONT_INPUT, anchor=tk.W, relief=tk.FLAT, padx=6)
+        self._start_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(gf, text=_("btn_edit"), command=self._edit_start,
+                  bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=8, cursor="hand2").pack(side=tk.RIGHT, padx=(4, 0))
+
+        # Links (several allowed; ids of the links table, see LinkListEditor)
+        lf = tk.Frame(right, bg=BG_CARD)
+        lf.pack(fill=tk.X, padx=10, pady=4)
+        tk.Label(lf, text=_("field_links"), bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_LABEL, anchor=tk.W).pack(anchor=tk.W)
+        links_row = tk.Frame(lf, bg=BG_CARD)
+        links_row.pack(fill=tk.X, pady=(2, 0))
+        self._lbl_links = tk.Label(links_row, text="", bg=BG_INPUT, fg=FG_TEXT,
+                                   font=FONT_INPUT, anchor=tk.W, relief=tk.FLAT,
+                                   padx=6, wraplength=240, justify=tk.LEFT)
+        self._lbl_links.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(links_row, text=_("btn_edit"), command=self._edit_links,
+                  bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
+                  relief=tk.FLAT, padx=8, cursor="hand2").pack(side=tk.RIGHT, padx=(4, 0))
+
+        self._status = tk.StringVar(value="")
+        tk.Label(self, textvariable=self._status, bg=BG_CARD, fg=FG_LABEL,
+                 font=FONT_SMALL, anchor=tk.W, padx=8).pack(fill=tk.X)
+
+    # ── Data ──────────────────────────────────────────────────────────────────
+    def _reload(self):
+        try:
+            self._collections = self._app.model.list_collections()
+        except Exception as e:
+            self._status.set(str(e))
+            self._collections = []
+
+        self._lb.delete(0, tk.END)
+        for i, coll in enumerate(self._collections):
+            self._lb.insert(tk.END, coll["id"])
+            if not coll.get("published"):
+                self._lb.itemconfig(i, fg=FG_LABEL)
+        self._status.set(_("coll_mgr_count").format(n=len(self._collections)))
+
+        if self._selected_id:
+            self._select_in_list(self._selected_id)
+
+    def _select_in_list(self, coll_id: str):
+        for i, coll in enumerate(self._collections):
+            if coll["id"] == coll_id:
+                self._lb.selection_clear(0, tk.END)
+                self._lb.selection_set(i)
+                self._lb.see(i)
+                return
+
+    def _on_select(self, _event=None):
+        sel = self._lb.curselection()
+        if not sel:
+            return
+        self._load_collection(self._collections[sel[0]])
+
+    def _load_collection(self, coll: dict):
+        self._is_new = False
+        self._selected_id = coll["id"]
+        self._id_entry.config(state=tk.NORMAL)
+        self._id_var.set(coll["id"])
+        self._id_entry.config(state=tk.DISABLED)   # the id never changes
+        self._title_var.set(coll.get("title") or "")
+        self._published_var.set(bool(coll.get("published")))
+        self._map_var.set(bool(coll.get("map", True)))
+        self._travel_var.set(bool(coll.get("travel")))
+        start = coll.get("start") or []
+        self._start_coord = list(start) if len(start) >= 2 else []
+        self._refresh_start()
+        self._btn_map.config(state=tk.NORMAL if MAP_AVAILABLE else tk.DISABLED)
+        self._order_var.set(str(coll.get("order", 0)))
+        self._desc_txt.delete("1.0", tk.END)
+        self._desc_txt.insert("1.0", coll.get("description") or "")
+        self._links = list(coll.get("links") or [])
+        self._refresh_links()
+        self._btn_delete.config(state=tk.NORMAL)
+
+    def _new(self):
+        self._is_new = True
+        self._selected_id = None
+        self._lb.selection_clear(0, tk.END)
+        self._id_entry.config(state=tk.NORMAL)
+        self._id_var.set("")
+        self._title_var.set("")
+        self._published_var.set(False)
+        self._map_var.set(True)
+        self._travel_var.set(False)
+        self._start_coord = []
+        self._refresh_start()
+        self._btn_map.config(state=tk.DISABLED)
+        self._order_var.set(str(
+            max((c.get("order", 0) for c in self._collections), default=-1) + 1))
+        self._desc_txt.delete("1.0", tk.END)
+        self._links = []
+        self._refresh_links()
+        self._id_entry.focus_set()
+        self._btn_delete.config(state=tk.DISABLED)
+
+    def _refresh_links(self):
+        self._lbl_links.config(text=" / ".join(self._links))
+
+    def _refresh_start(self):
+        if len(self._start_coord) >= 2:
+            self._start_lbl.config(
+                text=f"lat {self._start_coord[0]:.6f}  /  lon {self._start_coord[1]:.6f}")
+        else:
+            self._start_lbl.config(text="")
+
+    def _edit_start(self):
+        def on_save(c):
+            self._start_coord = list(c) if c and len(c) >= 2 else []
+            self._refresh_start()
+        CoordDialog(self, list(self._start_coord), on_save, self._t)
+
+    def _open_map(self):
+        """Interactive map of the collection's cards and nearby POIs
+        (TravelMapWindow), centred on the travel start point."""
+        coll_id = self._selected_id
+        if self._is_new or not coll_id:
+            return
+        if not MAP_AVAILABLE:
+            messagebox.showerror(_("error_title"), _("map_unavailable"), parent=self)
+            return
+        win = self._map_win
+        if win is not None and win.winfo_exists():
+            win._on_close()
+        self._map_win = TravelMapWindow(
+            self, self._app, self._t, coll_id,
+            {"title": self._title_var.get().strip() or None,
+             "collection": coll_id,
+             "start": self._start_coord or None})
+
+    def _edit_links(self):
+        def on_save(new_ids):
+            self._links = list(new_ids)
+            self._refresh_links()
+        LinkListEditor(self, _("field_links"), list(self._links), on_save,
+                       self._app.model, self._t)
+
+    # ── Save / Delete / Reorder ───────────────────────────────────────────────
+    def _save(self):
+        coll_id = self._id_var.get().strip()
+        if not coll_id:
+            messagebox.showwarning(_("info_title"), _("coll_mgr_id_required"),
+                                   parent=self)
+            return
+        if self._is_new and any(c["id"] == coll_id for c in self._collections):
+            messagebox.showwarning(_("info_title"),
+                                   _("coll_mgr_id_exists").format(id=coll_id),
+                                   parent=self)
+            return
+
+        try:
+            order = int(self._order_var.get().strip())
+        except ValueError:
+            messagebox.showwarning(_("info_title"), _("coll_mgr_order_invalid"),
+                                   parent=self)
+            return
+
+        if self._travel_var.get() and len(self._start_coord) < 2:
+            messagebox.showwarning(_("info_title"),
+                                   _("coll_mgr_travel_start_required"), parent=self)
+            return
+
+        try:
+            self._app.model.write_collection({
+                "id": coll_id,
+                "order": order,
+                "map": self._map_var.get(),
+                "travel": self._travel_var.get(),
+                "start": self._start_coord or None,
+                "title": self._title_var.get().strip() or None,
+                "description": self._desc_txt.get("1.0", tk.END).strip() or None,
+                "published": self._published_var.get(),
+                "links": self._links,
+            })
+        except Exception as e:
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            return
+
+        self._is_new = False
+        self._selected_id = coll_id
+        self._id_entry.config(state=tk.DISABLED)
+        self._btn_delete.config(state=tk.NORMAL)
+        self._btn_map.config(state=tk.NORMAL if MAP_AVAILABLE else tk.DISABLED)
+        self._reload()
+        self._app._refresh_collections()
+        self._status.set(_("coll_mgr_saved").format(id=coll_id))
+
+    def _delete(self):
+        if not self._selected_id:
+            return
+        coll_id = self._selected_id
+        try:
+            n = len(self._app.model._cards_in_collection(coll_id))
+        except Exception:
+            n = 0
+        if not messagebox.askyesno(
+                _("info_title"),
+                _("coll_mgr_delete_confirm").format(id=coll_id, n=n),
+                parent=self):
+            return
+        try:
+            updated = self._app.model.delete_collection(coll_id)
+        except Exception as e:
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            return
+        self._new()
+        self._reload()
+        self._app._refresh_collections(cards_changed=bool(updated))
+        self._status.set(_("coll_mgr_deleted").format(id=coll_id, n=updated))
+
+    def _move(self, delta: int):
+        """Move the selected collection up (-1) or down (+1) in the
+        display order."""
+        if not self._selected_id or self._is_new:
+            return
+        ids = [c["id"] for c in self._collections]
+        if self._selected_id not in ids:
+            return
+        i = ids.index(self._selected_id)
+        j = i + delta
+        if j < 0 or j >= len(ids):
+            return
+        ids[i], ids[j] = ids[j], ids[i]
+        try:
+            self._app.model.reorder_collections(ids)
+        except Exception as e:
+            messagebox.showerror(_("error_title"), str(e), parent=self)
+            return
+        self._reload()
+        self._app._refresh_collections()
+
+
 class PoiManagerView(tk.Toplevel):
     """Manage the points of interest (POIs) stored in the database.
 
@@ -5646,368 +6298,6 @@ class LinkListEditor(tk.Toplevel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Travel model manager (travels.json only)
-# ─────────────────────────────────────────────────────────────────────────────
-class TravelManagerView(tk.Toplevel):
-    """Manage travel model definitions stored in travels.json.
-
-    Each travel has: id, title, title2 (optional), collection (optional),
-    start GPS coordinates (optional). The JSON is the source of truth;
-    a separate script generates the SQLite data from it.
-    """
-
-    def __init__(self, parent: "App", t):
-        super().__init__(parent)
-        self._app = parent
-        self._t   = t
-        self.title(_("travel_title"))
-        self.configure(bg=BG_MAIN)
-        self.resizable(True, True)
-
-        self._travels: dict = {}        # {id: {...}}
-        self._selected: str | None = None
-        self._start_coord: list = []
-        self._is_new = False
-
-        self._build_ui()
-        self._reload()
-        self.geometry("820x540")
-        self.minsize(700, 420)
-
-    # ── Construction ─────────────────────────────────────────────────────────
-    def _build_ui(self):
-        body = tk.Frame(self, bg=BG_MAIN)
-        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Left: list
-        left = tk.Frame(body, bg=BG_CARD)
-        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
-
-        tk.Label(left, text=_("travel_list_label"), bg=BG_CARD, fg=FG_ACCENT,
-                 font=FONT_TITLE).pack(anchor=tk.W, padx=8, pady=(8, 4))
-
-        lb_frm = tk.Frame(left, bg=BG_CARD)
-        lb_frm.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
-
-        # Boutons +/- : déplacent le trajet sélectionné d'un cran vers le
-        # haut/bas dans la liste (voir _move()), et persistent le
-        # nouvel ordre (Model.reorder_travels_json -- champ "position"
-        # de travels.json). C'est cet ordre que reprend
-        # ParcoursCartes.travels() à la prochaine régénération, avant
-        # d'être affiché tel quel sur la page /travel/ de flpostcards.
-        move_frm = tk.Frame(lb_frm, bg=BG_CARD)
-        move_frm.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 4))
-        self._btn_up = tk.Button(move_frm, text="+", command=lambda: self._move(-1),
-                                 bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
-                                 relief=tk.FLAT, width=2, cursor="hand2")
-        self._btn_up.pack(pady=(0, 2))
-        self._btn_down = tk.Button(move_frm, text="-", command=lambda: self._move(1),
-                                   bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
-                                   relief=tk.FLAT, width=2, cursor="hand2")
-        self._btn_down.pack()
-
-        vsb = ttk.Scrollbar(lb_frm, orient=tk.VERTICAL)
-        vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        self._lb = tk.Listbox(lb_frm, bg=BG_INPUT, fg=FG_TEXT,
-                              selectbackground=FG_ACCENT, font=FONT_INPUT,
-                              relief=tk.FLAT, activestyle="none",
-                              yscrollcommand=vsb.set)
-        self._lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        vsb.config(command=self._lb.yview)
-        self._lb.bind("<<ListboxSelect>>", self._on_select)
-
-        tk.Button(left, text=_("travel_new"), command=self._new,
-                  bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
-                  relief=tk.FLAT, padx=8, cursor="hand2").pack(
-            fill=tk.X, padx=8, pady=(0, 8))
-
-        # Right: detail form
-        right = tk.Frame(body, bg=BG_CARD, width=360)
-        right.pack(side=tk.LEFT, fill=tk.Y)
-        right.pack_propagate(False)
-
-        tk.Label(right, text=_("travel_detail_label"), bg=BG_CARD, fg=FG_ACCENT,
-                 font=FONT_TITLE).pack(anchor=tk.W, padx=10, pady=(10, 6))
-
-        pad = dict(padx=10, pady=4)
-
-        def row(label_key: str, widget_factory):
-            frm = tk.Frame(right, bg=BG_CARD)
-            frm.pack(fill=tk.X, **pad)
-            tk.Label(frm, text=_(label_key), bg=BG_CARD, fg=FG_LABEL,
-                     font=FONT_LABEL, width=10, anchor=tk.W).pack(side=tk.LEFT)
-            w = widget_factory(frm)
-            w.pack(side=tk.LEFT, fill=tk.X, expand=True)
-            return w
-
-        # Id
-        idf = tk.Frame(right, bg=BG_CARD)
-        idf.pack(fill=tk.X, **pad)
-        tk.Label(idf, text=_("travel_id"), bg=BG_CARD, fg=FG_LABEL,
-                 font=FONT_LABEL, width=10, anchor=tk.W).pack(side=tk.LEFT)
-        self._id_var = tk.StringVar()
-        self._id_entry = tk.Entry(idf, textvariable=self._id_var,
-                                  bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-                                  font=FONT_INPUT, relief=tk.FLAT)
-        self._id_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        context_menu(self._id_entry)
-
-        # Title
-        self._title_var = tk.StringVar()
-        self._title_entry = row("travel_title_field",
-                                lambda p: tk.Entry(p, textvariable=self._title_var,
-                                                   bg=BG_INPUT, fg=FG_TEXT,
-                                                   insertbackground=FG_TEXT,
-                                                   font=FONT_INPUT, relief=tk.FLAT))
-        context_menu(self._title_entry)
-
-        # Title2 (zone de saisie agrandie, sur plusieurs lignes -- label
-        # au-dessus plutôt qu'à côté, même agencement que la description
-        # d'un POI ci-dessus : le sous-titre affiché sur la page /travel/
-        # de flpostcards peut être plus long qu'un simple titre court).
-        title2f = tk.Frame(right, bg=BG_CARD)
-        title2f.pack(fill=tk.X, **pad)
-        tk.Label(title2f, text=_("travel_title2_field"), bg=BG_CARD, fg=FG_LABEL,
-                 font=FONT_LABEL, anchor=tk.W).pack(anchor=tk.W)
-        self._title2_txt = tk.Text(title2f, height=4, wrap=tk.WORD,
-                                   bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-                                   font=FONT_INPUT, relief=tk.FLAT, padx=6, pady=4,
-                                   undo=True)
-        self._title2_txt.pack(fill=tk.X, pady=(2, 0))
-        context_menu(self._title2_txt)
-
-        # Collection (combobox from config)
-        cf = tk.Frame(right, bg=BG_CARD)
-        cf.pack(fill=tk.X, **pad)
-        tk.Label(cf, text=_("travel_collection"), bg=BG_CARD, fg=FG_LABEL,
-                 font=FONT_LABEL, width=10, anchor=tk.W).pack(side=tk.LEFT)
-        self._coll_var = tk.StringVar()
-        self._coll_combo = ttk.Combobox(cf, textvariable=self._coll_var,
-                                        values=[""] + self._app.collections,
-                                        font=FONT_INPUT, state="normal")
-        self._coll_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        # Start GPS
-        gf = tk.Frame(right, bg=BG_CARD)
-        gf.pack(fill=tk.X, **pad)
-        tk.Label(gf, text=_("travel_start"), bg=BG_CARD, fg=FG_LABEL,
-                 font=FONT_LABEL, width=10, anchor=tk.W).pack(side=tk.LEFT)
-        self._start_lbl = tk.Label(gf, text="", bg=BG_INPUT, fg=FG_TEXT,
-                                   font=FONT_INPUT, anchor=tk.W, relief=tk.FLAT, padx=6)
-        self._start_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        tk.Button(gf, text=_("btn_edit"), command=self._edit_start,
-                  bg=BG_FIELD, fg=FG_ACCENT2, font=FONT_LABEL,
-                  relief=tk.FLAT, padx=8, cursor="hand2").pack(side=tk.RIGHT, padx=(4, 0))
-
-        # Actions
-        actions = tk.Frame(right, bg=BG_CARD)
-        actions.pack(fill=tk.X, padx=10, pady=10, side=tk.BOTTOM)
-        tk.Button(actions, text=_("btn_save_close"), command=self._save,
-                  bg=FG_ACCENT, fg="#fff", font=FONT_LABEL,
-                  relief=tk.FLAT, padx=10, cursor="hand2").pack(side=tk.LEFT, padx=(0, 6))
-        tk.Button(actions, text=_("travel_delete"), command=self._delete,
-                  bg="#5a1a1a", fg=FG_TEXT, font=FONT_LABEL,
-                  relief=tk.FLAT, padx=10, cursor="hand2").pack(side=tk.LEFT)
-        self._btn_map = tk.Button(actions, text=_("travel_map_btn"), command=self._open_map,
-                                  bg=BG_FIELD, fg=FG_LINK, font=FONT_LABEL,
-                                  relief=tk.FLAT, padx=10, cursor="hand2",
-                                  state=tk.DISABLED)
-        self._btn_map.pack(side=tk.RIGHT)
-
-        self._status = tk.StringVar(value="")
-        tk.Label(self, textvariable=self._status, bg=BG_CARD, fg=FG_LABEL,
-                 font=FONT_SMALL, anchor=tk.W, padx=8).pack(fill=tk.X)
-
-    # ── Data ──────────────────────────────────────────────────────────────────
-    def _sorted_travels(self):
-        """Trajets triés selon leur ordre d'affichage (champ "position"
-        de travels.json, id en second critère) -- c'est cet ordre qui
-        est listé ici et que font varier les boutons +/- (_move)."""
-        return sorted(
-            self._travels.items(),
-            key=lambda kv: (kv[1].get("position") or 0, kv[0]),
-        )
-
-    def _reload(self):
-        try:
-            self._travels = self._app.model.read_travels_json()
-        except Exception as e:
-            self._travels = {}
-            self._status.set(f"{_('error_title')} : {e}")
-            messagebox.showerror(_("error_title"), str(e), parent=self)
-            return
-
-        self._lb.delete(0, tk.END)
-        for tid, t in self._sorted_travels():
-            label = tid if not t.get("title") else f"{tid}  —  {t['title'][:40]}"
-            self._lb.insert(tk.END, label)
-
-        self._status.set(_("travel_count").format(n=len(self._travels)))
-
-    def _on_select(self, _event=None):
-        sel = self._lb.curselection()
-        if not sel:
-            return
-        tid = [tid for tid, _t in self._sorted_travels()][sel[0]]
-        self._load_travel(tid)
-
-    def _move(self, direction: int):
-        """Déplace le trajet sélectionné d'un cran vers le haut
-        (direction=-1, bouton "+") ou le bas (direction=+1, bouton "-")
-        dans la liste, et persiste le nouvel ordre pour tous les
-        trajets (Model.reorder_travels_json) -- sans effet si aucun
-        trajet n'est sélectionné, ou déjà en haut/bas de la liste."""
-        if self._is_new or not self._selected:
-            return
-
-        ordered_ids = [tid for tid, _t in self._sorted_travels()]
-        try:
-            idx = ordered_ids.index(self._selected)
-        except ValueError:
-            return
-
-        new_idx = idx + direction
-        if new_idx < 0 or new_idx >= len(ordered_ids):
-            return  # déjà en haut/en bas de la liste
-
-        ordered_ids[idx], ordered_ids[new_idx] = ordered_ids[new_idx], ordered_ids[idx]
-
-        try:
-            self._app.model.reorder_travels_json(ordered_ids)
-        except Exception as e:
-            messagebox.showerror(_("error_title"), str(e), parent=self)
-            return
-
-        # Répercute aussi tout de suite dans la table SQL "travels" (celle
-        # que lit flpostcards) : travels.json (ci-dessus) reste la source
-        # de vérité persistante, mais sans ce second appel, le nouvel
-        # ordre n'apparaîtrait sur /travel/ qu'après la prochaine
-        # régénération complète des trajets (recalcul distance/cartes,
-        # bien plus coûteux qu'un simple changement d'ordre). Best-effort
-        # (silencieux) : si un trajet n'a encore jamais été calculé, il
-        # n'existe pas encore dans cette table, rien à mettre à jour pour
-        # lui -- pas une erreur.
-        try:
-            self._app.model.reorder_travels(ordered_ids)
-        except Exception:
-            pass
-
-        selected = self._selected
-        self._reload()
-        self._select_in_list(selected)
-
-    def _load_travel(self, travel_id: str):
-        self._is_new = False
-        self._selected = travel_id
-        t = self._travels[travel_id]
-        self._id_var.set(t.get("id", travel_id))
-        self._id_entry.config(state=tk.DISABLED)
-        self._title_var.set(t.get("title") or "")
-        self._title2_txt.delete("1.0", tk.END)
-        self._title2_txt.insert("1.0", t.get("title2") or "")
-        self._coll_var.set(t.get("collection") or "")
-        start = t.get("start") or []
-        self._start_coord = list(start) if len(start) >= 2 else []
-        self._refresh_start()
-        self._btn_map.config(state=tk.NORMAL if MAP_AVAILABLE else tk.DISABLED)
-
-    def _new(self):
-        self._is_new = True
-        self._selected = None
-        self._lb.selection_clear(0, tk.END)
-        self._id_var.set("")
-        self._id_entry.config(state=tk.NORMAL)
-        self._title_var.set("")
-        self._title2_txt.delete("1.0", tk.END)
-        self._coll_var.set("")
-        self._start_coord = []
-        self._refresh_start()
-        self._btn_map.config(state=tk.DISABLED)
-        self._id_entry.focus_set()
-        self._status.set("")
-
-    def _refresh_start(self):
-        if len(self._start_coord) >= 2:
-            self._start_lbl.config(
-                text=f"lat {self._start_coord[0]:.6f}  /  lon {self._start_coord[1]:.6f}")
-        else:
-            self._start_lbl.config(text="")
-
-    def _edit_start(self):
-        def on_save(c):
-            self._start_coord = c
-            self._refresh_start()
-        CoordDialog(self, list(self._start_coord), on_save, self._t)
-
-    def _open_map(self):
-        if self._is_new or not self._selected:
-            return
-        if not MAP_AVAILABLE:
-            messagebox.showerror(_("error_title"), _("map_unavailable"), parent=self)
-            return
-        travel = self._travels.get(self._selected)
-        if not travel:
-            return
-        win = getattr(self, "_map_win", None)
-        if win is not None and win.winfo_exists():
-            win._on_close()
-        self._map_win = TravelMapWindow(self, self._app, self._t, self._selected, travel)
-
-    # ── Save / Delete ─────────────────────────────────────────────────────────
-    def _save(self):
-        travel_id = self._id_var.get().strip()
-        if not travel_id:
-            messagebox.showwarning(_("info_title"), _("travel_id_required"), parent=self)
-            return
-
-        start = self._start_coord if len(self._start_coord) >= 2 else None
-
-        entry = {
-            "id":         travel_id,
-            "title":      self._title_var.get().strip() or None,
-            "title2":     self._title2_txt.get("1.0", "end-1c").strip() or None,
-            "collection": self._coll_var.get().strip() or None,
-            "start":      start,
-        }
-
-        try:
-            self._app.model.write_travel_json(entry)
-        except Exception as e:
-            messagebox.showerror(_("error_title"), str(e), parent=self)
-            return
-
-        self._is_new = False
-        self._selected = travel_id
-        self._id_entry.config(state=tk.DISABLED)
-        self._reload()
-        self._select_in_list(travel_id)
-        self._status.set(_("travel_saved").format(id=travel_id))
-
-    def _delete(self):
-        if not self._selected:
-            return
-        if not messagebox.askyesno(_("info_title"),
-                                   _("travel_delete_confirm").format(id=self._selected),
-                                   parent=self):
-            return
-        try:
-            self._app.model.delete_travel_json(self._selected)
-        except Exception as e:
-            messagebox.showerror(_("error_title"), str(e), parent=self)
-            return
-        self._new()
-        self._reload()
-
-    def _select_in_list(self, travel_id: str):
-        keys = [tid for tid, _t in self._sorted_travels()]
-        if travel_id in keys:
-            i = keys.index(travel_id)
-            self._lb.selection_clear(0, tk.END)
-            self._lb.selection_set(i)
-            self._lb.see(i)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 #  Carte interactive d'un travel (cartes postales + POI de la zone)
 # ─────────────────────────────────────────────────────────────────────────────
 class TravelMapWindow(tk.Toplevel):
@@ -6607,18 +6897,11 @@ class AuthManagerView(tk.Toplevel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Application settings (collections.json + [DEFAULT] section of postcards.conf)
+#  Application settings ([DEFAULT] section of postcards.conf)
 # ─────────────────────────────────────────────────────────────────────────────
 class SettingsView(tk.Toplevel):
     """Edit the application-wide settings:
 
-    - ``collections``: comma-separated list of collection names, used
-      throughout tkmanager (filters, checkboxes on each card, ...).
-      Stored in ``<datadir>/collections.json`` (shared with ``tkscan``,
-      ``tktools`` and the web app via ``libpostcards.model.Model``).
-    - ``collections_map``: comma-separated subset of ``collections``
-      shown on the public map (web app). Stored alongside
-      ``collections`` in ``<datadir>/collections.json``.
     - ``file_format``: extension of the scanned images stored in
       ``datadir/cards`` (e.g. ``tiff``). Stored in the ``[DEFAULT]``
       section of ``postcards.conf`` (shared with ``tkscan``, ``tktools``
@@ -6626,11 +6909,10 @@ class SettingsView(tk.Toplevel):
       inheritance).
     """
 
-    FIELDS = (
-        # (config key, label key, help key)
-        ("collections",     "settings_collections",     "settings_collections_help"),
-        ("collections_map", "settings_collections_map", "settings_collections_map_help"),
-    )
+    # Collections are no longer a setting: they live in
+    # ``<datadir>/collections.json`` and are edited in CollectionManagerView
+    # (menu "Collections").
+    FIELDS: tuple = ()
 
     FORMAT_CHOICES = ("tiff", "jpg", "jpeg", "png")
 
@@ -6713,26 +6995,10 @@ class SettingsView(tk.Toplevel):
     # ── Data ──────────────────────────────────────────────────────────────────
     def _reload(self):
         cfg = self._app.config_parser
-        collections, collections_map = self._app.model.get_collections()
-        self._vars["collections"].set(", ".join(collections))
-        self._vars["collections_map"].set(", ".join(collections_map))
         self._vars["file_format"].set(cfg.get("DEFAULT", "file_format", fallback=""))
 
     def _save(self):
-        collections_raw = self._vars["collections"].get()
-        map_raw = self._vars["collections_map"].get()
         file_format = self._vars["file_format"].get().strip()
-
-        collections = [c.strip() for c in collections_raw.split(",") if c.strip()]
-        collections_map = [c.strip() for c in map_raw.split(",") if c.strip()]
-
-        unknown = [c for c in collections_map if c not in collections]
-        if unknown:
-            messagebox.showwarning(
-                _("info_title"),
-                _("settings_map_unknown").format(names=", ".join(unknown)),
-                parent=self)
-            return
 
         if not file_format:
             messagebox.showwarning(_("info_title"), _("settings_format_required"),
@@ -6740,13 +7006,12 @@ class SettingsView(tk.Toplevel):
             return
 
         try:
-            self._app.model.set_collections(collections, collections_map)
-
             cfg = self._app.config_parser
             cfg.set("DEFAULT", "file_format", file_format)
-            # collections/collections_map ont migré vers collections.json ;
-            # on nettoie d'éventuelles anciennes valeurs laissées dans
-            # postcards.conf par une version antérieure de tkmanager.
+            # collections/collections_map ne sont plus lus dans
+            # postcards.conf (les collections vivent dans collections.json) ;
+            # on nettoie d'éventuelles anciennes valeurs laissées par une
+            # version antérieure.
             cfg.remove_option("DEFAULT", "collections")
             cfg.remove_option("DEFAULT", "collections_map")
             with open(self._app.conf_file, "w", encoding="utf-8") as f:
@@ -6755,12 +7020,8 @@ class SettingsView(tk.Toplevel):
             messagebox.showerror(_("error_title"), str(e), parent=self)
             return
 
-        # Keep the in-memory collection list in sync for the rest of this
-        # session (checkboxes, filters); other settings (file_format) are
-        # only read by other tools/processes and take effect on their
-        # next run.
-        self._app.collections = collections
-
+        # file_format is only read by other tools/processes and takes
+        # effect on their next run.
         self._status.set(_("settings_saved"))
         self.destroy()
 

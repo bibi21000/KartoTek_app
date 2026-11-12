@@ -127,7 +127,8 @@ class Common(object):
         # serveur distant, au lieu d'un calcul local, tout ce que
         # simpostcards sait faire à la place de cette machine :
         #   - PostcardSearcher (recherche par similarité, recherche de
-        #     doublons, construction d'index) -- voir
+        #     doublons -- comparaison de toutes les paires incluse, via
+        #     POST /api/find_duplicates --, construction d'index) -- voir
         #     libpostcards.similar.PostcardSearcher.external_helper ;
         #     dispense d'installer torch/open-clip-torch/imagehash ici ;
         #   - ParcoursCartes (calcul de parcours optimisés) -- voir

@@ -52,11 +52,11 @@
         <p>{{ card.description }}</p>
         {% endif %}
 
-        {% if card.collections %}
+        {% if card_collections %}
         <div class="collections">
-            {% for c in card.collections %}
+            {% for c in card_collections %}
             <a href="{{ url_for('slideshow.index', collection=c) }}"
-               title="{{ _("Voir le diaporama de cette collection") }}">{{ c }}</a>
+               title="{{ _("Voir le diaporama de cette collection") }}">{{ c | collection_label }}</a>
             {% endfor %}
         </div>
         {% endif %}
@@ -182,7 +182,7 @@
     {% endif %}
 
     {% if card_links %}
-    {# Liens de la carte et de ses POIs, sans distinction (voir
+    {# Liens de la carte, de ses POIs et de ses collections, sans distinction (voir
        Model.resolve_card_links). #}
     <div class="card-links-section">
         <h2 class="card-links-title">{{ _("Liens") }}</h2>

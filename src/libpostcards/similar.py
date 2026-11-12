@@ -1,10 +1,15 @@
 # -*- encoding: utf-8 -*-
 from pathlib import Path
+import gzip
+import json
+import logging
 import pickle
 import tempfile
 import requests
 
 from PIL import Image, ImageGrab
+
+logger = logging.getLogger(__name__)
 
 # imagehash / open_clip / torch sont volontairement importés localement
 # dans les méthodes qui en ont besoin (voir chaque site d'import
@@ -963,8 +968,153 @@ class PostcardSearcher:
         hash_weight=0.60,
         clip_weight=0.40
     ):
-
+        """
+        Retourne les paires d'entrées de l'index dont le score combiné
+        atteint ``threshold`` (``[{"score", "file1", "file2"}, ...]``,
+        triée par score décroissant). Version non progressive de
+        :meth:`iter_similar_in_index`, dont elle agrège le résultat.
+        """
         matches = []
+        for _done, _total, block in self.iter_similar_in_index(
+                threshold=threshold,
+                hash_weight=hash_weight,
+                clip_weight=clip_weight):
+            matches.extend(block)
+
+        matches.sort(
+            key=lambda x: x["score"],
+            reverse=True
+        )
+
+        return matches
+
+    def iter_similar_in_index(
+        self,
+        threshold=90,
+        hash_weight=0.60,
+        clip_weight=0.40
+    ):
+        """
+        Version PROGRESSIVE de :meth:`find_similar_in_index` : générateur
+        de ``(traitées, total, paires)`` -- ``paires`` étant la liste
+        (éventuellement vide) des doublons trouvés à cette étape -- qui
+        permet d'afficher les résultats au fur et à mesure, et de mesurer
+        l'avancement (``traitées``/``total`` = entrées comparées sur le
+        nombre d'entrées de l'index). Les paires ne sont PAS triées
+        globalement (ordre de découverte) : c'est à l'appelant de trier
+        à la fin s'il le souhaite.
+
+        Si ``self.external_helper`` est configuré, la comparaison de
+        toutes les paires (O(n²)) est déléguée au serveur simpostcards
+        distant (``POST /api/find_duplicates`` en flux, voir
+        :meth:`_iter_similar_remote`) : ni torch ni numpy ne sont alors
+        nécessaires sur ce poste. Un serveur qui ne connaît pas cette
+        route (404/501) fait retomber sur le calcul local.
+        """
+
+        if self.external_helper:
+            try:
+                yield from self._iter_similar_remote(
+                    threshold=threshold,
+                    hash_weight=hash_weight,
+                    clip_weight=clip_weight)
+                return
+            except requests.HTTPError as exc:
+                # _iter_similar_remote ne lève HTTPError qu'AVANT d'avoir
+                # produit quoi que ce soit : repli sans doublon possible.
+                status = exc.response.status_code if exc.response is not None else None
+                if status not in (404, 501):
+                    raise
+                logger.warning(
+                    "iter_similar_in_index : %s ne propose pas "
+                    "/api/find_duplicates (HTTP %s), calcul local.",
+                    self.external_helper, status)
+
+        yield from self._iter_similar_local(
+            threshold=threshold,
+            hash_weight=hash_weight,
+            clip_weight=clip_weight)
+
+    def _iter_similar_remote(self, threshold, hash_weight, clip_weight):
+        """
+        Délègue la recherche de doublons à
+        ``POST {self.external_helper}/api/find_duplicates`` (voir
+        simpostcards.blueprints.api.find_duplicates_route), en mode flux
+        (``"stream": true``) : une ligne NDJSON par bloc calculé, lue et
+        transmise à mesure qu'elle arrive.
+
+        N'envoie que les champs utiles à la comparaison (chemin, 4 hashs,
+        embedding éventuel) -- pas ``mpath``/``chash`` -- dans un corps
+        JSON compressé en gzip : l'embedding CLIP (ex : 768 flottants par
+        carte) rend sinon la requête volumineuse. Pour une très grande
+        collection, ``max_content_length_mb`` côté serveur peut devoir
+        être augmenté. Avec un flux, ``external_helper_timeout`` borne
+        l'attente entre deux blocs, plus la durée totale du calcul O(n²).
+
+        Un serveur qui répond en JSON simple (sans connaître le mode
+        flux) est géré : tout le résultat est alors transmis d'un bloc.
+
+        :raises RuntimeError: erreur signalée par le serveur en cours de
+            calcul, ou flux interrompu avant la ligne finale.
+        """
+        items = [
+            {
+                "path": item["path"],
+                "ahash": item["ahash"],
+                "dhash": item["dhash"],
+                "phash": item["phash"],
+                "whash": item["whash"],
+                "embedding": item.get("embedding"),
+            }
+            for item in self.index.values()
+        ]
+        body = gzip.compress(json.dumps({
+            "items": items,
+            "threshold": threshold,
+            "hash_weight": hash_weight,
+            "clip_weight": clip_weight,
+            "stream": True,
+        }).encode("utf-8"))
+
+        response = requests.post(
+            f"{self.external_helper.rstrip('/')}/api/find_duplicates",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Encoding": "gzip",
+            },
+            timeout=self.external_helper_timeout,
+            stream=True,
+        )
+        try:
+            response.raise_for_status()
+
+            if "ndjson" not in response.headers.get("Content-Type", ""):
+                total = len(items)
+                yield total, total, response.json()["matches"]
+                return
+
+            finished = False
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                message = json.loads(line)
+                if "error" in message:
+                    raise RuntimeError(
+                        "Recherche de doublons distante : %s" % message["error"])
+                if message.get("status") == "ok":
+                    finished = True
+                    continue
+                yield message["done"], message["total"], message["matches"]
+
+            if not finished:
+                raise RuntimeError(
+                    "Recherche de doublons distante : flux interrompu "
+                    "avant la fin du calcul.")
+        finally:
+            response.close()
+
+    def _iter_similar_local(self, threshold, hash_weight, clip_weight):
 
         sindex = [v for k,v in self.index.items()]
 
@@ -973,6 +1123,7 @@ class PostcardSearcher:
         for i in self.tqdm(range(total)):
 
             item1 = sindex[i]
+            row = []
 
             for j in range(i + 1, total):
 
@@ -983,11 +1134,18 @@ class PostcardSearcher:
 
                 if final_score >= threshold:
 
-                    matches.append({
+                    row.append({
                         "score": round(final_score, 2),
                         "file1": item1["path"],
                         "file2": item2["path"]
                     })
+
+            yield i + 1, total, row
+
+    def _find_similar_local(self, threshold, hash_weight, clip_weight):
+
+        matches = [m for _d, _t, row in self._iter_similar_local(
+            threshold, hash_weight, clip_weight) for m in row]
 
         matches.sort(
             key=lambda x: x["score"],
@@ -1039,6 +1197,33 @@ class PostcardSearcher:
         return checked
 
 
+    def _missing_double_error(self, item, model):
+        """
+        Entrée d'erreur pour la paire ``item`` (``{"score", "file1",
+        "file2"}``) si les deux cartes ne se référencent pas mutuellement
+        dans leurs ``doubles``, sinon ``None``.
+        """
+        id1 = self.extract_card_id(item["file1"])
+        id2 = self.extract_card_id(item["file2"])
+
+        card1 = model.get_card(id1)
+        card2 = model.get_card(id2)
+
+        doubles1 = set(str(x) for x in (card1.get("doubles", []) if card1 else []))
+        doubles2 = set(str(x) for x in (card2.get("doubles", []) if card2 else []))
+
+        if id1 not in doubles2 or id2 not in doubles1:
+            return {
+                "score": item["score"],
+                "file1": item["file1"],
+                "file2": item["file2"],
+                "id1": id1,
+                "id2": id2,
+                "file1_has_id2": id2 in doubles1,
+                "file2_has_id1": id1 in doubles2,
+            }
+        return None
+
     def find_missing_doubles(
         self,
         model,
@@ -1058,24 +1243,34 @@ class PostcardSearcher:
             )
 
         for item in results:
-            id1 = self.extract_card_id(item["file1"])
-            id2 = self.extract_card_id(item["file2"])
-
-            card1 = model.get_card(id1)
-            card2 = model.get_card(id2)
-
-            doubles1 = set(str(x) for x in (card1.get("doubles", []) if card1 else []))
-            doubles2 = set(str(x) for x in (card2.get("doubles", []) if card2 else []))
-
-            if id1 not in doubles2 or id2 not in doubles1:
-                errors.append({
-                    "score": item["score"],
-                    "file1": item["file1"],
-                    "file2": item["file2"],
-                    "id1": id1,
-                    "id2": id2,
-                    "file1_has_id2": id2 in doubles1,
-                    "file2_has_id1": id1 in doubles2,
-                })
+            error = self._missing_double_error(item, model)
+            if error is not None:
+                errors.append(error)
 
         return errors
+
+    def iter_missing_doubles(
+        self,
+        model,
+        threshold=90,
+        hash_weight=0.60,
+        clip_weight=0.40
+    ):
+        """
+        Version PROGRESSIVE de :meth:`find_missing_doubles` : générateur
+        de ``(traitées, total, erreurs)`` -- voir
+        :meth:`iter_similar_in_index` --, où ``erreurs`` ne contient que
+        les paires similaires trouvées à cette étape dont les cartes ne se
+        référencent pas mutuellement dans leurs ``doubles``. Ordre de
+        découverte, non trié.
+        """
+        for done, total, row in self.iter_similar_in_index(
+                threshold=threshold,
+                hash_weight=hash_weight,
+                clip_weight=clip_weight):
+            errors = []
+            for item in row:
+                error = self._missing_double_error(item, model)
+                if error is not None:
+                    errors.append(error)
+            yield done, total, errors

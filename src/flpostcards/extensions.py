@@ -27,7 +27,7 @@ limiter = Limiter(key_func=get_remote_address)
 # Cache (15 minutes par défaut, voir CACHE_DEFAULT_TIMEOUT dans
 # load_config()) pour flpostcards/data_cache.py : évite de refaire la
 # lecture SQLite (elle-même synchronisée depuis collections.json,
-# pois.json, travels.json -- voir libpostcards.model.Model) à chaque
+# pois.json -- voir libpostcards.model.Model) à chaque
 # requête HTTP. Backend configuré dans load_config() : Redis si
 # [redis] url est défini dans postcards.conf (mêmes host/prefix
 # global que le rate limiting, voir [redis] cache_prefix), sinon un

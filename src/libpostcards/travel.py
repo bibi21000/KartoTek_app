@@ -61,38 +61,39 @@ class ParcoursCartes:
     def travels(datadir, external_helper=None, external_helper_timeout=None):
 
         from pathlib import Path
-        import json
         from libpostcards.model import Model
 
         datadir = Path(datadir)
         model = Model(datadir)
         data = model.list_unique_cards_with_coord(limit=1000)
 
-        with open(datadir / "travels.json", "r", encoding="utf-8") as f:
-            travels = json.load(f)
+        # Les parcours sont les collections dont "travel" est vrai et dont
+        # "start" (point de départ) est renseigné (collections.json, voir
+        # Model.list_collections) : l'id du parcours est celui de la
+        # collection ; titre, description et ordre sont lus sur la
+        # collection au moment de l'affichage (Model.list_travels).
+        collections = [
+            c for c in model.list_collections()
+            if c.get("travel") and c.get("start")
+        ]
 
         travel = ParcoursCartes(data, external_helper=external_helper,
                                  external_helper_timeout=external_helper_timeout)
-        travel_data = {}
-        for tt in travels:
+        for collection in collections:
             travel_data = travel.calculer(
-                *travels[tt]['start'],
-                collection=travels[tt]['collection'],
+                *collection['start'],
+                collection=collection['id'],
                 )
-            travel_data['id'] = travels[tt]['id']
-            travel_data['title'] = travels[tt]['title']
-            travel_data['title2'] = travels[tt]['title2']
-            # Ordre d'affichage sur la page /travel/ de flpostcards (voir
-            # Model.list_travels/reorder_travels_json) : source de vérité
-            # dans travels.json, propagé ici à chaque régénération comme
-            # title/title2 -- 0 par défaut si absent (ancien travels.json
-            # sans ce champ).
-            travel_data['position'] = travels[tt].get('position', 0)
+            travel_data['id'] = collection['id']
 
             # model.write_travel() met à jour mdate lui-même, uniquement
             # si "cards" a réellement changé par rapport à la version déjà
             # en base (cf. sa docstring) : pas besoin de le faire ici.
             model.write_travel(travel_data)
+
+        # Retire les parcours calculés dont la collection n'a plus de
+        # travel (supprimée, ou case "travel" décochée).
+        model.prune_travels()
 
     @staticmethod
     def haversine(lat1, lon1, lat2, lon2):

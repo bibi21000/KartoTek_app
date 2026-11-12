@@ -97,6 +97,16 @@ lock_timeout = 60.0
 #   hash-only similarity -- still effective at finding an actual
 #   duplicate scan, just less able to match a postcard photographed
 #   under very different lighting/framing than the reference scan.
+#   The duplicate search itself (comparing every pair of cards in the
+#   index, O(n^2) -- `tktools duplicates`, "Find missing doubles") also
+#   runs on that server (POST /api/find_duplicates): the index (hashes
+#   + embeddings, gzip-compressed) is sent in a single request, and only
+#   the matching pairs come back, streamed block by block as they are
+#   computed (tkmanager displays duplicates progressively). For a
+#   large collection, raise
+#   [simpostcards] max_content_length_mb and external_helper_timeout
+#   below. A simpostcards server too old to have this route makes the
+#   client fall back to the local comparison automatically.
 #
 # - travel-route optimization (tkmanager's "Publish" dialog "update
 #   travel routes" checkbox, `travels` / `publish --full` tktools

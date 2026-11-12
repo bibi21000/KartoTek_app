@@ -9,6 +9,7 @@ from flask import Blueprint, current_app, jsonify, render_template, request, url
 from flask_babel import gettext
 
 from flpostcards.alt_text import build_recto_alt
+from flpostcards.data_cache import collection_label
 from flpostcards.images import SIZE_SMALL, card_images, image_dimensions
 from flpostcards.osm_static_map import get_or_generate_map_image
 
@@ -32,7 +33,9 @@ def index():
     show_pois = request.args.get("show_pois") in ("1", "true", "on")
 
     if collection:
-        page_title = gettext("Carte - %(collection)s", collection=collection)
+        page_title = gettext(
+            "Carte - %(collection)s", collection=collection_label(collection)
+        )
     else:
         page_title = gettext("Carte")
 

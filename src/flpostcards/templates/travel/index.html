@@ -23,8 +23,8 @@
             {% endif %}
             <div class="travel-card-info">
                 <h2>{{ travel.title or travel.id }}</h2>
-                {% if travel.title2 %}
-                <p class="travel-card-subtitle">{{ travel.title2 }}</p>
+                {% if travel.description %}
+                <p class="travel-card-subtitle">{{ travel.description }}</p>
                 {% endif %}
                 <p class="travel-card-meta">
                     {{ _("%(distance)s km", distance=("%.2f" | format(travel.distance_km))) }}

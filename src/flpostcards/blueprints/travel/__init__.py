@@ -1,16 +1,22 @@
 """
-Blueprint travel : parcours personnalisés (table travels), affichés sous
-forme de diaporama suivant l'ordre des cartes du trajet.
+Blueprint travel : parcours des collections publiées dont ``travel`` est
+vrai (table travels, voir Model.list_travels), affichés sous forme de
+diaporama suivant l'ordre des cartes du trajet. L'id d'un parcours est
+celui de sa collection ; son titre, sa description (sous-titre) et son
+ordre sont ceux de la collection.
 """
 
 from __future__ import annotations
 
 import random
 
-from flask import Blueprint, abort, current_app, jsonify, render_template, url_for
+from flask import (
+    Blueprint, abort, current_app, jsonify, redirect, render_template, url_for,
+)
 from flask_babel import gettext
 
 from flpostcards.alt_text import build_recto_alt
+from flpostcards import data_cache
 from flpostcards.extensions import cache
 from flpostcards.images import SIZE_MAIN, SIZE_SMALL, card_images, image_dimensions
 
@@ -75,6 +81,21 @@ def _format_duration(count: int) -> str:
     return gettext("%(m)d min", m=minutes)
 
 
+def _legacy_travel_redirect(travel_id: str, endpoint: str):
+    """Anciennes URLs : avant la fusion des travels dans les collections,
+    l'id d'un parcours était en minuscules (``/travel/seille``) alors que
+    celui de sa collection ne l'est pas forcément (``Seille``). Si
+    ``travel_id`` correspond, à la casse près, à l'id d'un parcours
+    publié, redirige définitivement (301) vers l'URL avec l'id exact ;
+    sinon retourne None."""
+    wanted = travel_id.lower()
+    for travel in data_cache.list_travels_cached():
+        real_id = str(travel["id"])
+        if real_id != travel_id and real_id.lower() == wanted:
+            return redirect(url_for(endpoint, travel_id=real_id), code=301)
+    return None
+
+
 @bp.route("/travel/")
 def index():
     """Liste des parcours disponibles."""
@@ -108,7 +129,7 @@ def detail(travel_id: str):
     model = current_app.model
     travel = model.read_travel(travel_id)
     if travel is None:
-        abort(404)
+        return _legacy_travel_redirect(travel_id, "travel.detail") or abort(404)
 
     cards = travel.get("cards") or []
     if not cards:
@@ -134,7 +155,7 @@ def detail(travel_id: str):
         travel=travel,
         cards=cards,
         og_title=page_title,
-        og_description=travel.get("title2")
+        og_description=travel.get("description")
         or gettext(
             "Suivez mes parcours à travers ma collection de cartes postales."
         ),
@@ -154,7 +175,7 @@ def cards_json(travel_id: str):
     model = current_app.model
     travel = model.read_travel(travel_id)
     if travel is None:
-        abort(404)
+        return _legacy_travel_redirect(travel_id, "travel.cards_json") or abort(404)
 
     items = []
     for entry in travel.get("cards") or []:

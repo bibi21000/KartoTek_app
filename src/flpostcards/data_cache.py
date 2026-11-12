@@ -2,10 +2,10 @@
 flpostcards/data_cache.py - Cache pour les lectures répétées des trois
 jeux de données "de référence" partagés par toutes les requêtes :
 collections (collections.json), POIs (pois.json) et trajets
-(travels.json).
+(les collections dont ``travel`` est vrai, dans collections.json).
 
-Ces trois fichiers ne sont plus lus tels quels à chaque requête (voir
-libpostcards.model.Model : ``get_collections()``, ``list_pois()`` et
+Ces fichiers ne sont plus lus tels quels à chaque requête (voir
+libpostcards.model.Model : ``list_collections()``, ``list_pois()`` et
 ``list_travels()`` interrogent en réalité les tables SQLite
 ``collections``/``pois``/``travels``, tenues à jour depuis ces JSON --
 même principe que postcards.sqlite pour les cartes). Ce module ajoute
@@ -38,14 +38,27 @@ _POIS_KEY = "pois"
 _TRAVELS_KEY = "travels"
 
 
-def get_collections_cached() -> tuple[list[str], list[str]]:
-    """Équivalent mis en cache de ``current_app.model.get_collections()``
-    -- retourne ``(collections, collections_map)``."""
+def get_collections_cached() -> list[dict]:
+    """Équivalent mis en cache de
+    ``current_app.model.list_collections(published_only=True)`` --
+    retourne les collections publiées ``[{id, title, description,
+    published, links}]``, dans l'ordre d'affichage. Les collections non
+    publiées ne sont jamais exposées par flpostcards."""
     value = cache.get(_COLLECTIONS_KEY)
     if value is None:
-        value = current_app.model.get_collections()
+        value = current_app.model.list_collections(published_only=True)
         cache.set(_COLLECTIONS_KEY, value)
     return value
+
+
+def collection_label(collection_id: str | None) -> str:
+    """Libellé affiché pour une collection : son ``title`` s'il est
+    renseigné, sinon son ``id``. Lit ``COLLECTION_TITLES`` (voir
+    flpostcards.apply_collections) ; un id inconnu est rendu tel quel."""
+    if not collection_id:
+        return ""
+    titles = current_app.config.get("COLLECTION_TITLES", {})
+    return titles.get(collection_id) or collection_id
 
 
 def list_pois_cached() -> list[dict]:
@@ -72,7 +85,7 @@ def get_travel_cached(travel_id: str) -> dict | None:
 
     Recherche dans :func:`list_travels_cached` plutôt que d'ouvrir un
     espace de cache séparé par id : le nombre de trajets reste modeste
-    (parcours définis à la main dans travels.json), donc un balayage
+    (parcours définis à la main sur des collections), donc un balayage
     de la liste déjà en cache est largement suffisant, et évite
     d'avoir à invalider une clé par id.
     """

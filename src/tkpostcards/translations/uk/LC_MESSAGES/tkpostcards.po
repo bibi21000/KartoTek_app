@@ -1335,6 +1335,14 @@ msgstr "Шукати"
 msgid "doubles_done"
 msgstr "Пошук завершено"
 
+#: src/tkpostcards/tkmanager.py
+msgid "doubles_progress"
+msgstr "{done}/{total} карток порівняно — знайдено можливих дублікатів: {n}"
+
+#: src/tkpostcards/tkmanager.py
+msgid "doubles_loading_images"
+msgstr "Завантаження зображень… (залишилось: {remaining})"
+
 #: src/tkpostcards/tkmanager.py:4470
 msgid "doubles_edit"
 msgstr "Редагувати"
@@ -2856,6 +2864,95 @@ msgstr "Записано до {f}"
 #, python-brace-format
 msgid "{n} request(s) made to Delcampe"
 msgstr "Запитів до Delcampe: {n}"
+
+#: src/tkpostcards/tkmanager.py
+msgid "nav_collections"
+msgstr "Колекції"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_title"
+msgstr "Керування колекціями"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_list_label"
+msgstr "Колекції"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_detail_label"
+msgstr "Деталі колекції"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_new"
+msgstr "Нова колекція"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_id"
+msgstr "Id"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_title_field"
+msgstr "Назва"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_description"
+msgstr "Опис"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_published"
+msgstr "Опублікована на сайті (flpostcards)"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_delete"
+msgstr "Видалити"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_id_required"
+msgstr "Id колекції обов'язковий."
+
+#: src/tkpostcards/tkmanager.py
+#, python-brace-format
+msgid "coll_mgr_id_exists"
+msgstr "Колекція «{id}» вже існує."
+
+#: src/tkpostcards/tkmanager.py
+#, python-brace-format
+msgid "coll_mgr_saved"
+msgstr "Колекцію «{id}» збережено."
+
+#: src/tkpostcards/tkmanager.py
+#, python-brace-format
+msgid "coll_mgr_count"
+msgstr "Колекцій: {n}"
+
+#: src/tkpostcards/tkmanager.py
+#, python-brace-format
+msgid "coll_mgr_delete_confirm"
+msgstr "Видалити колекцію «{id}»?\n\nЇї також буде вилучено з карток, що її використовують: {n}."
+
+#: src/tkpostcards/tkmanager.py
+#, python-brace-format
+msgid "coll_mgr_deleted"
+msgstr "Колекцію «{id}» видалено (оновлено карток: {n})."
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_order"
+msgstr "Порядок"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_map"
+msgstr "Показувати на карті (collections_map)"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_order_invalid"
+msgstr "Порядок має бути цілим числом."
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_travel"
+msgstr "Маршрут визначено (сторінка /travel/)"
+
+#: src/tkpostcards/tkmanager.py
+msgid "coll_mgr_travel_start_required"
+msgstr "Для маршруту потрібна початкова точка."
 
 #~ msgid "White threshold:"
 #~ msgstr "Поріг білого:"

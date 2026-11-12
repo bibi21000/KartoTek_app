@@ -831,33 +831,50 @@ def next_update():
 @limiter.limit("30 per minute;600 per hour")
 def collections():
     """
-    Liste des collections connues (paramètre ``collections`` de
+    Liste des collections **publiées** (``published`` vrai dans
     ``<datadir>/collections.json``), avec le nombre de cartes uniques
     (sans doublons) dans chacune.
 
     Réponse JSON :
       {
         "collections": [
-          {"name": "Louhans", "count": 42},
-          {"name": "Seille", "count": 12},
+          {"id": "Louhans", "name": "Louhans", "title": "Louhans et environs",
+           "description": "...", "count": 42},
+          {"id": "Seille", "name": "Seille", "title": "Seille", "description": null, "count": 12},
           ...
         ],
         "collections_map": ["Louhans", "Seille"]
-          -- sous-ensemble proposé comme filtre sur /map/ (= collections
-             si "collections_map" n'est pas défini dans collections.json)
       }
+
+    ``id`` (et son alias historique ``name``) est la valeur à passer au
+    paramètre ``collection`` des autres endpoints ; ``title`` est le
+    libellé à afficher (le titre de la collection, ou son id s'il n'en a
+    pas). ``collections_map`` : ids des collections dont ``map`` est vrai
+    (celles proposées sur /map/), dans l'ordre de ``order``.
     """
     model = current_app.model
-    names = current_app.config.get("COLLECTIONS", [])
+    config = current_app.config
+    published = config.get("COLLECTIONS", [])
+    titles = config.get("COLLECTION_TITLES", {})
+    descriptions = {
+        c["id"]: c.get("description")
+        for c in model.list_collections(published_only=True)
+    }
 
     items = [
-        {"name": name, "count": model.count_unique_cards(collection=name, exclude_status="exchanged")}
-        for name in names
+        {
+            "id": cid,
+            "name": cid,
+            "title": titles.get(cid) or cid,
+            "description": descriptions.get(cid),
+            "count": model.count_unique_cards(collection=cid, exclude_status="exchanged"),
+        }
+        for cid in published
     ]
 
     return jsonify({
         "collections": items,
-        "collections_map": current_app.config.get("COLLECTIONS_MAP", names),
+        "collections_map": list(config.get("COLLECTIONS_MAP", published)),
     })
 
 
@@ -1168,7 +1185,7 @@ def card_detail(card_id: str):
       cdate, mdate  : timestamps UNIX (ajout / dernière modification).
       address       : liste de chaînes (adresse/lieu, tel que renseigné
                        lors de l'import) — peut être vide.
-      collections   : liste des collections auxquelles la carte appartient.
+      collections   : ids des collections publiées auxquelles la carte appartient.
       coord         : {"lat", "lon"} ou null si non géolocalisée.
       recto_text / verso_text : texte reconnu (OCR nettoyé) sur chaque
                        face, s'il y en a un — absent du JSON si vide,
@@ -1179,8 +1196,8 @@ def card_detail(card_id: str):
       poi           : liste des points d'intérêt liés, chacun résolu en
                        {"id", "description", "coord"} (voir model.get_poi)
                        plutôt que de simples identifiants bruts.
-      links         : liens de la carte puis de ses POIs, à plat et sans
-                       doublon (voir model.resolve_card_links), chacun
+      links         : liens de la carte, de ses POIs puis de ses collections
+                       publiées, à plat et sans doublon (voir model.resolve_card_links), chacun
                        {"id", "title", "description", "url"} — même liste
                        que celle affichée en bas de la fiche web.
       doubles       : autres exemplaires connus de la même carte
@@ -1250,7 +1267,10 @@ def card_detail(card_id: str):
         "cdate": card.get("cdate"),
         "mdate": card.get("mdate"),
         "address": card.get("address") or [],
-        "collections": card.get("collections") or [],
+        "collections": [
+            c for c in (card.get("collections") or [])
+            if c in current_app.config.get("COLLECTIONS", [])
+        ],
         "coord": {"lat": coord[0], "lon": coord[1]} if has_coord else None,
         "recto": _sizes("recto"),
         "verso": _sizes("verso"),
@@ -2016,7 +2036,7 @@ def admin_restart():
     le cache JSON (collections/pois/travels, voir
     flpostcards.data_cache) : avec un backend Redis partagé entre
     plusieurs workers, ce redémarrage à lui seul ne le viderait pas
-    (contrairement à COLLECTIONS/COLLECTIONS_MAP, qui ne vivent que
+    (contrairement à COLLECTIONS/COLLECTION_TITLES, qui ne vivent que
     dans ce process et disparaissent avec lui).
 
     Authentification : jeton partagé, à envoyer soit dans l'en-tête

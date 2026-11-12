@@ -3,6 +3,7 @@ Blueprint API de simpostcards : six points d'entrée.
 
   POST /api/compute_hashes
   POST /api/compute_hashes_only
+  POST /api/find_duplicates
   POST /api/correct_scan
   POST /api/compute_travel
   POST /api/compute_ocr
@@ -153,6 +154,51 @@ Erreurs :
   400 { "error": "..." }   -- pas d'image envoyée / image illisible /
                               paramètre invalide
   501 { "error": "..." }   -- [simpostcards] correct_scan_enabled = false
+
+--------------------------------------------------------------------
+POST /api/find_duplicates
+--------------------------------------------------------------------
+
+Recherche de doublons dans un index de similarité : compare toutes les
+paires d'entrées (hashs perceptuels + embedding CLIP si présent) et
+renvoie celles dont le score atteint un seuil -- l'équivalent de
+``libpostcards.similar.PostcardSearcher.find_similar_in_index()``, exécuté
+ici (calcul O(n²), numpy) au lieu du poste appelant (voir
+``PostcardSearcher.external_helper``). Ni torch ni open-clip ne sont
+requis : la similarité des embeddings est un simple produit scalaire.
+Corps JSON (éventuellement compressé, ``Content-Encoding: gzip``) :
+
+  {"items": [{"path": "396_R.tiff", "ahash": "...", "dhash": "...",
+              "phash": "...", "whash": "...", "embedding": [...] | null}],
+   "threshold": 90, "hash_weight": 0.60, "clip_weight": 0.40,
+   "stream": false}
+
+  - "items" (requis) : entrées de l'index (hashs hexadécimaux de 64 bits,
+    comme renvoyés par /api/compute_hashes). Une entrée sans embedding
+    est comparée sur les hashs seuls.
+  - "threshold" (défaut 90), "hash_weight" (0.60), "clip_weight" (0.40)
+    : comme les paramètres de ``find_similar_in_index``.
+  - "stream" (défaut false) : réponse en flux, voir ci-dessous.
+
+Réponse (200), triée par score décroissant :
+  {"status": "ok", "count": 1,
+   "matches": [{"score": 97.5, "file1": "396_R.tiff", "file2": "512_R.tiff"}]}
+
+Avec "stream": true, la réponse est un flux ``application/x-ndjson`` (une
+ligne JSON par bloc de lignes comparées, émise dès qu'il est calculé) :
+  {"done": 256, "total": 5000, "matches": [{"score": ..., "file1": ..., "file2": ...}]}
+  ...
+  {"status": "ok", "count": 42}        <- dernière ligne : flux complet
+Les paires ne sont triées qu'à l'intérieur d'un bloc : le tri global
+est à la charge du client. Une erreur en cours de calcul est signalée par
+une ligne {"error": "..."} ; un flux sans ligne finale "status" est
+tronqué.
+
+Erreurs :
+  400 { "error": "..." }   -- corps absent/invalide, entrée malformée
+  413                      -- corps trop volumineux (MAX_CONTENT_LENGTH,
+                              [simpostcards] max_content_length_mb : à
+                              augmenter pour une très grande collection)
 
 --------------------------------------------------------------------
 POST /api/compute_travel
@@ -415,6 +461,7 @@ POST /api/translate  (JSON : {"lang": "fr", "source": "en", "texts": [...]})
 
 from __future__ import annotations
 
+import gzip
 import io
 import json
 import time
@@ -428,6 +475,7 @@ from simpostcards.libs.detection_backend import (
     CAPTION_AVAILABLE, OBJECTS_AVAILABLE, compute_caption, compute_objects
 )
 from simpostcards.libs.embedder import CLIP_AVAILABLE, compute_embedding
+from simpostcards.libs.duplicates import InvalidIndexError, iter_similar_pairs
 from simpostcards.libs.hasher import compute_hashes
 from simpostcards.libs.ocr_backend import (
     OCR_AVAILABLE, compute_ocr, installed_languages, missing_languages,
@@ -642,6 +690,94 @@ def compute_hashes_only_route():
         "hashes": hashes,
         "embedding": embedding,
     })
+
+
+@bp.route("/api/find_duplicates", methods=["POST"])
+def find_duplicates_route():
+    """Voir la docstring du module (POST /api/find_duplicates)."""
+    start = time.perf_counter()
+    remote = request.headers.get("X-Forwarded-For", request.remote_addr)
+
+    body = request.get_data()
+    if request.headers.get("Content-Encoding", "").strip().lower() == "gzip":
+        try:
+            body = gzip.decompress(body)
+        except (OSError, EOFError) as exc:
+            return jsonify({"error": "Corps gzip invalide : %s" % exc}), 400
+
+    try:
+        payload = json.loads(body) if body else None
+    except ValueError:
+        payload = None
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Corps JSON attendu"}), 400
+
+    items = payload.get("items")
+    if not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
+        return jsonify({"error": "'items' doit être une liste d'objets"}), 400
+
+    try:
+        threshold = float(payload.get("threshold", 90))
+        hash_weight = float(payload.get("hash_weight", 0.60))
+        clip_weight = float(payload.get("clip_weight", 0.40))
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "'threshold', 'hash_weight' et 'clip_weight' doivent être numériques"
+        }), 400
+
+    current_app.logger.info(
+        "find_duplicates : requête reçue, %d entrée(s), seuil=%s (from=%s)",
+        len(items), threshold, remote,
+    )
+
+    stream = bool(payload.get("stream", False))
+
+    try:
+        blocks = iter_similar_pairs(
+            items, threshold=threshold, hash_weight=hash_weight, clip_weight=clip_weight)
+    except InvalidIndexError as exc:
+        current_app.logger.warning("find_duplicates : %s (from=%s)", exc, remote)
+        return jsonify({"error": "Index malformé : %s" % exc}), 400
+
+    logger = current_app.logger
+
+    if stream:
+        # Flux NDJSON : une ligne JSON par bloc calculé, émise dès qu'il
+        # est prêt -- le client affiche les doublons au fur et à mesure.
+        # La dernière ligne {"status": "ok"} permet de détecter un flux
+        # tronqué ; une erreur en cours de route est signalée par une
+        # ligne {"error": ...} (le statut HTTP 200 est déjà parti).
+        def generate():
+            count = 0
+            try:
+                for done, total, block in blocks:
+                    count += len(block)
+                    yield json.dumps({"done": done, "total": total, "matches": block}) + "\n"
+                yield json.dumps({"status": "ok", "count": count}) + "\n"
+            except Exception as exc:  # noqa: BLE001 -- relayé au client
+                logger.exception("find_duplicates : erreur en cours de flux (from=%s)", remote)
+                yield json.dumps({"error": str(exc)}) + "\n"
+            else:
+                logger.info(
+                    "find_duplicates : OK en %.2fs (%d entrée(s) -> %d paire(s), flux, from=%s)",
+                    time.perf_counter() - start, len(items), count, remote,
+                )
+
+        return current_app.response_class(
+            generate(), mimetype="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    matches = []
+    for _done, _total, block in blocks:
+        matches.extend(block)
+    matches.sort(key=lambda m: m["score"], reverse=True)
+
+    logger.info(
+        "find_duplicates : OK en %.2fs (%d entrée(s) -> %d paire(s), from=%s)",
+        time.perf_counter() - start, len(items), len(matches), remote,
+    )
+
+    return jsonify({"status": "ok", "count": len(matches), "matches": matches})
 
 
 def _form_int(name: str, default: int) -> int:

@@ -13,6 +13,7 @@ from flask import Blueprint, current_app, jsonify, render_template, request, url
 from flask_babel import gettext
 
 from flpostcards.alt_text import build_recto_alt
+from flpostcards.data_cache import collection_label
 from flpostcards.extensions import cache
 from flpostcards.images import SIZE_SMALL, card_images, image_dimensions
 
@@ -99,7 +100,7 @@ def index():
 
     if collection:
         page_title = gettext(
-            "Diaporama - %(collection)s", collection=collection
+            "Diaporama - %(collection)s", collection=collection_label(collection)
         )
     else:
         page_title = gettext("Diaporama")
